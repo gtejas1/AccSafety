@@ -6,13 +6,14 @@ from flask import Flask, render_template_string, redirect, request, session
 from pbc_trail_app import create_trail_dash
 from pbc_eco_app import create_eco_dash
 from vivacity_app import create_vivacity_dash
+from wisdot_files_app import create_wisdot_files_app
 
 VALID_USERS = {  # change as needed, or load from env/DB
     "admin": "admin",
     "user1": "mypassword",
 }
 
-PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/")  # guard home + all apps
+PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/wisdot/")  # guard home + all apps
 
 
 def create_server():
@@ -150,10 +151,11 @@ def create_server():
     create_trail_dash(server, prefix="/trail/")
     create_eco_dash(server, prefix="/eco/")
     create_vivacity_dash(server, prefix="/vivacity/")
+    create_wisdot_files_app(server, prefix="/wisdot/")
 
     @server.route("/")
     def home():
-        wisdot_link = None  # or "http://127.0.0.1:5001/"
+        wisdot_link = "/wisdot/"
         return render_template_string("""
 <!doctype html>
 <html lang="en">
@@ -212,6 +214,8 @@ def create_server():
     def eco_no_slash(): return redirect("/eco/", code=302)
     @server.route("/vivacity")
     def vivacity_no_slash(): return redirect("/vivacity/", code=302)
+    @server.route("/wisdot")
+    def wisdot_no_slash(): return redirect("/wisdot/", code=302)
 
     return server
 
