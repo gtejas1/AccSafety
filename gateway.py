@@ -187,7 +187,7 @@ def create_server():
       <a href="/eco/">Temporary Counts</a>
       <a href="/trail/">WisDOT Trails</a>
       <a href="/vivacity/">Permanent Counts</a>
-      {% if wisdot_link %}<a href="{{ wisdot_link }}">WisDOT files</a>{% endif %}
+      {% if wisdot_link %}<a href="{{ wisdot_link }}">WisDOT Intersections</a>{% endif %}
     </nav>
     <div class="spacer"></div>
     <div class="user">Signed in as <strong>{{ user }}</strong> · <a class="logout" href="/logout">Log out</a></div>

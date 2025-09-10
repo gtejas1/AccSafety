@@ -82,7 +82,7 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
     bp = Blueprint("wisdot_files", __name__)
 
     # Folder where your WisDOT files live
-    BASE_DIR = r"C:\\D-Drive\\IPIT_Research_Assistant\\Counts"
+    BASE_DIR = r"C:\\D-Drive\\IPIT_Research_Assistant\\WisDOT_download"
 
     # (location name, date) -> filename mapping for trail counts
     # Example: {("Capital City Trail at 4th St", "2023-08-15"): "CapCityTrail_4thSt_20230815.xlsm"}
