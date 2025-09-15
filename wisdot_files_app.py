@@ -1,6 +1,7 @@
 # wisdot_files_app.py
 import os
 import re
+import json
 from datetime import datetime
 from urllib.parse import quote
 
@@ -83,10 +84,16 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
 
     # Folder where your WisDOT files live
     BASE_DIR = r"C:\\D-Drive\\IPIT_Research_Assistant\\WisDOT_download"
+    # Disk cache path for filename/location/date metadata
+    CACHE_PATH = os.path.join(os.path.dirname(__file__), "wisdot_cache.json")
 
     # (location name, date) -> filename mapping for trail counts
     # Example: {("Capital City Trail at 4th St", "2023-08-15"): "CapCityTrail_4thSt_20230815.xlsm"}
     TRAIL_FILES = {}
+
+    # Cache to avoid repeatedly opening Excel files
+    # filename -> (location, date_display)
+    INTERSECTION_META_CACHE = {}
 
     @bp.route("/")
     def index():
@@ -108,14 +115,70 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
 
         trail_filenames = {fname for fname in TRAIL_FILES.values()}
 
-        # Build intersection rows for remaining files
+        # Load disk cache if present
+        try:
+            with open(CACHE_PATH, "r", encoding="utf-8") as fh:
+                disk_cache = json.load(fh)
+        except Exception:
+            disk_cache = {}
+        disk_modified = False
+
+        # Current file stats for validation
+        file_stats = {}
+        for f in files:
+            try:
+                st = os.stat(os.path.join(BASE_DIR, f))
+                file_stats[f] = {"mtime": st.st_mtime, "size": st.st_size}
+            except Exception:
+                pass
+
+        # Use disk cache for any files with matching mtime/size; otherwise mark for Excel parse
+        need_excel = []
+        for f in files:
+            if f in trail_filenames:
+                continue
+            rec = disk_cache.get(f)
+            st = file_stats.get(f)
+            if isinstance(rec, dict) and st and rec.get("mtime") == st.get("mtime") and rec.get("size") == st.get("size"):
+                INTERSECTION_META_CACHE[f] = (rec.get("location") or "(unknown)", rec.get("date") or "")
+            else:
+                need_excel.append(f)
+
+        # Read Excel for those still missing (no filename parsing)
+        for f in need_excel:
+            loc, date_disp = extract_location_date(os.path.join(BASE_DIR, f))
+            loc = loc or "(unknown)"
+            date_disp = date_disp or ""
+            INTERSECTION_META_CACHE[f] = (loc, date_disp)
+            st = file_stats.get(f)
+            if st:
+                disk_cache[f] = {"location": loc, "date": date_disp, "mtime": st["mtime"], "size": st["size"]}
+                disk_modified = True
+
+        # Purge disk cache entries for files no longer present
+        existing = set(files)
+        prune = [k for k in list(disk_cache.keys()) if k not in existing]
+        if prune:
+            for k in prune:
+                try:
+                    del disk_cache[k]
+                except KeyError:
+                    pass
+            disk_modified = True
+
+        if disk_modified:
+            try:
+                with open(CACHE_PATH, "w", encoding="utf-8") as fh:
+                    json.dump(disk_cache, fh)
+            except Exception:
+                pass
+
+        # Build intersection rows using cache/Excel-derived values only (no filename parsing)
         intersection_rows = []
         for f in files:
             if f in trail_filenames:
                 continue
-            loc, date_disp = extract_location_date(os.path.join(BASE_DIR, f))
-            if not loc and not date_disp:
-                loc, date_disp = parse_loc_date(f)
+            loc, date_disp = INTERSECTION_META_CACHE.get(f, ("(unknown)", ""))
             intersection_rows.append({
                 "location": loc or "(unknown)",
                 "date": date_disp or "",

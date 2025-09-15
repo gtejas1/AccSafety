@@ -161,7 +161,7 @@ def create_server():
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>AccSafety Gateway</title>
+  <title>AccSafety Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <script type="module" src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"></script>
   <style>
@@ -182,7 +182,7 @@ def create_server():
 </head>
 <body>
   <header>
-    <h2>AccSafety Gateway</h2>
+    <h2>AccSafety Portal</h2>
     <nav>
       <a href="/eco/">Temporary Counts</a>
       <a href="/trail/">WisDOT Trails</a>
@@ -197,6 +197,7 @@ def create_server():
     <arcgis-embedded-map
       item-id="a1e765b1cec34b2897d6a8b7c1ffe54b"
       theme="light"
+      legend-enabled
       center="-88.06736899999999,43.068770999999984"
       center="-88.06736899999999,43.068770999999984"
       scale="577790.554289"
