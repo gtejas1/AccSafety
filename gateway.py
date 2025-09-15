@@ -116,7 +116,7 @@ def create_server():
       AccSafety
     </div>
     <h1>Welcome back</h1>
-    <p class="muted">Sign in to access Eco, Trail, and Vivacity dashboards.</p>
+    <p class="muted">Sign in to access and visualize data.</p>
 
     <input type="hidden" name="next" value="{{ nxt }}"/>
 
@@ -129,7 +129,6 @@ def create_server():
 
     <button class="btn" type="submit">Sign in</button>
     {% if error %}<div class="error">{{ error }}</div>{% endif %}
-    <div class="foot">Tip: default creds are <strong>admin / admin</strong> (change in <code>gateway.py</code>).</div>
   </form>
 
   <script>
