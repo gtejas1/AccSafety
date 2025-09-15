@@ -1,0 +1,9 @@
+flask
+dash
+dash_bootstrap_components
+pandas
+plotly
+sqlalchemy
+psycopg2-binary
+requests
+openpyxl
