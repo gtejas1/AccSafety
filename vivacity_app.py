@@ -540,7 +540,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         suppress_callback_exceptions=True,
         assets_url_path=f"{prefix.rstrip('/')}/assets",
     )
-    app.title = "Vivacity Simple Dashboard"
+    app.title = " Vivacity W Wells St & N 68th St Intersection"
 
     # Preload meta (optional)
     try:
@@ -562,7 +562,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
 
     app.layout = html.Div(
         [
-            html.H2("Vivacity Simple Dashboard"),
+            html.H2("W Wells St & N 68th St Intersection"),
             html.Div(
                 [
                     html.Div(
