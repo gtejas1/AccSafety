@@ -249,7 +249,7 @@ def create_server():
       <div class="dropdown">
         <button class="nav-link nav-trigger" type="button" aria-haspopup="true">Short Term Counts</button>
         <div class="dropdown-menu">
-          <a href="/eco/">Short Term</a>
+          <a href="/eco/">Short Term Locations</a>
           <a href="/trail/">WisDOT Trails</a>
           {% if wisdot_link %}<a href="{{ wisdot_link }}">WisDOT Intersections</a>{% endif %}
         </div>
