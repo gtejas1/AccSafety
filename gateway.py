@@ -168,8 +168,70 @@ def create_server():
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin:0; }
     header { padding: var(--pad); border-bottom: 1px solid #eee; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
     header h2 { margin: 0; font-size: 20px; }
-    nav a { margin-right: 12px; text-decoration: none; color: #0b66c3; }
-    nav a:hover { text-decoration: underline; }
+    nav { display:flex; align-items:center; gap: 12px; flex-wrap: wrap; }
+    .nav-link {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      text-decoration:none;
+      color:#0b66c3;
+      font-weight:500;
+      font-size:14px;
+      padding:8px 10px;
+      border-radius:6px;
+      background:none;
+      border:none;
+      cursor:pointer;
+      font-family: inherit;
+      transition: background-color .15s ease;
+    }
+    .nav-link:hover,
+    .nav-link:focus {
+      background-color: rgba(11, 102, 195, 0.12);
+      text-decoration:none;
+      outline:none;
+    }
+    .dropdown { position: relative; }
+    .nav-trigger::after {
+      content: "\25BE";
+      font-size: 12px;
+      line-height: 1;
+    }
+    .dropdown-menu {
+      display:none;
+      position:absolute;
+      top: calc(100% + 6px);
+      left: 0;
+      min-width: 200px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+      border-radius: 8px;
+      padding: 8px 0;
+      z-index: 20;
+    }
+    .dropdown:hover .dropdown-menu,
+    .dropdown:focus-within .dropdown-menu {
+      display: block;
+    }
+    .dropdown-menu a,
+    .dropdown-menu span {
+      display:block;
+      padding: 8px 16px;
+      color: #0f172a;
+      text-decoration:none;
+      font-size:14px;
+      white-space: nowrap;
+    }
+    .dropdown-menu a:hover,
+    .dropdown-menu a:focus {
+      background:#f1f5f9;
+      outline:none;
+    }
+    .dropdown-menu .placeholder {
+      color:#94a3b8;
+      cursor: default;
+    }
     .spacer { flex: 1 1 auto; }
     .wrap { padding: var(--pad); }
     arcgis-embedded-map {
@@ -183,10 +245,22 @@ def create_server():
   <header>
     <h2>AccSafety Portal</h2>
     <nav>
-      <a href="/eco/">Temporary Counts</a>
-      <a href="/trail/">WisDOT Trails</a>
-      <a href="/vivacity/">Permanent Counts</a>
-      {% if wisdot_link %}<a href="{{ wisdot_link }}">WisDOT Intersections</a>{% endif %}
+      <a class="nav-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Home</a>
+      <div class="dropdown">
+        <button class="nav-link nav-trigger" type="button" aria-haspopup="true">Short Term Counts</button>
+        <div class="dropdown-menu">
+          <a href="/eco/">Short Term Dashboard</a>
+          <a href="/trail/">WisDOT Trails</a>
+          {% if wisdot_link %}<a href="{{ wisdot_link }}">WisDOT Intersections</a>{% endif %}
+        </div>
+      </div>
+      <div class="dropdown">
+        <button class="nav-link nav-trigger" type="button" aria-haspopup="true">Long Term Counts</button>
+        <div class="dropdown-menu">
+          <a href="/vivacity/">Vivacity Dashboard</a>
+          <span class="placeholder" aria-disabled="true">Add future link</span>
+        </div>
+      </div>
     </nav>
     <div class="spacer"></div>
     <div class="user">Signed in as <strong>{{ user }}</strong> · <a class="logout" href="/logout">Log out</a></div>
