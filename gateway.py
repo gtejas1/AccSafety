@@ -193,7 +193,7 @@ def create_server():
     }
     .dropdown { position: relative; }
     .nav-trigger::after {
-      content: "\25BE";
+      content: "▾";
       font-size: 12px;
       line-height: 1;
     }
@@ -249,7 +249,7 @@ def create_server():
       <div class="dropdown">
         <button class="nav-link nav-trigger" type="button" aria-haspopup="true">Short Term Counts</button>
         <div class="dropdown-menu">
-          <a href="/eco/">Short Term Dashboard</a>
+          <a href="/eco/">Short Term</a>
           <a href="/trail/">WisDOT Trails</a>
           {% if wisdot_link %}<a href="{{ wisdot_link }}">WisDOT Intersections</a>{% endif %}
         </div>
@@ -257,7 +257,7 @@ def create_server():
       <div class="dropdown">
         <button class="nav-link nav-trigger" type="button" aria-haspopup="true">Long Term Counts</button>
         <div class="dropdown-menu">
-          <a href="/vivacity/">Vivacity Dashboard</a>
+          <a href="/vivacity/">Vivacity Locations</a>
           <span class="placeholder" aria-disabled="true">Add future link</span>
         </div>
       </div>
