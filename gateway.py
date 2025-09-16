@@ -196,9 +196,11 @@ def create_server():
     <arcgis-embedded-map
       item-id="a1e765b1cec34b2897d6a8b7c1ffe54b"
       theme="light"
+      bookmarks-enabled
+      heading-enabled
       legend-enabled
-      center="-88.06736899999999,43.068770999999984"
-      center="-88.06736899999999,43.068770999999984"
+      information-enabled
+      center="-87.87609699999999,43.122054"
       scale="577790.554289"
       portal-url="https://uwm.maps.arcgis.com">
     </arcgis-embedded-map>
