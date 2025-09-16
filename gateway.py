@@ -7,13 +7,14 @@ from pbc_trail_app import create_trail_dash
 from pbc_eco_app import create_eco_dash
 from vivacity_app import create_vivacity_dash
 from wisdot_files_app import create_wisdot_files_app
+from live_detection_app import create_live_detection_app
 
 VALID_USERS = {  # change as needed, or load from env/DB
     "admin": "admin",
     "user1": "mypassword",
 }
 
-PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/wisdot/")  # guard home + all apps
+PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/")  # guard home + all apps
 
 
 def create_server():
@@ -150,6 +151,7 @@ def create_server():
     create_trail_dash(server, prefix="/trail/")
     create_eco_dash(server, prefix="/eco/")
     create_vivacity_dash(server, prefix="/vivacity/")
+    create_live_detection_app(server, prefix="/live/")
     create_wisdot_files_app(server, prefix="/wisdot/")
 
     @server.route("/")
@@ -258,7 +260,7 @@ def create_server():
         <button class="nav-link nav-trigger" type="button" aria-haspopup="true">Long Term Counts</button>
         <div class="dropdown-menu">
           <a href="/vivacity/">Vivacity Locations</a>
-          <span class="placeholder" aria-disabled="true">Add future link</span>
+          <a href="/live/">Live Object Detection</a>
         </div>
       </div>
     </nav>
@@ -290,6 +292,8 @@ def create_server():
     def eco_no_slash(): return redirect("/eco/", code=302)
     @server.route("/vivacity")
     def vivacity_no_slash(): return redirect("/vivacity/", code=302)
+    @server.route("/live")
+    def live_no_slash(): return redirect("/live/", code=302)
     @server.route("/wisdot")
     def wisdot_no_slash(): return redirect("/wisdot/", code=302)
 
