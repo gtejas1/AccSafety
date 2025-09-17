@@ -73,12 +73,12 @@ def create_se_wi_trails_app(server, prefix: str = "/se-wi-trails/") -> None:
     }
     main {
       padding: 24px;
-      max-width: 1200px;
-      margin: 0 auto;
+      margin: 0;
     }
     .intro {
       margin-bottom: 20px;
       line-height: 1.5;
+      text-align: justify;
     }
     .table-wrap {
       overflow-x: auto;
@@ -86,6 +86,7 @@ def create_se_wi_trails_app(server, prefix: str = "/se-wi-trails/") -> None:
       border-radius: 10px;
       box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
       border: 1px solid rgba(148, 163, 184, 0.35);
+      width: 100%;
     }
     table.data-table {
       border-collapse: collapse;
