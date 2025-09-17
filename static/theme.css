@@ -152,6 +152,10 @@ body {
   margin: 0 auto;
 }
 
+.app-card--wide {
+  max-width: none;
+}
+
 .app-main-centered {
   display: flex;
   justify-content: center;

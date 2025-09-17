@@ -178,14 +178,14 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     html.P("Streaming from RTSP/HTTP with on-the-fly YOLO inference."),
                     html.Img(
                         src=route_path,
-                        style={"width": "100%", "maxWidth": "960px", "borderRadius": "12px"},
+                        style={"width": "100%", "borderRadius": "12px"},
                     ),
                     html.Div(
                         "Tip: If playback stutters, reduce TARGET_WIDTH or process with a GPU.",
                         className="mt-3 text-muted",
                     ),
                 ],
-                class_name="app-card--narrow",
+                class_name="app-card--wide",
             )
         ],
     )

@@ -78,6 +78,24 @@ def parse_loc_date(filename: str):
     return location, date_display
 
 
+def coalesce_metadata(filename: str, location: str | None, date_display: str | None) -> tuple[str, str]:
+    """Ensure each file has at least a best-effort location/date."""
+
+    location = (location or "").strip()
+    date_display = (date_display or "").strip()
+
+    if location and date_display:
+        return location, date_display
+
+    fallback_loc, fallback_date = parse_loc_date(filename)
+    if not location:
+        location = fallback_loc or "(unknown)"
+    if not date_display:
+        date_display = fallback_date
+
+    return location or "(unknown)", date_display
+
+
 def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
     """Register WisDOT file listing/download routes on a Flask server."""
     bp = Blueprint("wisdot_files", __name__)
@@ -140,15 +158,23 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
             rec = disk_cache.get(f)
             st = file_stats.get(f)
             if isinstance(rec, dict) and st and rec.get("mtime") == st.get("mtime") and rec.get("size") == st.get("size"):
-                INTERSECTION_META_CACHE[f] = (rec.get("location") or "(unknown)", rec.get("date") or "")
+                loc, date_disp = coalesce_metadata(f, rec.get("location"), rec.get("date"))
+                INTERSECTION_META_CACHE[f] = (loc, date_disp)
+                if (rec.get("location") or "").strip() != loc or (rec.get("date") or "").strip() != date_disp:
+                    disk_cache[f] = {
+                        "location": loc,
+                        "date": date_disp,
+                        "mtime": st["mtime"],
+                        "size": st["size"],
+                    }
+                    disk_modified = True
             else:
                 need_excel.append(f)
 
         # Read Excel for those still missing (no filename parsing)
         for f in need_excel:
             loc, date_disp = extract_location_date(os.path.join(BASE_DIR, f))
-            loc = loc or "(unknown)"
-            date_disp = date_disp or ""
+            loc, date_disp = coalesce_metadata(f, loc, date_disp)
             INTERSECTION_META_CACHE[f] = (loc, date_disp)
             st = file_stats.get(f)
             if st:
@@ -178,10 +204,11 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
         for f in files:
             if f in trail_filenames:
                 continue
-            loc, date_disp = INTERSECTION_META_CACHE.get(f, ("(unknown)", ""))
+            loc, date_disp = INTERSECTION_META_CACHE.get(f, ("", ""))
+            loc, date_disp = coalesce_metadata(f, loc, date_disp)
             intersection_rows.append({
-                "location": loc or "(unknown)",
-                "date": date_disp or "",
+                "location": loc,
+                "date": date_disp,
                 "href": "download/" + quote(f),
             })
         intersection_rows.sort(key=lambda r: (r["location"].lower(), r["date"]))
