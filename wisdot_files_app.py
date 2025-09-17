@@ -78,6 +78,24 @@ def parse_loc_date(filename: str):
     return location, date_display
 
 
+def coalesce_metadata(filename: str, location: str | None, date_display: str | None) -> tuple[str, str]:
+    """Ensure each file has at least a best-effort location/date."""
+
+    location = (location or "").strip()
+    date_display = (date_display or "").strip()
+
+    if location and date_display:
+        return location, date_display
+
+    fallback_loc, fallback_date = parse_loc_date(filename)
+    if not location:
+        location = fallback_loc or "(unknown)"
+    if not date_display:
+        date_display = fallback_date
+
+    return location or "(unknown)", date_display
+
+
 def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
     """Register WisDOT file listing/download routes on a Flask server."""
     bp = Blueprint("wisdot_files", __name__)
@@ -140,15 +158,23 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
             rec = disk_cache.get(f)
             st = file_stats.get(f)
             if isinstance(rec, dict) and st and rec.get("mtime") == st.get("mtime") and rec.get("size") == st.get("size"):
-                INTERSECTION_META_CACHE[f] = (rec.get("location") or "(unknown)", rec.get("date") or "")
+                loc, date_disp = coalesce_metadata(f, rec.get("location"), rec.get("date"))
+                INTERSECTION_META_CACHE[f] = (loc, date_disp)
+                if (rec.get("location") or "").strip() != loc or (rec.get("date") or "").strip() != date_disp:
+                    disk_cache[f] = {
+                        "location": loc,
+                        "date": date_disp,
+                        "mtime": st["mtime"],
+                        "size": st["size"],
+                    }
+                    disk_modified = True
             else:
                 need_excel.append(f)
 
         # Read Excel for those still missing (no filename parsing)
         for f in need_excel:
             loc, date_disp = extract_location_date(os.path.join(BASE_DIR, f))
-            loc = loc or "(unknown)"
-            date_disp = date_disp or ""
+            loc, date_disp = coalesce_metadata(f, loc, date_disp)
             INTERSECTION_META_CACHE[f] = (loc, date_disp)
             st = file_stats.get(f)
             if st:
@@ -178,58 +204,93 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
         for f in files:
             if f in trail_filenames:
                 continue
-            loc, date_disp = INTERSECTION_META_CACHE.get(f, ("(unknown)", ""))
+            loc, date_disp = INTERSECTION_META_CACHE.get(f, ("", ""))
+            loc, date_disp = coalesce_metadata(f, loc, date_disp)
             intersection_rows.append({
-                "location": loc or "(unknown)",
-                "date": date_disp or "",
+                "location": loc,
+                "date": date_disp,
                 "href": "download/" + quote(f),
             })
         intersection_rows.sort(key=lambda r: (r["location"].lower(), r["date"]))
 
         html = """
-        <h3>WisDOT Historical Files (.xlsm)</h3>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WisDOT Count Files</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/theme.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-header-title">
+        <span class="app-brand">AccSafety</span>
+        <span class="app-subtitle">WisDOT Count Files</span>
+      </div>
+      <nav class="app-nav">
+        <a class="app-link" href="/">Back to Portal</a>
+      </nav>
+    </header>
+    <main class="app-content">
+      <section class="app-card">
+        <h1>Download recent WisDOT uploads</h1>
+        <p class="app-muted">Files are synchronised from the shared WisDOT repository. Choose a location below to retrieve the latest spreadsheet.</p>
+        {% if not trail_rows and not intersection_rows %}
+          <div class="app-alert">No count files were found in the configured directory.</div>
+        {% endif %}
         {% if trail_rows %}
-        <h4>Trail Counts</h4>
-        <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; font-family: sans-serif;">
-          <thead style="background:#f5f5f5;">
-            <tr>
-              <th align="left">Location</th>
-              <th align="left">Date</th>
-              <th align="left">Download</th>
-            </tr>
-          </thead>
-          <tbody>
-          {% for r in trail_rows %}
-            <tr>
-              <td>{{ r.location }}</td>
-              <td>{{ r.date }}</td>
-              <td><a href="{{ r.href }}">Download</a></td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
+          <h2>Trail Counts</h2>
+          <div class="table-wrap">
+            <table class="app-table">
+              <thead>
+                <tr>
+                  <th>Location</th>
+                  <th>Date</th>
+                  <th>Download</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in trail_rows %}
+                <tr>
+                  <td>{{ r.location }}</td>
+                  <td>{{ r.date }}</td>
+                  <td><a href="{{ r.href }}">Download</a></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         {% endif %}
         {% if intersection_rows %}
-        <h4>Intersection Counts</h4>
-        <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; font-family: sans-serif;">
-          <thead style="background:#f5f5f5;">
-            <tr>
-              <th align="left">Location</th>
-              <th align="left">Date</th>
-              <th align="left">Download</th>
-            </tr>
-          </thead>
-          <tbody>
-          {% for r in intersection_rows %}
-            <tr>
-              <td>{{ r.location }}</td>
-              <td>{{ r.date }}</td>
-              <td><a href="{{ r.href }}">Download</a></td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
+          <h2>Intersection Counts</h2>
+          <div class="table-wrap">
+            <table class="app-table">
+              <thead>
+                <tr>
+                  <th>Location</th>
+                  <th>Date</th>
+                  <th>Download</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in intersection_rows %}
+                <tr>
+                  <td>{{ r.location }}</td>
+                  <td>{{ r.date }}</td>
+                  <td><a href="{{ r.href }}">Download</a></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         {% endif %}
+      </section>
+    </main>
+  </div>
+</body>
+</html>
         """
         return render_template_string(html, trail_rows=trail_rows, intersection_rows=intersection_rows)
 

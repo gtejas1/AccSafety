@@ -15,6 +15,8 @@ import dash
 from dash import html
 import dash_bootstrap_components as dbc
 
+from theme import card, dash_page
+
 # ── Config ────────────────────────────────────────────────────────────────────
 # RTSP_URL = os.getenv(
 #     "YOLO_RTSP_URL",
@@ -161,28 +163,31 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         server=server,
         routes_pathname_prefix=prefix,
         requests_pathname_prefix=prefix,
-        external_stylesheets=[dbc.themes.BOOTSTRAP],
+        external_stylesheets=[dbc.themes.BOOTSTRAP, "/static/theme.css"],
         suppress_callback_exceptions=True,
         assets_url_path=f"{prefix.rstrip('/')}/assets",
     )
     app.title = "Live Object Detection"
 
-    app.layout = dbc.Container(
+    app.layout = dash_page(
+        "Long Term Counts · Live Detection",
         [
-            # html.H3("N Santa Monica Blvd & E Silver Spring Dr – Village of Whitefish Bay"),
-            html.H3("N Maryland Avenue - UW Milwaukee Campus"),
-            html.P("Streaming from RTSP/HTTP with on-the-fly YOLO inference"),
-            html.Img(
-                src=route_path,
-                style={"width": "100%", "maxWidth": "960px", "borderRadius": "12px"},
-            ),
-            html.Div(
-                "Tip: If it stutters, reduce TARGET_WIDTH or use GPU.",
-                className="mt-3 text-muted",
-            ),
+            card(
+                [
+                    html.H3("N Maryland Avenue - UW Milwaukee Campus"),
+                    html.P("Streaming from RTSP/HTTP with on-the-fly YOLO inference."),
+                    html.Img(
+                        src=route_path,
+                        style={"width": "100%", "borderRadius": "12px"},
+                    ),
+                    html.Div(
+                        "Tip: If playback stutters, reduce TARGET_WIDTH or process with a GPU.",
+                        className="mt-3 text-muted",
+                    ),
+                ],
+                class_name="app-card--wide",
+            )
         ],
-        fluid=True,
-        className="p-4",
     )
 
     return app

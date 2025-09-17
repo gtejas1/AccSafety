@@ -61,77 +61,96 @@ def create_server():
   <meta charset="utf-8">
   <title>Sign in · AccSafety</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/theme.css">
   <style>
-    :root {
-      --bg1: #0b1736; --bg2: #143e6e; --card: #ffffff; --muted:#6b7280;
-      --brand:#0b66c3; --brand2:#22c55e; --danger:#b91c1c;
+    .login-card h1 {
+      margin: 0 0 12px;
+      font-size: 1.4rem;
     }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body {
-      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      background: radial-gradient(1000px 600px at 10% 10%, #1e3a8a 0%, transparent 70%),
-                  radial-gradient(800px 500px at 90% 90%, #047857 0%, transparent 70%),
-                  linear-gradient(140deg, var(--bg1), var(--bg2));
-      color: #0f172a; display: grid; place-items: center; padding: 24px;
+    .login-card p {
+      margin: 0 0 20px;
+      color: var(--brand-muted);
     }
-    .card {
-      width: 100%; max-width: 420px; background: var(--card);
-      border-radius: 16px; padding: 28px; box-shadow:
-      0 10px 30px rgba(2,6,23,.25), inset 0 1px 0 rgba(255,255,255,.6);
-      border: 1px solid rgba(2,6,23,.08);
+    .login-card label {
+      display: block;
+      margin: 12px 0 6px;
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #0b1736;
     }
-    .logo {
-      display:flex; align-items:center; gap:10px; margin-bottom: 8px;
-      font-weight: 700; color: #0b1a37; letter-spacing:.3px;
+    .login-card input[type="text"],
+    .login-card input[type="password"] {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(15, 23, 42, 0.16);
+      background: #f8fafc;
+      font-size: 0.95rem;
     }
-    .logo-badge {
-      width: 36px; height: 36px; border-radius: 10px;
-      background: linear-gradient(135deg, var(--brand), var(--brand2));
-      display:grid; place-items:center; color:white; font-weight:800;
+    .login-card button {
+      width: 100%;
+      margin-top: 20px;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 999px;
+      background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary));
+      color: white;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 1rem;
+      box-shadow: 0 14px 30px rgba(11, 102, 195, 0.28);
     }
-    h1 { font-size: 20px; margin: 8px 0 16px; }
-    p.muted { color: var(--muted); margin: 0 0 18px; font-size: 14px;}
-    label { display:block; font-size: 13px; margin: 10px 0 6px; color:#0b1a37; }
-    input[type="text"], input[type="password"] {
-      width: 100%; padding: 12px 14px; border-radius: 10px; outline: none;
-      border: 1px solid #e5e7eb; font-size: 14px; background: #f8fafc;
+    .login-card button:hover {
+      filter: brightness(1.05);
     }
-    .row { display:flex; gap:12px; }
-    .btn {
-      display:inline-flex; align-items:center; justify-content:center; gap:8px;
-      padding: 12px 14px; border-radius: 10px; border: none; cursor: pointer;
-      background: linear-gradient(135deg, var(--brand), #0ea5e9); color: white;
-      font-weight: 600; width: 100%; margin-top: 14px;
-      box-shadow: 0 6px 16px rgba(2,132,199,.35);
+    .login-card .showpw {
+      margin-top: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      color: #0b1736;
     }
-    .btn:hover { filter: brightness(1.05); }
-    .error { color: var(--danger); font-size: 13px; margin-top: 10px; }
-    .foot { margin-top: 16px; font-size: 12px; color: var(--muted); text-align:center; }
-    .showpw { font-size: 12px; color:#0b1a37; display:flex; gap:6px; align-items:center; margin-top:8px;}
+    .login-card .error {
+      margin-top: 12px;
+      color: #b91c1c;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
   </style>
 </head>
 <body>
-  <form class="card" method="post" autocomplete="off">
-    <div class="logo">
-      <div class="logo-badge">A</div>
-      AccSafety
-    </div>
-    <h1>Welcome back</h1>
-    <p class="muted">Sign in to access and visualize data.</p>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-header-title">
+        <span class="app-brand">AccSafety</span>
+        <span class="app-subtitle">Secure Portal Access</span>
+      </div>
+      <nav class="app-nav">
+        <a class="app-link" href="/">Back to Portal</a>
+      </nav>
+    </header>
+    <main class="app-content">
+      <div class="app-main-centered">
+        <form class="app-card app-card--narrow login-card" method="post" autocomplete="off">
+          <h1>Welcome back</h1>
+          <p>Enter your credentials to continue to the unified dashboards.</p>
 
-    <input type="hidden" name="next" value="{{ nxt }}"/>
+          <input type="hidden" name="next" value="{{ nxt }}"/>
 
-    <label for="username">Username</label>
-    <input id="username" name="username" type="text" required placeholder="e.g. admin" autofocus>
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" required placeholder="e.g. admin" autofocus>
 
-    <label for="password">Password</label>
-    <input id="password" name="password" type="password" required placeholder="••••••••">
-    <label class="showpw"><input id="toggle" type="checkbox"> Show password</label>
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" required placeholder="••••••••">
+          <label class="showpw"><input id="toggle" type="checkbox"> Show password</label>
 
-    <button class="btn" type="submit">Sign in</button>
-    {% if error %}<div class="error">{{ error }}</div>{% endif %}
-  </form>
+          <button type="submit">Sign in</button>
+          {% if error %}<div class="error">{{ error }}</div>{% endif %}
+        </form>
+      </div>
+    </main>
+  </div>
 
   <script>
     document.getElementById('toggle').addEventListener('change', function(){
@@ -166,127 +185,66 @@ def create_server():
   <meta charset="utf-8">
   <title>AccSafety Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/theme.css">
+  <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css">
   <script type="module" src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"></script>
-  <style>
-    :root { --pad: 16px; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; margin:0; }
-    header { padding: var(--pad); border-bottom: 1px solid #eee; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-    header h2 { margin: 0; font-size: 20px; }
-    nav { display:flex; align-items:center; gap: 12px; flex-wrap: wrap; }
-    .nav-link {
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      text-decoration:none;
-      color:#0b66c3;
-      font-weight:500;
-      font-size:14px;
-      padding:8px 10px;
-      border-radius:6px;
-      background:none;
-      border:none;
-      cursor:pointer;
-      font-family: inherit;
-      transition: background-color .15s ease;
-    }
-    .nav-link:hover,
-    .nav-link:focus {
-      background-color: rgba(11, 102, 195, 0.12);
-      text-decoration:none;
-      outline:none;
-    }
-    .dropdown { position: relative; }
-    .nav-trigger::after {
-      content: "▾";
-      font-size: 12px;
-      line-height: 1;
-    }
-    .dropdown-menu {
-      display:none;
-      position:absolute;
-      top: calc(100% + 6px);
-      left: 0;
-      min-width: 200px;
-      background: #ffffff;
-      border: 1px solid #e2e8f0;
-      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
-      border-radius: 8px;
-      padding: 8px 0;
-      z-index: 20;
-    }
-    .dropdown:hover .dropdown-menu,
-    .dropdown:focus-within .dropdown-menu {
-      display: block;
-    }
-    .dropdown-menu a,
-    .dropdown-menu span {
-      display:block;
-      padding: 8px 16px;
-      color: #0f172a;
-      text-decoration:none;
-      font-size:14px;
-      white-space: nowrap;
-    }
-    .dropdown-menu a:hover,
-    .dropdown-menu a:focus {
-      background:#f1f5f9;
-      outline:none;
-    }
-    .dropdown-menu .placeholder {
-      color:#94a3b8;
-      cursor: default;
-    }
-    .spacer { flex: 1 1 auto; }
-    .wrap { padding: var(--pad); }
-    arcgis-embedded-map {
-      display: block; width: 100%; height: 70vh; border: 1px solid #ddd; border-radius: 8px;
-    }
-    .user { color:#334155; font-size:14px; }
-    .logout { color:#b91c1c; text-decoration:none; margin-left:8px; }
-  </style>
+  <script nomodule src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.js"></script>
 </head>
 <body>
-  <header>
-    <h2>AccSafety Portal</h2>
-    <nav>
-      <a class="nav-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Home</a>
-      <div class="dropdown">
-        <button class="nav-link nav-trigger" type="button" aria-haspopup="true">Short Term Counts</button>
-        <div class="dropdown-menu">
-          <a href="/eco/">Short Term Locations(Pilot Counts)</a>
-          <a href="/trail/">WisDOT Trails</a>
-          {% if wisdot_link %}<a href="{{ wisdot_link }}">WisDOT Intersections</a>{% endif %}
-        </div>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-header-title">
+        <span class="app-brand">AccSafety</span>
+        <span class="app-subtitle">Unified Mobility Analytics Portal</span>
       </div>
-      <div class="dropdown">
-        <button class="nav-link nav-trigger" type="button" aria-haspopup="true">Long Term Counts</button>
-        <div class="dropdown-menu">
-          <a href="/vivacity/">Vivacity Locations</a>
-          <a href="/live/">Live Object Detection</a>
+      <nav class="app-nav portal-nav" aria-label="Main navigation">
+        <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
+        <div class="portal-dropdown">
+          <button class="portal-trigger" type="button" aria-haspopup="true">Short Term Counts</button>
+          <div class="portal-menu">
+            <a href="/eco/">Short Term Locations (Pilot Counts)</a>
+            <a href="/trail/">WisDOT Trails</a>
+            {% if wisdot_link %}<a href="{{ wisdot_link }}">WisDOT Intersections</a>{% endif %}
+          </div>
         </div>
-      </div>
-      <a class="nav-link" href="/se-wi-trails/">SE Wisconsin Trails</a>
-    </nav>
-    <div class="spacer"></div>
-    <div class="user">Signed in as <strong>{{ user }}</strong> · <a class="logout" href="/logout">Log out</a></div>
-  </header>
+        <div class="portal-dropdown">
+          <button class="portal-trigger" type="button" aria-haspopup="true">Long Term Counts</button>
+          <div class="portal-menu">
+            <a href="/vivacity/">Vivacity Locations</a>
+            <a href="/live/">Live Object Detection</a>
+          </div>
+        </div>
+        <a class="app-link" href="/se-wi-trails/">SE Wisconsin Trails</a>
+      </nav>
+      <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
+    </header>
 
-  <div class="wrap">
-    <arcgis-embedded-map
-      item-id="a1e765b1cec34b2897d6a8b7c1ffe54b"
-      theme="light"
-      bookmarks-enabled
-      heading-enabled
-      legend-enabled
-      information-enabled
-      center="-87.87609699999999,43.122054"
-      scale="577790.554289"
-      portal-url="https://uwm.maps.arcgis.com">
-    </arcgis-embedded-map>
+    <main class="app-content">
+      <section class="app-card">
+        <h1>Explore Wisconsin Mobility Data</h1>
+        <p class="app-muted">
+          Use the navigation above to jump between short term and long term count dashboards,
+          download WisDOT files, or explore the regional trails catalog. The interactive map
+          below highlights current study areas.
+        </p>
+        <arcgis-embedded-map
+          class="portal-map"
+          item-id="a1e765b1cec34b2897d6a8b7c1ffe54b"
+          theme="light"
+          bookmarks-enabled
+          heading-enabled
+          legend-enabled
+          information-enabled
+          center="-87.87609699999999,43.122054"
+          scale="577790.554289"
+          portal-url="https://uwm.maps.arcgis.com">
+        </arcgis-embedded-map>
+      </section>
+    </main>
   </div>
 </body>
 </html>
-        """, wisdot_link=wisdot_link, user=session.get("user","user"))
+        """, wisdot_link=wisdot_link, user=session.get("user", "user"))
 
 
     # Convenience redirects

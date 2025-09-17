@@ -46,91 +46,51 @@ def create_se_wi_trails_app(server, prefix: str = "/se-wi-trails/") -> None:
   <meta charset="utf-8">
   <title>SE Wisconsin Trails</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/theme.css">
   <style>
-    body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      margin: 0;
-      background-color: #f8fafc;
-      color: #0f172a;
-    }
-    header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 18px 24px;
-      background: linear-gradient(135deg, #0b66c3, #0ea5e9);
-      color: white;
-    }
-    header h1 {
-      margin: 0;
-      font-size: 22px;
-      letter-spacing: .3px;
-    }
-    header a {
-      color: white;
-      text-decoration: none;
-      font-weight: 500;
-    }
-    main {
-      padding: 24px;
-      margin: 0;
-    }
-    .intro {
-      margin-bottom: 20px;
-      line-height: 1.5;
-      text-align: justify;
-    }
-    .table-wrap {
-      overflow-x: auto;
-      background: white;
-      border-radius: 10px;
-      box-shadow: 0 18px 38px rgba(15, 23, 42, 0.12);
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      width: 100%;
-    }
     table.data-table {
-      border-collapse: collapse;
       width: 100%;
     }
     table.data-table thead {
-      background: #0b66c3;
+      background: var(--brand-primary);
       color: white;
     }
     table.data-table th,
     table.data-table td {
-      padding: 10px 12px;
+      padding: 12px 14px;
       text-align: left;
-      font-size: 14px;
     }
     table.data-table tbody tr:nth-child(even) {
-      background: #f1f5f9;
-    }
-    .error {
-      padding: 16px;
-      background: #fee2e2;
-      color: #b91c1c;
-      border-radius: 8px;
-      border: 1px solid #fecaca;
+      background: rgba(15, 23, 42, 0.06);
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>SE Wisconsin Trails</h1>
-    <a href="/">← Back to Portal</a>
-  </header>
-  <main>
-    <p class="intro">
-      This table lists SE Wisconsin trail counter locations, their descriptive details,
-      and supporting metadata as provided in the regional spreadsheet.
-      Use the horizontal scrollbar to view additional columns.
-    </p>
-    {% if error %}
-      <div class="error">{{ error }}</div>
-    {% else %}
-      <div class="table-wrap">{{ table_html|safe }}</div>
-    {% endif %}
-  </main>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-header-title">
+        <span class="app-brand">AccSafety</span>
+        <span class="app-subtitle">SE Wisconsin Trails</span>
+      </div>
+      <nav class="app-nav">
+        <a class="app-link" href="/">Back to Portal</a>
+      </nav>
+    </header>
+    <main class="app-content">
+      <section class="app-card">
+        <h1>Regional trail counter inventory</h1>
+        <p class="app-muted">
+          This reference table summarises known SE Wisconsin trail counter locations along with descriptive metadata.
+          Scroll horizontally to view all available details.
+        </p>
+        {% if error %}
+          <div class="app-alert">{{ error }}</div>
+        {% else %}
+          <div class="table-wrap">{{ table_html|safe }}</div>
+        {% endif %}
+      </section>
+    </main>
+  </div>
 </body>
 </html>
             """,
