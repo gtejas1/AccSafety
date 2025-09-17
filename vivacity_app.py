@@ -380,6 +380,9 @@ import requests
 import dash
 from dash import dcc, html, Input, Output, State, dash_table
 from dash.exceptions import PreventUpdate
+import dash_bootstrap_components as dbc
+
+from theme import card, dash_page
 
 # ── Config ─────────────────────────────────────────────────────
 API_BASE = "https://api.vivacitylabs.com"
@@ -537,6 +540,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         server=server,
         routes_pathname_prefix=prefix,
         requests_pathname_prefix=prefix,
+        external_stylesheets=[dbc.themes.BOOTSTRAP, "/static/theme.css"],
         suppress_callback_exceptions=True,
         assets_url_path=f"{prefix.rstrip('/')}/assets",
     )
@@ -560,145 +564,150 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
     DEFAULT_TO_LOCAL = now_local
     DEFAULT_FROM_LOCAL = now_local - timedelta(days=6)
 
-    app.layout = html.Div(
+    app.layout = dash_page(
+        "Long Term Counts · Vivacity",
         [
-            html.H2("W Wells St & N 68th St Intersection"),
-            html.Div(
+            card(
                 [
+                    html.H2("W Wells St & N 68th St Intersection"),
                     html.Div(
                         [
-                            html.Label("API key status:"),
                             html.Div(
-                                "Loaded" if API_KEY else "Missing — set VIVACITY_API_KEY",
-                                id="viv-api-status",
-                                style={"color": "#0a0" if API_KEY else "#b00"},
-                            ),
-                        ],
-                        style={"marginBottom": 8},
-                    ),
-                    html.Div(
-                        [
-                            html.Label("Countlines"),
-                            dcc.Dropdown(
-                                id="viv-countline-dd",
-                                options=[
-                                    {"label": row["label"], "value": row["countline_id"]}
-                                    for _, row in PRELOADED_META.iterrows()
+                                [
+                                    html.Label("API key status:"),
+                                    html.Div(
+                                        "Loaded" if API_KEY else "Missing — set VIVACITY_API_KEY",
+                                        id="viv-api-status",
+                                        style={"color": "#0a0" if API_KEY else "#b00"},
+                                    ),
                                 ],
-                                multi=True,
-                                placeholder=("Select countlines from metadata"),
-                                value=DEFAULT_IDS,  # preselect default IDs
-                            ),
-                            dcc.Input(
-                                id="viv-manual-ids",
-                                placeholder="Or enter IDs e.g. 54315,54316",
-                                style={"width": 320, "marginTop": 6},
-                            ),
-                        ],
-                        style={"minWidth": 340, "flex": 2, "marginRight": 12},
-                    ),
-                    html.Div(
-                        [
-                            html.Label("From / To (Local time)"),
-                            dcc.DatePickerRange(
-                                id="viv-date-range",
-                                start_date=DEFAULT_FROM_LOCAL.date(),
-                                end_date=DEFAULT_TO_LOCAL.date(),
-                                display_format="YYYY-MM-DD",
-                                updatemode="bothdates",
-                            ),
-                            html.Div(
-                                "Time of day can be adjusted below.",
-                                style={"fontSize": 12, "opacity": 0.75, "marginTop": 4},
+                                style={"marginBottom": 8},
                             ),
                             html.Div(
                                 [
-                                    dcc.Input(
-                                        id="viv-from-time",
-                                        type="text",
-                                        value="00:00",
-                                        placeholder="HH:MM",
-                                        style={"width": 80, "marginRight": 8},
+                                    html.Label("Countlines"),
+                                    dcc.Dropdown(
+                                        id="viv-countline-dd",
+                                        options=[
+                                            {"label": row["label"], "value": row["countline_id"]}
+                                            for _, row in PRELOADED_META.iterrows()
+                                        ],
+                                        multi=True,
+                                        placeholder=("Select countlines from metadata"),
+                                        value=DEFAULT_IDS,
                                     ),
                                     dcc.Input(
-                                        id="viv-to-time",
-                                        type="text",
-                                        value="23:59",
-                                        placeholder="HH:MM",
-                                        style={"width": 80},
+                                        id="viv-manual-ids",
+                                        placeholder="Or enter IDs e.g. 54315,54316",
+                                        style={"width": 320, "marginTop": 6},
                                     ),
                                 ],
-                                style={"marginTop": 6},
+                                style={"minWidth": 340, "flex": 2, "marginRight": 12},
+                            ),
+                            html.Div(
+                                [
+                                    html.Label("From / To (Local time)"),
+                                    dcc.DatePickerRange(
+                                        id="viv-date-range",
+                                        start_date=DEFAULT_FROM_LOCAL.date(),
+                                        end_date=DEFAULT_TO_LOCAL.date(),
+                                        display_format="YYYY-MM-DD",
+                                        updatemode="bothdates",
+                                    ),
+                                    html.Div(
+                                        "Time of day can be adjusted below.",
+                                        style={"fontSize": 12, "opacity": 0.75, "marginTop": 4},
+                                    ),
+                                    html.Div(
+                                        [
+                                            dcc.Input(
+                                                id="viv-from-time",
+                                                type="text",
+                                                value="00:00",
+                                                placeholder="HH:MM",
+                                                style={"width": 80, "marginRight": 8},
+                                            ),
+                                            dcc.Input(
+                                                id="viv-to-time",
+                                                type="text",
+                                                value="23:59",
+                                                placeholder="HH:MM",
+                                                style={"width": 80},
+                                            ),
+                                        ],
+                                        style={"marginTop": 6},
+                                    ),
+                                ],
+                                style={"minWidth": 280, "flex": 2, "marginRight": 12},
+                            ),
+                            html.Div(
+                                [
+                                    html.Label("Time bucket"),
+                                    dcc.Dropdown(
+                                        id="viv-bucket-dd",
+                                        options=[
+                                            {"label": "5 minutes", "value": "5m"},
+                                            {"label": "15 minutes", "value": "15m"},
+                                            {"label": "1 hour", "value": "1h"},
+                                            {"label": "24 hours", "value": "24h"},
+                                        ],
+                                        value=DEFAULT_TIME_BUCKET,
+                                        clearable=False,
+                                    ),
+                                    html.Label("Classes"),
+                                    dcc.Checklist(
+                                        id="viv-classes-check",
+                                        options=[{"label": c.title(), "value": c} for c in DEFAULT_CLASSES],
+                                        value=DEFAULT_CLASSES,
+                                        inline=True,
+                                        style={"marginTop": 6},
+                                    ),
+                                    html.Button("Refresh", id="viv-refresh-btn", n_clicks=0, style={"marginTop": 8}),
+                                ],
+                                style={"minWidth": 260, "flex": 1},
                             ),
                         ],
-                        style={"minWidth": 280, "flex": 2, "marginRight": 12},
+                        style={
+                            "display": "flex",
+                            "flexWrap": "wrap",
+                            "gap": 12,
+                            "alignItems": "flex-end",
+                            "marginBottom": 12,
+                        },
                     ),
+                    dcc.Interval(id="viv-init", interval=200, n_intervals=0, max_intervals=1),
+                    dcc.Graph(id="viv-timeseries-graph"),
+                ],
+                class_name="mb-4",
+            ),
+            card(
+                [
+                    html.H4("Raw Data"),
                     html.Div(
                         [
-                            html.Label("Time bucket"),
-                            dcc.Dropdown(
-                                id="viv-bucket-dd",
-                                options=[
-                                    {"label": "5 minutes", "value": "5m"},
-                                    {"label": "15 minutes", "value": "15m"},
-                                    {"label": "1 hour", "value": "1h"},
-                                    {"label": "24 hours", "value": "24h"},
-                                ],
-                                value=DEFAULT_TIME_BUCKET,  # 1h default
-                                clearable=False,
-                            ),
-                            html.Label("Classes"),
-                            dcc.Checklist(
-                                id="viv-classes-check",
-                                options=[{"label": c.title(), "value": c} for c in DEFAULT_CLASSES],
-                                value=DEFAULT_CLASSES,
-                                inline=True,
-                                style={"marginTop": 6},
-                            ),
-                            html.Button("Refresh", id="viv-refresh-btn", n_clicks=0, style={"marginTop": 8}),
-                        ],
-                        style={"minWidth": 260, "flex": 1},
+                            html.Button("Download CSV", id="viv-download-btn", n_clicks=0, style={"marginBottom": 8}),
+                            dcc.Download(id="viv-download-raw"),
+                            dcc.Store(id="viv-raw-df-store"),
+                        ]
                     ),
-                ],
-                style={
-                    "display": "flex",
-                    "flexWrap": "wrap",
-                    "gap": 12,
-                    "alignItems": "flex-end",
-                    "marginBottom": 12,
-                },
-            ),
-
-            # Auto-run once on page load
-            dcc.Interval(id="viv-init", interval=200, n_intervals=0, max_intervals=1),
-
-            dcc.Graph(id="viv-timeseries-graph"),
-            html.Hr(),
-            html.H4("Raw Data"),
-            html.Div(
-                [
-                    html.Button("Download CSV", id="viv-download-btn", n_clicks=0, style={"marginBottom": 8}),
-                    dcc.Download(id="viv-download-raw"),
-                    dcc.Store(id="viv-raw-df-store"),  # holds the raw dataframe from the last query
+                    dash_table.DataTable(
+                        id="viv-data-table",
+                        columns=[
+                            {"name": "Timestamp (Local)", "id": "timestamp"},
+                            {"name": "Countline ID", "id": "countline_id"},
+                            {"name": "Class", "id": "cls"},
+                            {"name": "Count", "id": "count"},
+                        ],
+                        data=[],
+                        sort_action="native",
+                        filter_action="native",
+                        page_size=20,
+                        style_table={"overflowX": "auto"},
+                    ),
+                    html.Div(id="viv-error-box", style={"color": "#b00", "marginTop": 10}),
                 ]
             ),
-            dash_table.DataTable(
-                id="viv-data-table",
-                columns=[
-                    {"name": "Timestamp (Local)", "id": "timestamp"},
-                    {"name": "Countline ID", "id": "countline_id"},
-                    {"name": "Class", "id": "cls"},
-                    {"name": "Count", "id": "count"},
-                ],
-                data=[],
-                sort_action="native",
-                filter_action="native",
-                page_size=20,
-                style_table={"overflowX": "auto"},
-            ),
-            html.Div(id="viv-error-box", style={"color": "#b00", "marginTop": 10}),
         ],
-        style={"padding": 16, "fontFamily": "system-ui, -apple-system, Segoe UI, Roboto, Arial"},
     )
 
     # Main query callback: runs on first load (viv-init) and on Refresh button.

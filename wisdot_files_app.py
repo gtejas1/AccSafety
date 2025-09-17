@@ -187,49 +187,83 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
         intersection_rows.sort(key=lambda r: (r["location"].lower(), r["date"]))
 
         html = """
-        <h3>WisDOT Historical Files (.xlsm)</h3>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>WisDOT Count Files</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/theme.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-header-title">
+        <span class="app-brand">AccSafety</span>
+        <span class="app-subtitle">WisDOT Count Files</span>
+      </div>
+      <nav class="app-nav">
+        <a class="app-link" href="/">Back to Portal</a>
+      </nav>
+    </header>
+    <main class="app-content">
+      <section class="app-card">
+        <h1>Download recent WisDOT uploads</h1>
+        <p class="app-muted">Files are synchronised from the shared WisDOT repository. Choose a location below to retrieve the latest spreadsheet.</p>
+        {% if not trail_rows and not intersection_rows %}
+          <div class="app-alert">No count files were found in the configured directory.</div>
+        {% endif %}
         {% if trail_rows %}
-        <h4>Trail Counts</h4>
-        <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; font-family: sans-serif;">
-          <thead style="background:#f5f5f5;">
-            <tr>
-              <th align="left">Location</th>
-              <th align="left">Date</th>
-              <th align="left">Download</th>
-            </tr>
-          </thead>
-          <tbody>
-          {% for r in trail_rows %}
-            <tr>
-              <td>{{ r.location }}</td>
-              <td>{{ r.date }}</td>
-              <td><a href="{{ r.href }}">Download</a></td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
+          <h2>Trail Counts</h2>
+          <div class="table-wrap">
+            <table class="app-table">
+              <thead>
+                <tr>
+                  <th>Location</th>
+                  <th>Date</th>
+                  <th>Download</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in trail_rows %}
+                <tr>
+                  <td>{{ r.location }}</td>
+                  <td>{{ r.date }}</td>
+                  <td><a href="{{ r.href }}">Download</a></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         {% endif %}
         {% if intersection_rows %}
-        <h4>Intersection Counts</h4>
-        <table border="1" cellpadding="6" cellspacing="0" style="border-collapse:collapse; font-family: sans-serif;">
-          <thead style="background:#f5f5f5;">
-            <tr>
-              <th align="left">Location</th>
-              <th align="left">Date</th>
-              <th align="left">Download</th>
-            </tr>
-          </thead>
-          <tbody>
-          {% for r in intersection_rows %}
-            <tr>
-              <td>{{ r.location }}</td>
-              <td>{{ r.date }}</td>
-              <td><a href="{{ r.href }}">Download</a></td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
+          <h2>Intersection Counts</h2>
+          <div class="table-wrap">
+            <table class="app-table">
+              <thead>
+                <tr>
+                  <th>Location</th>
+                  <th>Date</th>
+                  <th>Download</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in intersection_rows %}
+                <tr>
+                  <td>{{ r.location }}</td>
+                  <td>{{ r.date }}</td>
+                  <td><a href="{{ r.href }}">Download</a></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
         {% endif %}
+      </section>
+    </main>
+  </div>
+</body>
+</html>
         """
         return render_template_string(html, trail_rows=trail_rows, intersection_rows=intersection_rows)
 
