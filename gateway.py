@@ -186,7 +186,9 @@ def create_server():
   <title>AccSafety Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/theme.css">
+  <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css">
   <script type="module" src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"></script>
+  <script nomodule src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.js"></script>
 </head>
 <body>
   <div class="app-shell">
