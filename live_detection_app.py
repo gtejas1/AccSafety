@@ -18,14 +18,14 @@ import dash_bootstrap_components as dbc
 from theme import card, dash_page
 
 # ── Config ────────────────────────────────────────────────────────────────────
-# RTSP_URL = os.getenv(
-#     "YOLO_RTSP_URL",
-#     "http://root:Wisdot2018!@63.43.111.221:8881/axis-cgi/media.cgi?"
-#     "audiocodec=aac&audiosamplerate=16000&audiobitrate=32000&camera=1&"
-#     "videoframeskipmode=empty&videozprofile=classic&resolution=1920x1080&fps=30&"
-#     "audiodeviceid=0&audioinputid=0&timestamp=0&videocodec=h264&container=mp4",
-# )
-RTSP_URL = "rtsp://trafficstudy:q;3Gq85RHL+G@10.1.52.24/axis-media/media.amp?videocodec=h264&camera=1"
+RTSP_URL = os.getenv(
+    "YOLO_RTSP_URL",
+    "http://root:Wisdot2018!@63.43.111.221:8881/axis-cgi/media.cgi?"
+    "audiocodec=aac&audiosamplerate=16000&audiobitrate=32000&camera=1&"
+    "videoframeskipmode=empty&videozprofile=classic&resolution=1920x1080&fps=30&"
+    "audiodeviceid=0&audioinputid=0&timestamp=0&videocodec=h264&container=mp4",
+)
+# RTSP_URL = "rtsp://trafficstudy:q;3Gq85RHL+G@10.1.52.24/axis-media/media.amp?videocodec=h264&camera=1"
 MODEL_PATH = os.getenv("YOLO_MODEL", "yolo11n.pt")
 TARGET_WIDTH = int(os.getenv("YOLO_TARGET_WIDTH", 960))
 SCORE_THRESH = float(os.getenv("YOLO_SCORE_THRESH", 0.4))
@@ -176,6 +176,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 [
                     html.H3("N Maryland Avenue - UW Milwaukee Campus"),
                     html.P("Streaming from RTSP/HTTP with on-the-fly YOLO inference."),
+                    html.P("NOTE: This is a demonstration to show live object detection."),
                     html.Img(
                         src=route_path,
                         style={"width": "100%", "borderRadius": "12px"},

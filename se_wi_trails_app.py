@@ -78,7 +78,7 @@ def create_se_wi_trails_app(server, prefix: str = "/se-wi-trails/") -> None:
     </header>
     <main class="app-content">
       <section class="app-card">
-        <h1>Regional trail counter inventory</h1>
+        <h1>SE Wisconsin Trails</h1>
         <p class="app-muted">
           This reference table summarises known SE Wisconsin trail counter locations along with descriptive metadata.
           Scroll horizontally to view all available details.

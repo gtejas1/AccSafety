@@ -83,7 +83,7 @@ def create_trail_dash(server, prefix="/trail/"):
     )
 
     summary_layout = card([
-        html.H2("Trail Counter Locations", style={"textAlign": "center"}),
+        html.H2("WisDOT Trail Counter Locations", style={"textAlign": "center"}),
         dash_table.DataTable(
             id="trail-summary-table",
             columns=[

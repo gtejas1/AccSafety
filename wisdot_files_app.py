@@ -235,8 +235,8 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
     </header>
     <main class="app-content">
       <section class="app-card">
-        <h1>Download recent WisDOT uploads</h1>
-        <p class="app-muted">Files are synchronised from the shared WisDOT repository. Choose a location below to retrieve the latest spreadsheet.</p>
+        <h1>Download historical WisDOT data</h1>
+        <p class="app-muted">Files are synchronised from the raw data folder in the server. Choose a location below to retrieve the latest spreadsheet.</p>
         {% if not trail_rows and not intersection_rows %}
           <div class="app-alert">No count files were found in the configured directory.</div>
         {% endif %}
@@ -309,5 +309,5 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
 if __name__ == "__main__":
     app = Flask(__name__)
     create_wisdot_files_app(app, prefix="/")
-    app.run(host="127.0.0.1", port=5001, debug=True)
+    app.run(host="127.0.0.1", port=5001, debug=False)
 

@@ -221,7 +221,7 @@ def create_server():
 
     <main class="app-content">
       <section class="app-card">
-        <h1>Explore Wisconsin Mobility Data</h1>
+        <h1>Explore Wisconsin Pedestrain and Bicyclist Mobility Data</h1>
         <p class="app-muted">
           Use the navigation above to jump between short term and long term count dashboards,
           download WisDOT files, or explore the regional trails catalog. The interactive map
@@ -266,4 +266,4 @@ def create_server():
 
 if __name__ == "__main__":
     app = create_server()
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    app.run(host="127.0.0.1", port=5000, debug=False)
