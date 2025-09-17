@@ -8,13 +8,14 @@ from pbc_eco_app import create_eco_dash
 from vivacity_app import create_vivacity_dash
 from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
+from se_wi_trails_app import create_se_wi_trails_app
 
 VALID_USERS = {  # change as needed, or load from env/DB
     "admin": "admin",
     "user1": "mypassword",
 }
 
-PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/")  # guard home + all apps
+PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")  # guard home + all apps
 
 
 def create_server():
@@ -153,6 +154,7 @@ def create_server():
     create_vivacity_dash(server, prefix="/vivacity/")
     create_live_detection_app(server, prefix="/live/")
     create_wisdot_files_app(server, prefix="/wisdot/")
+    create_se_wi_trails_app(server, prefix="/se-wi-trails/")
 
     @server.route("/")
     def home():
@@ -263,6 +265,7 @@ def create_server():
           <a href="/live/">Live Object Detection</a>
         </div>
       </div>
+      <a class="nav-link" href="/se-wi-trails/">SE Wisconsin Trails</a>
     </nav>
     <div class="spacer"></div>
     <div class="user">Signed in as <strong>{{ user }}</strong> · <a class="logout" href="/logout">Log out</a></div>
@@ -285,6 +288,7 @@ def create_server():
 </html>
         """, wisdot_link=wisdot_link, user=session.get("user","user"))
 
+
     # Convenience redirects
     @server.route("/trail")
     def trail_no_slash(): return redirect("/trail/", code=302)
@@ -296,6 +300,8 @@ def create_server():
     def live_no_slash(): return redirect("/live/", code=302)
     @server.route("/wisdot")
     def wisdot_no_slash(): return redirect("/wisdot/", code=302)
+    @server.route("/se-wi-trails")
+    def se_wi_trails_no_slash(): return redirect("/se-wi-trails/", code=302)
 
     return server
 
