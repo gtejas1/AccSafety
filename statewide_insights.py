@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import pandas as pd
 from flask import Flask, redirect, render_template_string
@@ -71,6 +71,27 @@ def _load_dataset(label: str, path: Path) -> pd.DataFrame:
     return data
 
 
+def _clean_text(value: object) -> Optional[str]:
+    """Return a trimmed string representation or ``None`` for null-ish values."""
+
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    if isinstance(value, (int, float)):
+        if pd.isna(value):
+            return None
+        # Avoid trailing ".0" for whole numbers that were read as floats.
+        if isinstance(value, float) and value.is_integer():
+            return str(int(value))
+        return str(value)
+    if pd.isna(value):  # Handles pandas NA types gracefully.
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 @lru_cache(maxsize=1)
 def load_statewide_dataset() -> StatewideDataset:
     """Load and cache the statewide viewer dataset."""
@@ -96,22 +117,27 @@ def load_statewide_dataset() -> StatewideDataset:
     for row in data.to_dict(orient="records"):
         year_val = int(row["Year"]) if pd.notna(row["Year"]) else None
         est_val = float(row["EstimatedAnnual"]) if pd.notna(row["EstimatedAnnual"]) else None
+        city_val = _clean_text(row.get("City"))
+        region_val = _clean_text(row.get("WisDOT Region"))
+        location_id = _clean_text(row.get("Location ID"))
+        location_name = _clean_text(row.get("Location Name")) or "Unknown"
+        type_val = _clean_text(row.get("Type"))
         records.append(
             {
-                "Type": row["Type"],
+                "Type": type_val,
                 "Year": year_val,
-                "WisDOT Region": row["WisDOT Region"],
-                "City": row["City"],
-                "Location ID": row["Location ID"],
-                "Location Name": row["Location Name"],
+                "WisDOT Region": region_val,
+                "City": city_val,
+                "Location ID": location_id,
+                "Location Name": location_name,
                 "EstimatedAnnual": est_val,
             }
         )
 
-    type_options = sorted({row["Type"] for row in records if row["Type"]})
+    type_options = sorted({row["Type"] for row in records if row["Type"]}, key=str.casefold)
     year_options = sorted({row["Year"] for row in records if row["Year"] is not None})
-    city_options = sorted({row["City"] for row in records if row["City"]})
-    region_options = sorted({row["WisDOT Region"] for row in records if row["WisDOT Region"]})
+    city_options = sorted({row["City"] for row in records if row["City"]}, key=str.casefold)
+    region_options = sorted({row["WisDOT Region"] for row in records if row["WisDOT Region"]}, key=str.casefold)
 
     return StatewideDataset(
         records_json=json.dumps(records, separators=(",", ":")),
