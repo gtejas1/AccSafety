@@ -1,6 +1,7 @@
 # gateway.py
 import os
 from urllib.parse import quote
+
 from flask import Flask, render_template_string, redirect, request, session
 
 from pbc_trail_app import create_trail_dash
@@ -9,14 +10,14 @@ from vivacity_app import create_vivacity_dash
 from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
+from statewide_insights import register_statewide_insights
 
 VALID_USERS = {  # change as needed, or load from env/DB
     "admin": "admin",
     "user1": "mypassword",
 }
 
-PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")  # guard home + all apps
-
+PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/", "/statewide-map")  # guard home + all apps
 
 def create_server():
     server = Flask(__name__)
@@ -174,6 +175,7 @@ def create_server():
     create_live_detection_app(server, prefix="/live/")
     create_wisdot_files_app(server, prefix="/wisdot/")
     create_se_wi_trails_app(server, prefix="/se-wi-trails/")
+    register_statewide_insights(server)
 
     @server.route("/")
     def home():
@@ -215,6 +217,7 @@ def create_server():
           </div>
         </div>
         <a class="app-link" href="/se-wi-trails/">SE Wisconsin Trails</a>
+        <a class="app-link" href="/statewide-map">Statewide Map &amp; Insights</a>
       </nav>
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
     </header>
@@ -245,7 +248,6 @@ def create_server():
 </html>
         """, wisdot_link=wisdot_link, user=session.get("user", "user"))
 
-
     # Convenience redirects
     @server.route("/trail")
     def trail_no_slash(): return redirect("/trail/", code=302)
@@ -259,7 +261,6 @@ def create_server():
     def wisdot_no_slash(): return redirect("/wisdot/", code=302)
     @server.route("/se-wi-trails")
     def se_wi_trails_no_slash(): return redirect("/se-wi-trails/", code=302)
-
     return server
 
 
