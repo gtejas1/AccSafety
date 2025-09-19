@@ -191,6 +191,26 @@ def create_server():
   <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css">
   <script type="module" src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"></script>
   <script nomodule src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.js"></script>
+  <style>
+    .portal-subheading-link {
+      margin: 12px 0 20px;
+    }
+
+    .portal-subheading-link a {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      color: var(--brand-primary);
+      text-decoration: none;
+    }
+
+    .portal-subheading-link a:hover,
+    .portal-subheading-link a:focus {
+      color: var(--brand-secondary);
+      text-decoration: underline;
+    }
+  </style>
 </head>
 <body>
   <div class="app-shell">
@@ -217,7 +237,6 @@ def create_server():
           </div>
         </div>
         <a class="app-link" href="/se-wi-trails/">SE Wisconsin Trails</a>
-        <a class="app-link" href="/statewide-map">Statewide Map &amp; Insights</a>
       </nav>
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
     </header>
@@ -225,6 +244,9 @@ def create_server():
     <main class="app-content">
       <section class="app-card">
         <h1>Explore Wisconsin Pedestrain and Bicyclist Mobility Data</h1>
+        <p class="portal-subheading-link">
+          <a href="/statewide-map">Statewide Map &amp; Insights</a>
+        </p>
         <p class="app-muted">
           Use the navigation above to jump between short term and long term count dashboards,
           download WisDOT files, or explore the regional trails catalog. The interactive map
