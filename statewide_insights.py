@@ -1,6 +1,6 @@
 """Statewide ArcGIS map view for the AccSafety portal."""
 
-from flask import Flask, redirect, render_template_string, session
+from flask import Flask, redirect, render_template_string
 
 
 def register_statewide_insights(app: Flask) -> None:
@@ -37,11 +37,8 @@ def register_statewide_insights(app: Flask) -> None:
         <span class="app-subtitle">Statewide Map &amp; Insights</span>
       </div>
       <nav class="app-nav" aria-label="Main navigation">
-        <a class="app-link" href="/">Portal Home</a>
-        <a class="app-link" href="/statewide-map">Refresh Insights</a>
-        <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
+        <a class="app-link" href="/">Back to Portal</a>
       </nav>
-      <div class="app-user">Signed in as <strong>{{ user }}</strong></div>
     </header>
 
     <main class="app-content">
@@ -56,7 +53,6 @@ def register_statewide_insights(app: Flask) -> None:
 </body>
 </html>
             """,
-            user=session.get("user", "user"),
         )
 
     @app.route("/statewide-map/")
