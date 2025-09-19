@@ -1,14 +1,14 @@
-"""Statewide ArcGIS map view for the AccSafety portal."""
+"""Statewide ArcGIS map page with embedded Dash insights viewer."""
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import pandas as pd
+from dash import Dash, Input, Output, dash_table, dcc, html
+import plotly.express as px
 from flask import Flask, redirect, render_template_string
 
 
@@ -38,122 +38,296 @@ BASE_COLUMNS: List[str] = [
 ]
 
 
-@dataclass(frozen=True)
-class StatewideDataset:
-    """Normalized statewide insights data prepared for the viewer."""
-
-    records_json: str
-    type_options: List[str]
-    year_options: List[int]
-    city_options: List[str]
-    region_options: List[str]
+STATEWIDE_DASH_APP: Dash | None = None
+STATEWIDE_DATA: pd.DataFrame | None = None
+STATEWIDE_TYPE_OPTS: List[str] = []
+STATEWIDE_YEAR_OPTS: List[int] = []
+STATEWIDE_CITY_OPTS: List[str] = []
+STATEWIDE_REGION_OPTS: List[str] = []
 
 
 def _load_dataset(label: str, path: Path) -> pd.DataFrame:
-    """Load and normalize an Excel workbook for the statewide viewer."""
-
     df = pd.read_excel(path, sheet_name=0)
     df.columns = df.columns.astype(str)
 
     missing = [c for c in BASE_COLUMNS if c not in df.columns]
     if missing:
-        raise ValueError(f"{label}: missing required columns {missing} in {path.name}")
+        raise ValueError(f"{label}: Missing columns {missing} in {path.name}")
 
     annual_col = ANNUAL_COLS[label]
     if annual_col not in df.columns:
-        raise ValueError(f"{label}: missing column '{annual_col}' in {path.name}")
+        raise ValueError(f"{label}: Missing '{annual_col}' in {path.name}")
 
-    data = df[BASE_COLUMNS + [annual_col]].copy()
-    data.rename(columns={annual_col: "EstimatedAnnual"}, inplace=True)
-    data["Type"] = label
-    data["EstimatedAnnual"] = pd.to_numeric(data["EstimatedAnnual"], errors="coerce")
-    data["Year"] = pd.to_numeric(data["Year"], errors="coerce")
-    return data
-
-
-def _clean_text(value: object) -> Optional[str]:
-    """Return a trimmed string representation or ``None`` for null-ish values."""
-
-    if value is None:
-        return None
-    if isinstance(value, str):
-        text = value.strip()
-        return text or None
-    if isinstance(value, (int, float)):
-        if pd.isna(value):
-            return None
-        # Avoid trailing ".0" for whole numbers that were read as floats.
-        if isinstance(value, float) and value.is_integer():
-            return str(int(value))
-        return str(value)
-    if pd.isna(value):  # Handles pandas NA types gracefully.
-        return None
-    text = str(value).strip()
-    return text or None
+    out = df[BASE_COLUMNS + [annual_col]].copy()
+    out.rename(columns={annual_col: "EstimatedAnnual"}, inplace=True)
+    out["Type"] = label
+    out["EstimatedAnnual"] = pd.to_numeric(out["EstimatedAnnual"], errors="coerce")
+    out["Year"] = pd.to_numeric(out["Year"], errors="coerce")
+    return out
 
 
 @lru_cache(maxsize=1)
-def load_statewide_dataset() -> StatewideDataset:
-    """Load and cache the statewide viewer dataset."""
-
+def _load_statewide_frame() -> pd.DataFrame:
     frames: List[pd.DataFrame] = []
     errors: Dict[str, str] = {}
 
     for label, filename in EXCEL_FILES.items():
-        workbook_path = ASSETS_DIR / filename
         try:
-            frames.append(_load_dataset(label, workbook_path))
-        except Exception as exc:  # pragma: no cover - defensive guard
+            frames.append(_load_dataset(label, ASSETS_DIR / filename))
+        except Exception as exc:
             errors[label] = str(exc)
 
     if not frames:
-        raise RuntimeError(
-            "Failed to load any statewide datasets. Errors: " + ", ".join(f"{k}: {v}" for k, v in errors.items())
-        )
+        raise SystemExit(f"Failed to load any dataset. Errors: {errors}")
 
-    data = pd.concat(frames, ignore_index=True)
+    return pd.concat(frames, ignore_index=True)
 
-    records = []
-    for row in data.to_dict(orient="records"):
-        year_val = int(row["Year"]) if pd.notna(row["Year"]) else None
-        est_val = float(row["EstimatedAnnual"]) if pd.notna(row["EstimatedAnnual"]) else None
-        city_val = _clean_text(row.get("City"))
-        region_val = _clean_text(row.get("WisDOT Region"))
-        location_id = _clean_text(row.get("Location ID"))
-        location_name = _clean_text(row.get("Location Name")) or "Unknown"
-        type_val = _clean_text(row.get("Type"))
-        records.append(
-            {
-                "Type": type_val,
-                "Year": year_val,
-                "WisDOT Region": region_val,
-                "City": city_val,
-                "Location ID": location_id,
-                "Location Name": location_name,
-                "EstimatedAnnual": est_val,
-            }
-        )
 
-    type_options = sorted({row["Type"] for row in records if row["Type"]}, key=str.casefold)
-    year_options = sorted({row["Year"] for row in records if row["Year"] is not None})
-    city_options = sorted({row["City"] for row in records if row["City"]}, key=str.casefold)
-    region_options = sorted({row["WisDOT Region"] for row in records if row["WisDOT Region"]}, key=str.casefold)
+def _prepare_options(data: pd.DataFrame) -> None:
+    global STATEWIDE_TYPE_OPTS, STATEWIDE_YEAR_OPTS
+    global STATEWIDE_CITY_OPTS, STATEWIDE_REGION_OPTS
 
-    return StatewideDataset(
-        records_json=json.dumps(records, separators=(",", ":")),
-        type_options=list(type_options),
-        year_options=[int(y) for y in year_options],
-        city_options=list(city_options),
-        region_options=list(region_options),
+    STATEWIDE_TYPE_OPTS = sorted(data["Type"].dropna().unique().tolist())
+    STATEWIDE_YEAR_OPTS = sorted(int(y) for y in data["Year"].dropna().unique())
+    STATEWIDE_CITY_OPTS = sorted(data["City"].dropna().unique().tolist())
+    STATEWIDE_REGION_OPTS = sorted(data["WisDOT Region"].dropna().unique().tolist())
+
+
+def _ensure_statewide_dash(server: Flask) -> Dash:
+    global STATEWIDE_DASH_APP, STATEWIDE_DATA
+
+    if STATEWIDE_DASH_APP is not None:
+        return STATEWIDE_DASH_APP
+
+    STATEWIDE_DATA = _load_statewide_frame()
+    _prepare_options(STATEWIDE_DATA)
+
+    dash_app = Dash(
+        __name__,
+        server=server,
+        url_base_pathname="/statewide-map/viewer/",
     )
+    dash_app.title = "WI Ped/Bike/Trail Counts (Simple Viewer)"
+
+    dash_app.layout = html.Div(
+        style={
+            "fontFamily": "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+            "padding": "18px",
+        },
+        children=[
+            html.H2(
+                "Wisconsin Pedestrian / Bicyclist / Trail Users — Simple Viewer",
+                style={"marginTop": "0"},
+            ),
+            html.Div(
+                style={
+                    "display": "grid",
+                    "gridTemplateColumns": "repeat(4, minmax(180px, 1fr))",
+                    "gap": "12px",
+                    "alignItems": "end",
+                },
+                children=[
+                    html.Div(
+                        [
+                            html.Label("Type"),
+                            dcc.Dropdown(
+                                STATEWIDE_TYPE_OPTS,
+                                value=STATEWIDE_TYPE_OPTS[0] if STATEWIDE_TYPE_OPTS else None,
+                                id="type-dd",
+                            ),
+                        ]
+                    ),
+                    html.Div(
+                        [
+                            html.Label("Year"),
+                            dcc.Dropdown(
+                                STATEWIDE_YEAR_OPTS,
+                                multi=True,
+                                value=[],
+                                placeholder="All",
+                                id="year-dd",
+                            ),
+                        ]
+                    ),
+                    html.Div(
+                        [
+                            html.Label("City"),
+                            dcc.Dropdown(
+                                STATEWIDE_CITY_OPTS,
+                                multi=True,
+                                value=[],
+                                placeholder="All",
+                                id="city-dd",
+                            ),
+                        ]
+                    ),
+                    html.Div(
+                        [
+                            html.Label("WisDOT Region"),
+                            dcc.Dropdown(
+                                STATEWIDE_REGION_OPTS,
+                                multi=True,
+                                value=[],
+                                placeholder="All",
+                                id="region-dd",
+                            ),
+                        ]
+                    ),
+                ],
+            ),
+            html.Br(),
+            html.Div(
+                style={"display": "grid", "gridTemplateColumns": "2fr 1fr", "gap": "16px"},
+                children=[
+                    dcc.Graph(id="bar-top-locs"),
+                    html.Div(
+                        [html.H4("Summary"), html.Div(id="summary-box")],
+                        style={
+                            "border": "1px solid #ddd",
+                            "borderRadius": "10px",
+                            "padding": "12px",
+                        },
+                    ),
+                ],
+            ),
+            html.Br(),
+            html.H4("Filtered Records"),
+            dash_table.DataTable(
+                id="table",
+                columns=[
+                    {"name": c, "id": c}
+                    for c in [
+                        "Type",
+                        "Year",
+                        "WisDOT Region",
+                        "City",
+                        "Location ID",
+                        "Location Name",
+                        "EstimatedAnnual",
+                    ]
+                ],
+                page_size=10,
+                sort_action="native",
+                filter_action="native",
+                style_table={"overflowX": "auto"},
+                style_cell={"fontSize": "14px", "padding": "8px"},
+                style_header={"backgroundColor": "#f5f5f5", "fontWeight": "600"},
+                export_format="csv",
+            ),
+            html.Div(
+                style={"marginTop": "12px", "fontSize": "12px", "color": "#666"},
+                children="Tip: Use the table header filter boxes to further refine results; click column headers to sort.",
+            ),
+            html.Hr(),
+            html.Div(
+                style={"fontSize": "12px", "color": "#666"},
+                children=[
+                    "Data source: Wisconsin Ped/Bike Count Database Excel files (032824 versions). ",
+                    "This is a lightweight viewer generated automatically.",
+                ],
+            ),
+        ],
+    )
+
+    _register_dash_callbacks(dash_app)
+
+    STATEWIDE_DASH_APP = dash_app
+    return dash_app
+
+
+def _apply_filters(df: pd.DataFrame, type_val, years, cities, regions) -> pd.DataFrame:
+    filtered = df.copy()
+    if type_val:
+        filtered = filtered[filtered["Type"] == type_val]
+    if years:
+        filtered = filtered[filtered["Year"].isin(years)]
+    if cities:
+        filtered = filtered[filtered["City"].isin(cities)]
+    if regions:
+        filtered = filtered[filtered["WisDOT Region"].isin(regions)]
+    return filtered
+
+
+def _register_dash_callbacks(dash_app: Dash) -> None:
+    @dash_app.callback(  # type: ignore[misc]
+        Output("bar-top-locs", "figure"),
+        Output("table", "data"),
+        Output("summary-box", "children"),
+        Input("type-dd", "value"),
+        Input("year-dd", "value"),
+        Input("city-dd", "value"),
+        Input("region-dd", "value"),
+    )
+    def update_view(type_val, years, cities, regions):
+        if years is None:
+            years = []
+        if cities is None:
+            cities = []
+        if regions is None:
+            regions = []
+
+        assert STATEWIDE_DATA is not None  # Data is prepared during Dash setup.
+
+        filtered = _apply_filters(STATEWIDE_DATA, type_val, years, cities, regions)
+
+        top = filtered.sort_values("EstimatedAnnual", ascending=False).head(20).copy()
+        top["Label"] = top["Location Name"].str.slice(0, 40).fillna("Unknown")
+        fig = px.bar(
+            top,
+            x="Label",
+            y="EstimatedAnnual",
+            hover_data=[
+                "Location Name",
+                "City",
+                "WisDOT Region",
+                "Year",
+                "EstimatedAnnual",
+            ],
+            labels={"EstimatedAnnual": "Estimated Annual Count", "Label": "Location"},
+            title="Top Locations by Estimated Annual Count (Top 20)",
+        )
+        fig.update_layout(
+            margin=dict(l=10, r=10, t=50, b=10),
+            xaxis_tickangle=-35,
+            height=450,
+        )
+
+        total_sites = filtered["Location ID"].nunique()
+        total_rows = len(filtered)
+        total_est = filtered["EstimatedAnnual"].sum(min_count=1)
+        summary = html.Ul(
+            [
+                html.Li(f"Rows: {total_rows:,}"),
+                html.Li(f"Unique Sites: {total_sites:,}"),
+                html.Li(
+                    "Sum of Estimated Annual Count: "
+                    + (
+                        f"{int(total_est):,}" if pd.notna(total_est) else "N/A"
+                    )
+                ),
+            ]
+        )
+
+        table_data = filtered[
+            [
+                "Type",
+                "Year",
+                "WisDOT Region",
+                "City",
+                "Location ID",
+                "Location Name",
+                "EstimatedAnnual",
+            ]
+        ].to_dict("records")
+
+        return fig, table_data, summary
 
 
 def register_statewide_insights(app: Flask) -> None:
-    """Attach the statewide insights routes to the provided Flask app."""
+    _ensure_statewide_dash(app)
 
     @app.route("/statewide-map")
     def statewide_map():
-        dataset = load_statewide_dataset()
         return render_template_string(
             """
 <!doctype html>
@@ -166,10 +340,52 @@ def register_statewide_insights(app: Flask) -> None:
   <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css">
   <script type="module" src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"></script>
   <script nomodule src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.16/400.css">
   <style>
-    :root {
-      color-scheme: light;
+    .app-shell {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: #f8fafc;
+    }
+
+    .app-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 28px;
+      background: white;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    }
+
+    .app-header-title {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .app-brand {
+      font-size: 1.4rem;
+      font-weight: 600;
+      color: #0f172a;
+    }
+
+    .app-subtitle {
+      font-size: 0.95rem;
+      color: #64748b;
+    }
+
+    .app-nav .app-link {
+      color: #2563eb;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .app-content {
+      flex: 1;
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
     }
 
     .map-frame {
@@ -177,137 +393,22 @@ def register_statewide_insights(app: Flask) -> None:
       border-radius: 18px;
       overflow: hidden;
       box-shadow: 0 20px 44px rgba(15, 23, 42, 0.15);
+      background: white;
     }
 
-    .insights-viewer {
-      margin-top: 32px;
-      padding: 28px 30px 32px;
+    .viewer-frame {
+      border: none;
+      width: 100%;
+      min-height: 900px;
       border-radius: 22px;
-      background: linear-gradient(145deg, rgba(245,248,255,0.88), rgba(255,255,255,0.92));
       box-shadow: 0 18px 40px rgba(15, 23, 42, 0.12);
+      background: white;
     }
 
-    .viewer-header {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-bottom: 24px;
-    }
-
-    .viewer-title {
-      font-size: 1.8rem;
-      font-weight: 600;
-      color: #0f172a;
-      margin: 0;
-    }
-
-    .viewer-subtitle {
-      font-size: 0.95rem;
-      color: #475569;
-      margin: 0;
-    }
-
-    .viewer-controls {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-      gap: 16px;
-      margin-bottom: 26px;
-    }
-
-    .control-block label {
-      display: block;
-      font-weight: 600;
-      font-size: 0.85rem;
-      color: #1e293b;
-      margin-bottom: 6px;
-    }
-
-    .control-block select {
-      width: 100%;
-      min-height: 38px;
-      padding: 8px 10px;
-      border-radius: 12px;
-      border: 1px solid #cbd5f5;
-      background: #fff;
-      font-size: 0.95rem;
-      color: #0f172a;
-      box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.08);
-    }
-
-    .viewer-grid {
-      display: grid;
-      grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-      gap: 22px;
-      align-items: stretch;
-    }
-
-    .summary-box {
-      border-radius: 18px;
-      border: 1px solid rgba(148, 163, 184, 0.35);
-      padding: 20px 22px;
-      background: rgba(255, 255, 255, 0.95);
-    }
-
-    .summary-box h3 {
-      margin: 0 0 12px;
-      font-size: 1.05rem;
-      color: #1e293b;
-    }
-
-    .summary-box ul {
-      margin: 0;
-      padding-left: 18px;
-      color: #334155;
-      font-size: 0.95rem;
-      line-height: 1.6;
-    }
-
-    .records-section {
-      margin-top: 34px;
-    }
-
-    .records-section h3 {
-      font-size: 1.2rem;
-      color: #0f172a;
-      margin-bottom: 14px;
-    }
-
-    table.viewer-table {
-      width: 100%;
-      border-collapse: collapse;
-      border-radius: 18px;
-      overflow: hidden;
-      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
-      font-size: 0.92rem;
-    }
-
-    table.viewer-table thead {
-      background: linear-gradient(135deg, rgba(30, 64, 175, 0.12), rgba(30, 64, 175, 0.32));
-      color: #0f172a;
-    }
-
-    table.viewer-table th,
-    table.viewer-table td {
-      padding: 12px 14px;
-      border-bottom: 1px solid rgba(226, 232, 240, 0.8);
-      text-align: left;
-      white-space: nowrap;
-    }
-
-    table.viewer-table tbody tr:nth-child(even) {
-      background-color: rgba(241, 245, 249, 0.6);
-    }
-
-    .table-footnote {
-      margin-top: 10px;
-      color: #64748b;
-      font-size: 0.78rem;
-    }
-
-    @media (max-width: 960px) {
-      .viewer-grid {
-        grid-template-columns: 1fr;
-      }
+    .app-card {
+      padding: 20px;
+      background: white;
+      border-radius: 24px;
     }
   </style>
 </head>
@@ -330,211 +431,14 @@ def register_statewide_insights(app: Flask) -> None:
         </div>
       </section>
 
-      <section class="insights-viewer" aria-label="Statewide counts explorer">
-        <div class="viewer-header">
-          <h2 class="viewer-title">Wisconsin Pedestrian, Bicyclist &amp; Trail Activity</h2>
-          <p class="viewer-subtitle">Interact with statewide counts sourced from the Wisconsin Ped/Bike Count Database (March 2024 extracts).</p>
-        </div>
-
-        <div class="viewer-controls">
-          <div class="control-block">
-            <label for="type-select">User Type</label>
-            <select id="type-select">
-            {% for option in dataset.type_options %}
-              <option value="{{ option }}" {% if loop.first %}selected{% endif %}>{{ option }}</option>
-            {% endfor %}
-            </select>
-          </div>
-          <div class="control-block">
-            <label for="year-select">Year</label>
-            <select id="year-select" multiple size="6" aria-describedby="year-hint">
-            {% for option in dataset.year_options %}
-              <option value="{{ option }}">{{ option }}</option>
-            {% endfor %}
-            </select>
-            <small id="year-hint" style="display:block;margin-top:6px;color:#64748b;">Hold Ctrl/⌘ to pick multiple years. Leave empty for all.</small>
-          </div>
-          <div class="control-block">
-            <label for="city-select">City</label>
-            <select id="city-select" multiple size="6">
-            {% for option in dataset.city_options %}
-              <option value="{{ option }}">{{ option }}</option>
-            {% endfor %}
-            </select>
-          </div>
-          <div class="control-block">
-            <label for="region-select">WisDOT Region</label>
-            <select id="region-select" multiple size="6">
-            {% for option in dataset.region_options %}
-              <option value="{{ option }}">{{ option }}</option>
-            {% endfor %}
-            </select>
-          </div>
-        </div>
-
-        <div class="viewer-grid">
-          <div id="bar-container" role="img" aria-label="Top statewide locations chart"></div>
-          <aside class="summary-box" aria-live="polite">
-            <h3>Snapshot</h3>
-            <ul id="summary-list"></ul>
-          </aside>
-        </div>
-
-        <div class="records-section">
-          <h3>Filtered Records</h3>
-          <div style="overflow:auto;">
-            <table class="viewer-table" id="records-table">
-              <thead>
-                <tr>
-                  <th scope="col">Type</th>
-                  <th scope="col">Year</th>
-                  <th scope="col">WisDOT Region</th>
-                  <th scope="col">City</th>
-                  <th scope="col">Location ID</th>
-                  <th scope="col">Location Name</th>
-                  <th scope="col">Estimated Annual Count</th>
-                </tr>
-              </thead>
-              <tbody></tbody>
-            </table>
-          </div>
-          <div class="table-footnote">Tip: Scroll horizontally to view long location names. Table updates automatically as filters change.</div>
-        </div>
+      <section class="app-card">
+        <iframe class="viewer-frame" src="/statewide-map/viewer/"></iframe>
       </section>
     </main>
   </div>
-
-  <script src="https://cdn.plot.ly/plotly-2.26.0.min.js" integrity="sha384-BJy5gJdAwVXyHqUAFzPZTftIQCzq4V3sBtL66JNJ1yvASRWQJGkmG6gJ+FXHXm7f" crossorigin="anonymous"></script>
-  <script>
-    const DATA = {{ dataset.records_json | safe }};
-
-    const typeSelect = document.getElementById('type-select');
-    const yearSelect = document.getElementById('year-select');
-    const citySelect = document.getElementById('city-select');
-    const regionSelect = document.getElementById('region-select');
-    const summaryList = document.getElementById('summary-list');
-    const tableBody = document.querySelector('#records-table tbody');
-
-    function getSelectedValues(selectEl) {
-      return Array.from(selectEl.selectedOptions).map(opt => opt.value);
-    }
-
-    function applyFilters(records) {
-      const typeVal = typeSelect.value;
-      const years = getSelectedValues(yearSelect).map(Number);
-      const cities = new Set(getSelectedValues(citySelect));
-      const regions = new Set(getSelectedValues(regionSelect));
-
-      return records.filter(row => {
-        if (typeVal && row['Type'] !== typeVal) return false;
-        if (years.length && !years.includes(row['Year'])) return false;
-        if (cities.size && !cities.has(row['City'])) return false;
-        if (regions.size && !regions.has(row['WisDOT Region'])) return false;
-        return true;
-      });
-    }
-
-    function renderSummary(records) {
-      const totalRows = records.length;
-      const uniqueSites = new Set(records.map(row => row['Location ID'])).size;
-      const annualSum = records.reduce((sum, row) => sum + (Number.isFinite(row['EstimatedAnnual']) ? row['EstimatedAnnual'] : 0), 0);
-      const summaryItems = [
-        `Rows: ${totalRows.toLocaleString()}`,
-        `Unique Sites: ${uniqueSites.toLocaleString()}`,
-        `Sum of Estimated Annual Count: ${Number.isFinite(annualSum) ? Math.round(annualSum).toLocaleString() : 'N/A'}`,
-      ];
-      summaryList.innerHTML = summaryItems.map(item => `<li>${item}</li>`).join('');
-    }
-
-    function renderTable(records) {
-      const rows = records.slice(0, 500).map(row => {
-        const est = Number.isFinite(row['EstimatedAnnual']) ? Math.round(row['EstimatedAnnual']).toLocaleString() : 'N/A';
-        return `
-          <tr>
-            <td>${row['Type'] || ''}</td>
-            <td>${row['Year'] ?? ''}</td>
-            <td>${row['WisDOT Region'] || ''}</td>
-            <td>${row['City'] || ''}</td>
-            <td>${row['Location ID'] || ''}</td>
-            <td>${row['Location Name'] || ''}</td>
-            <td>${est}</td>
-          </tr>`;
-      }).join('');
-      tableBody.innerHTML = rows || '<tr><td colspan="7" style="padding:16px;text-align:center;color:#64748b;">No records match the selected filters.</td></tr>';
-    }
-
-    function renderChart(records) {
-      const chartContainer = document.getElementById('bar-container');
-      const sorted = records
-        .filter(row => Number.isFinite(row['EstimatedAnnual']))
-        .slice()
-        .sort((a, b) => b['EstimatedAnnual'] - a['EstimatedAnnual'])
-        .slice(0, 20);
-
-      if (!sorted.length) {
-        chartContainer.innerHTML = '<div style="padding:24px;color:#64748b;">No chart data available for the current filters.</div>';
-        return;
-      }
-
-      const labels = sorted.map(row => (row['Location Name'] || 'Unknown').slice(0, 40));
-      const hoverText = sorted.map(row => `${row['Location Name'] || 'Unknown'}<br>${row['City'] || 'City N/A'} · ${row['WisDOT Region'] || 'Region N/A'}<br>Year ${row['Year'] ?? 'N/A'}`);
-      const values = sorted.map(row => row['EstimatedAnnual']);
-
-      const trace = {
-        type: 'bar',
-        x: labels,
-        y: values,
-        text: values.map(val => Math.round(val).toLocaleString()),
-        textposition: 'outside',
-        marker: {
-          color: '#2563eb',
-          opacity: 0.88,
-        },
-        hovertext: hoverText,
-        hoverinfo: 'text+y',
-      };
-
-      const layout = {
-        title: {
-          text: 'Top Locations by Estimated Annual Count',
-          font: {size: 20, family: 'Inter, system-ui, sans-serif', color: '#0f172a'},
-        },
-        margin: {l: 40, r: 18, t: 60, b: 120},
-        height: 470,
-        xaxis: {
-          tickangle: -35,
-          tickfont: {size: 11, family: 'Inter, system-ui, sans-serif'},
-        },
-        yaxis: {
-          title: 'Estimated Annual Count',
-          tickfont: {family: 'Inter, system-ui, sans-serif'},
-        },
-        bargap: 0.3,
-        plot_bgcolor: 'rgba(255,255,255,0.97)',
-        paper_bgcolor: 'rgba(255,255,255,0)',
-      };
-
-      Plotly.react(chartContainer, [trace], layout, {responsive: true, displayModeBar: false});
-    }
-
-    function handleUpdate() {
-      const filtered = applyFilters(DATA);
-      renderSummary(filtered);
-      renderTable(filtered);
-      renderChart(filtered);
-    }
-
-    typeSelect.addEventListener('change', handleUpdate);
-    yearSelect.addEventListener('change', handleUpdate);
-    citySelect.addEventListener('change', handleUpdate);
-    regionSelect.addEventListener('change', handleUpdate);
-
-    window.addEventListener('DOMContentLoaded', handleUpdate);
-  </script>
 </body>
 </html>
             """,
-            dataset=dataset,
         )
 
     @app.route("/statewide-map/")
