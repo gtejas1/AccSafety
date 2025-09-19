@@ -80,7 +80,6 @@ def create_se_wi_trails_app(server, prefix: str = "/se-wi-trails/") -> None:
       <section class="app-card">
         <h1>SE Wisconsin Trails</h1>
         <p class="app-muted">
-          This reference table summarises known SE Wisconsin trail counter locations along with descriptive metadata.
           Scroll horizontally to view all available details.
         </p>
         {% if error %}

@@ -232,7 +232,6 @@ def create_server():
           item-id="a1e765b1cec34b2897d6a8b7c1ffe54b"
           theme="light"
           bookmarks-enabled
-          heading-enabled
           legend-enabled
           information-enabled
           center="-87.87609699999999,43.122054"

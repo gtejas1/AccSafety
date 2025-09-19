@@ -572,17 +572,17 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                     html.H2("W Wells St & N 68th St Intersection"),
                     html.Div(
                         [
-                            html.Div(
-                                [
-                                    html.Label("API key status:"),
-                                    html.Div(
-                                        "Loaded" if API_KEY else "Missing — set VIVACITY_API_KEY",
-                                        id="viv-api-status",
-                                        style={"color": "#0a0" if API_KEY else "#b00"},
-                                    ),
-                                ],
-                                style={"marginBottom": 8},
-                            ),
+                            # html.Div(
+                            #     [
+                            #         html.Label("API key status:"),
+                            #         html.Div(
+                            #             "Loaded" if API_KEY else "Missing — set VIVACITY_API_KEY",
+                            #             id="viv-api-status",
+                            #             style={"color": "#0a0" if API_KEY else "#b00"},
+                            #         ),
+                            #     ],
+                            #     style={"marginBottom": 8},
+                            # ),
                             html.Div(
                                 [
                                     html.Label("Countlines"),
