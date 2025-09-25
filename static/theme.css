@@ -147,54 +147,6 @@ body {
   width: 100%;
 }
 
-.app-card--notice {
-  position: relative;
-  border: 1px solid rgba(11, 102, 195, 0.28);
-  background: linear-gradient(135deg, rgba(14, 165, 233, 0.12), rgba(255, 255, 255, 0.92));
-  padding-left: 68px;
-}
-
-.app-card--notice::before {
-  content: "\26A0";
-  position: absolute;
-  left: 24px;
-  top: 24px;
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.25rem;
-  background: rgba(11, 102, 195, 0.12);
-  color: var(--brand-primary);
-}
-
-.app-card--notice h2 {
-  margin-top: 0;
-  margin-bottom: 12px;
-  font-size: 1.2rem;
-}
-
-.app-card--notice p {
-  margin: 0 0 12px;
-  color: #0b1736;
-}
-
-.app-card--notice ul {
-  margin: 0 0 16px 1.25rem;
-  padding: 0;
-  color: #0f172a;
-}
-
-.app-card--notice li {
-  margin-bottom: 8px;
-}
-
-.app-card--notice .app-muted {
-  color: var(--brand-muted);
-}
-
 .app-card--narrow {
   max-width: 520px;
   margin: 0 auto;
