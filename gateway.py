@@ -220,8 +220,26 @@ def create_server():
     </header>
 
     <main class="app-content">
+      <section class="app-card app-card--notice" role="region" aria-labelledby="usage-disclaimer">
+        <h2 id="usage-disclaimer">Data Use &amp; Liability Notice</h2>
+        <p>
+          The information and dashboards available through this portal are provided for planning,
+          research, and educational purposes. By proceeding, you acknowledge and agree that:
+        </p>
+        <ul>
+          <li>All mobility datasets are provided on an "as is" basis without warranties of any kind.</li>
+          <li>Neither the University of Wisconsin Milwaukee nor its partners are liable for decisions
+              or actions taken based on the dashboards or derived analyses.</li>
+          <li>You are responsible for complying with all applicable data privacy, sharing, and
+              security requirements when downloading or distributing materials.</li>
+        </ul>
+        <p class="app-muted">
+          If you do not accept these terms, please discontinue use of the portal and contact the
+          program administrator for support.
+        </p>
+      </section>
       <section class="app-card">
-        <h1>Explore Wisconsin Pedestrain and Bicyclist Mobility Data</h1>
+        <h1>Explore Wisconsin Pedestrian and Bicyclist Mobility Data</h1>
         <p class="app-muted">
           Use the navigation above to jump between short term and long term count dashboards,
           download WisDOT files, or explore the regional trails catalog. The interactive map
