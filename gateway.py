@@ -232,6 +232,11 @@ def create_server():
     const declinePolicy = document.getElementById('policy-decline');
     const submitButton = document.querySelector('.login-card button[type="submit"]');
     const usernameInput = document.getElementById('username');
+    const urlParams = new URLSearchParams(window.location.search);
+
+    if (urlParams.get('reset_policy') === '1') {
+      window.localStorage.removeItem('accsafetyPolicyAccepted');
+    }
 
     function enableForm() {
       policyModal.hidden = true;
@@ -265,7 +270,7 @@ def create_server():
     @server.route("/logout")
     def logout():
         session.clear()
-        return redirect("/login", code=302)
+        return redirect("/login?reset_policy=1", code=302)
 
     # ---- Gateway home (with your ArcGIS map) --------------------------------
     create_trail_dash(server, prefix="/trail/")
