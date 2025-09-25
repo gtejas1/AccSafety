@@ -103,6 +103,12 @@ def create_server():
     .login-card button:hover {
       filter: brightness(1.05);
     }
+    .login-card button:disabled {
+      filter: grayscale(0.4);
+      cursor: not-allowed;
+      box-shadow: none;
+      opacity: 0.7;
+    }
     .login-card .showpw {
       margin-top: 10px;
       display: flex;
@@ -117,9 +123,72 @@ def create_server():
       font-weight: 600;
       font-size: 0.9rem;
     }
+    .notice-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(12, 23, 42, 0.72);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 999;
+    }
+    .notice-card {
+      max-width: 540px;
+      width: 100%;
+      background: #ffffff;
+      border-radius: 18px;
+      box-shadow: 0 24px 60px rgba(11, 23, 54, 0.32);
+      padding: 28px 32px;
+      color: #0b1736;
+      display: grid;
+      gap: 18px;
+    }
+    .notice-card h2 {
+      margin: 0;
+      font-size: 1.35rem;
+    }
+    .notice-card p {
+      margin: 0;
+      line-height: 1.55;
+    }
+    .notice-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+    .notice-actions button {
+      border-radius: 999px;
+      border: none;
+      padding: 10px 18px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.95rem;
+    }
+    .notice-actions .primary {
+      background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary));
+      color: #fff;
+      box-shadow: 0 12px 26px rgba(11, 102, 195, 0.28);
+    }
+    .notice-backdrop[hidden] {
+      display: none;
+    }
   </style>
 </head>
 <body>
+  <div id="policy-modal" class="notice-backdrop" role="dialog" aria-modal="true" aria-labelledby="policy-title" aria-describedby="policy-copy">
+    <div class="notice-card">
+      <h2 id="policy-title">Data Use &amp; Liability Notice</h2>
+      <div id="policy-copy">
+        <p>By proceeding, you confirm that you are an authorized AccSafety partner and that you will use this portal solely for official program analysis. All insights and downloadable data are confidential and may contain sensitive roadway safety information.</p>
+        <p>You acknowledge that AccSafety and its data providers are not liable for decisions made using this information and that you will comply with all applicable privacy and data handling obligations.</p>
+      </div>
+      <div class="notice-actions">
+        <button type="button" class="primary" id="policy-accept">I Understand &amp; Agree</button>
+      </div>
+    </div>
+  </div>
   <div class="app-shell">
     <header class="app-header">
       <div class="app-header-title">
@@ -145,7 +214,7 @@ def create_server():
           <input id="password" name="password" type="password" required placeholder="••••••••">
           <label class="showpw"><input id="toggle" type="checkbox"> Show password</label>
 
-          <button type="submit">Sign in</button>
+          <button type="submit" disabled>Sign in</button>
           {% if error %}<div class="error">{{ error }}</div>{% endif %}
         </form>
       </div>
@@ -153,6 +222,31 @@ def create_server():
   </div>
 
   <script>
+    const policyModal = document.getElementById('policy-modal');
+    const acceptPolicy = document.getElementById('policy-accept');
+    const submitButton = document.querySelector('.login-card button[type="submit"]');
+    const usernameInput = document.getElementById('username');
+    const urlParams = new URLSearchParams(window.location.search);
+
+    if (urlParams.get('reset_policy') === '1') {
+      window.localStorage.removeItem('accsafetyPolicyAccepted');
+    }
+
+    function enableForm() {
+      policyModal.hidden = true;
+      submitButton.disabled = false;
+      usernameInput.focus();
+    }
+
+    acceptPolicy.addEventListener('click', function () {
+      window.localStorage.setItem('accsafetyPolicyAccepted', 'true');
+      enableForm();
+    });
+
+    if (window.localStorage.getItem('accsafetyPolicyAccepted') === 'true') {
+      enableForm();
+    }
+
     document.getElementById('toggle').addEventListener('change', function(){
       const pw = document.getElementById('password');
       pw.type = this.checked ? 'text' : 'password';
@@ -165,7 +259,7 @@ def create_server():
     @server.route("/logout")
     def logout():
         session.clear()
-        return redirect("/login", code=302)
+        return redirect("/login?reset_policy=1", code=302)
 
     # ---- Gateway home (with your ArcGIS map) --------------------------------
     create_trail_dash(server, prefix="/trail/")
@@ -221,7 +315,7 @@ def create_server():
 
     <main class="app-content">
       <section class="app-card">
-        <h1>Explore Wisconsin Pedestrain and Bicyclist Mobility Data</h1>
+        <h1>Explore Wisconsin Pedestrian and Bicyclist Mobility Data</h1>
         <p class="app-muted">
           Use the navigation above to jump between short term and long term count dashboards,
           download WisDOT files, or explore the regional trails catalog. The interactive map
