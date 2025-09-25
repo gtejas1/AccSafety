@@ -171,10 +171,6 @@ def create_server():
       color: #fff;
       box-shadow: 0 12px 26px rgba(11, 102, 195, 0.28);
     }
-    .notice-actions .secondary {
-      background: #edf2f7;
-      color: #0b1736;
-    }
     .notice-backdrop[hidden] {
       display: none;
     }
@@ -189,7 +185,6 @@ def create_server():
         <p>You acknowledge that AccSafety and its data providers are not liable for decisions made using this information and that you will comply with all applicable privacy and data handling obligations.</p>
       </div>
       <div class="notice-actions">
-        <button type="button" class="secondary" id="policy-decline">Decline</button>
         <button type="button" class="primary" id="policy-accept">I Understand &amp; Agree</button>
       </div>
     </div>
@@ -229,7 +224,6 @@ def create_server():
   <script>
     const policyModal = document.getElementById('policy-modal');
     const acceptPolicy = document.getElementById('policy-accept');
-    const declinePolicy = document.getElementById('policy-decline');
     const submitButton = document.querySelector('.login-card button[type="submit"]');
     const usernameInput = document.getElementById('username');
     const urlParams = new URLSearchParams(window.location.search);
@@ -247,11 +241,6 @@ def create_server():
     acceptPolicy.addEventListener('click', function () {
       window.localStorage.setItem('accsafetyPolicyAccepted', 'true');
       enableForm();
-    });
-
-    declinePolicy.addEventListener('click', function () {
-      window.localStorage.removeItem('accsafetyPolicyAccepted');
-      window.location.href = 'https://www.dot.state.wi.us';
     });
 
     if (window.localStorage.getItem('accsafetyPolicyAccepted') === 'true') {
