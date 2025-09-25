@@ -9,15 +9,13 @@ import dash
 from dash import dcc, html, dash_table
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
-from sqlalchemy import create_engine
 from flask import session as flask_session, request as flask_request, send_file
 
 from theme import card, centered, dash_page
+from data_service import fetch_counts, fetch_site_metadata
 
 # ---- Config -----------------------------------------------------------------
 VALID_USERS = {"admin": "admin", "user1": "mypassword"}
-DB_URL = "postgresql://postgres:gw2ksoft@localhost/TrafficDB"
-ENGINE = create_engine(DB_URL)
 
 def create_eco_dash(server, prefix="/eco/"):
     app = dash.Dash(
@@ -32,21 +30,7 @@ def create_eco_dash(server, prefix="/eco/"):
     app.title = "Temporary Counts - TRCC Statewide Pilot Counting Projects"
 
     # ── Summary table data ────────────────────────────────────────────────────
-    summary_query = """
-        SELECT
-            location_name,
-            MIN(date) AS start_date,
-            MAX(date) AS end_date,
-            SUM(count)::bigint AS total_counts,
-            AVG(count)::numeric(12,2) AS average_hourly_count
-        FROM eco_traffic_data
-        GROUP BY location_name
-        ORDER BY location_name
-    """
-    summary_df = pd.read_sql(summary_query, ENGINE)
-    summary_df["start_date"] = summary_df["start_date"].dt.date
-    summary_df["end_date"] = summary_df["end_date"].dt.date
-    summary_df["average_hourly_count"] = summary_df["average_hourly_count"].round(0).astype(int)
+    summary_df = fetch_site_metadata("eco")
     summary_df["View"] = summary_df["location_name"].apply(
         lambda loc: f"[View]({prefix}dashboard?location={urllib.parse.quote(loc)})"
     )
@@ -169,10 +153,7 @@ def create_eco_dash(server, prefix="/eco/"):
         location = flask_request.args.get("location")
         if not location:
             return "Location not specified", 400
-        df = pd.read_sql(
-            "SELECT * FROM eco_traffic_data WHERE location_name = %(location)s",
-            ENGINE, params={"location": location}
-        )
+        df = fetch_counts("eco", site_ids=[location])
         buf = io.StringIO(); df.to_csv(buf, index=False); buf.seek(0)
         return send_file(io.BytesIO(buf.read().encode()), mimetype="text/csv",
                          as_attachment=True, download_name=f"{location}_traffic_data.csv")
@@ -204,15 +185,12 @@ def create_eco_dash(server, prefix="/eco/"):
         if not loc:
             return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
 
-        date_range = pd.read_sql(
-            "SELECT MIN(date) AS min_date, MAX(date) AS max_date FROM eco_traffic_data WHERE location_name = %(l)s",
-            ENGINE, params={"l": loc}
-        )
-        if date_range.empty or pd.isna(date_range.iloc[0]["min_date"]):
+        metadata = fetch_site_metadata("eco", site_ids=[loc])
+        if metadata.empty or pd.isna(metadata.iloc[0]["start_date"]):
             return None, None, None, None, "", loc
 
-        min_date = date_range.iloc[0]["min_date"]
-        max_date = date_range.iloc[0]["max_date"]
+        min_date = metadata.iloc[0]["start_date"]
+        max_date = metadata.iloc[0]["end_date"]
         dl = f"{prefix}download?location={urllib.parse.quote(loc)}"
         return min_date, max_date, min_date, max_date, dl, loc
 
@@ -232,15 +210,13 @@ def create_eco_dash(server, prefix="/eco/"):
             empty = go.Figure()
             return empty, empty, empty
 
-        data = pd.read_sql(
-            "SELECT * FROM eco_traffic_data WHERE location_name=%(l)s AND date BETWEEN %(s)s AND %(e)s",
-            ENGINE, params={"l": loc, "s": start_date, "e": end_date}
-        )
+        data = fetch_counts("eco", site_ids=[loc], start=pd.to_datetime(start_date), end=pd.to_datetime(end_date))
         if data.empty:
             empty = go.Figure(); empty.update_layout(title="No data in selected range")
             return empty, empty, empty
 
-        data["date"] = pd.to_datetime(data["date"]); data.set_index("date", inplace=True)
+        data["date"] = pd.to_datetime(data["date"])
+        data.set_index("date", inplace=True)
         daily = data.resample("D").sum(numeric_only=True)
         hourly_fig = px.line(data, x=data.index, y="count", color="direction", title="Hourly Traffic Trends")
         daily_fig  = px.line(daily, x=daily.index, y="count", title="Total Daily Traffic")

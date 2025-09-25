@@ -1,7 +1,11 @@
 # gateway.py
 import os
+from datetime import date, datetime
 from urllib.parse import quote
-from flask import Flask, render_template_string, redirect, request, session
+
+import pandas as pd
+from flask import Flask, render_template_string, redirect, request, session, jsonify
+from typing import Optional
 
 from pbc_trail_app import create_trail_dash
 from pbc_eco_app import create_eco_dash
@@ -9,13 +13,14 @@ from vivacity_app import create_vivacity_dash
 from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
+from data_service import get_counts, get_sites
 
 VALID_USERS = {  # change as needed, or load from env/DB
     "admin": "admin",
     "user1": "mypassword",
 }
 
-PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")  # guard home + all apps
+PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/", "/api/")
 
 
 def create_server():
@@ -35,6 +40,84 @@ def create_server():
             next_target = full[:-1] if full.endswith("?") else full
             return redirect(f"/login?next={quote(next_target)}", code=302)
         return None
+
+    def _parse_site_ids() -> list[str]:
+        site_ids = request.args.getlist("site_id") or request.args.getlist("site")
+        if not site_ids:
+            csv_ids = request.args.get("site_ids") or request.args.get("sites")
+            if csv_ids:
+                site_ids = [s.strip() for s in csv_ids.split(",") if s.strip()]
+        return site_ids
+
+    def _parse_datetime(param: str) -> Optional[datetime]:
+        value = request.args.get(param)
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            try:
+                return pd.to_datetime(value).to_pydatetime()
+            except Exception:
+                return None
+
+    def _serialize_dates(record: dict, fields: list[str]) -> None:
+        for field in fields:
+            value = record.get(field)
+            if value is None:
+                continue
+            if isinstance(value, str):
+                continue
+            if pd.isna(value):
+                record[field] = None
+                continue
+            if isinstance(value, pd.Timestamp):
+                record[field] = value.to_pydatetime().isoformat()
+            elif isinstance(value, (datetime, date)):
+                record[field] = value.isoformat()
+
+    @server.route("/api/sites")
+    def api_sites():
+        dataset = request.args.get("dataset", "trail")
+        site_ids = _parse_site_ids() or None
+        try:
+            df = get_sites(dataset, site_ids=site_ids, source=request.args.get("source"))
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
+        records = df.to_dict("records")
+        for rec in records:
+            _serialize_dates(rec, ["start_date", "end_date"])
+        return jsonify({"sites": records, "count": len(records)})
+
+    @server.route("/api/counts")
+    def api_counts():
+        dataset = request.args.get("dataset", "trail")
+        site_ids = _parse_site_ids() or None
+        start = _parse_datetime("start")
+        end = _parse_datetime("end")
+        bucket = request.args.get("bucket")
+        classes_param = request.args.get("classes")
+        classes = [c.strip() for c in classes_param.split(",") if c.strip()] if classes_param else None
+
+        kwargs = {
+            "site_ids": site_ids,
+            "start": start,
+            "end": end,
+        }
+        if bucket:
+            kwargs["bucket"] = bucket
+        if classes is not None:
+            kwargs["classes"] = classes
+        try:
+            df = get_counts(dataset, **kwargs)
+        except ValueError as exc:
+            return jsonify({"error": str(exc)}), 400
+
+        records = df.to_dict("records")
+        for rec in records:
+            _serialize_dates(rec, ["timestamp", "date"])
+        return jsonify({"counts": records, "count": len(records)})
 
     # ---- Login page ---------------------------------------------------------
     @server.route("/login", methods=["GET", "POST"])
