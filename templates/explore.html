@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Explore Mobility Data · AccSafety</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+  <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css">
+  <script type="module" src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"></script>
+  <script nomodule src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.js"></script>
+  <style>
+    .explore-layout {
+      display: grid;
+      grid-template-columns: minmax(260px, 320px) minmax(0, 1fr) minmax(280px, 360px);
+      gap: 20px;
+      align-items: stretch;
+    }
+    @media (max-width: 1200px) {
+      .explore-layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .drawer {
+        order: 3;
+      }
+      .map-panel,
+      .table-panel {
+        order: 2;
+      }
+      .filters {
+        order: 1;
+      }
+    }
+    .panel {
+      background: white;
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 18px 34px rgba(11, 23, 54, 0.08);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      min-height: 200px;
+    }
+    .panel h2 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+    #map-container {
+      flex: 1 1 auto;
+      min-height: 340px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #f1f5f9;
+    }
+    #results-table table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+    #results-table th,
+    #results-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+      text-align: left;
+    }
+    #detail-drawer {
+      position: relative;
+    }
+    #detail-drawer .drawer-content {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .filter-chip-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .filter-chip {
+      padding: 8px 14px;
+      border-radius: 999px;
+      border: 1px solid rgba(15, 23, 42, 0.16);
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease;
+      user-select: none;
+    }
+    .filter-chip[aria-pressed="true"] {
+      background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary));
+      color: white;
+      border-color: transparent;
+    }
+    .empty-state {
+      color: var(--brand-muted);
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="app-header-title">
+        <span class="app-brand">AccSafety</span>
+        <span class="app-subtitle">Unified Mobility Analytics Portal</span>
+      </div>
+      <nav class="app-nav portal-nav" aria-label="Main navigation">
+        <a class="app-link" href="/explore">Explore</a>
+        <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
+        <div class="portal-dropdown">
+          <button class="portal-trigger" type="button" aria-haspopup="true">Short Term Counts</button>
+          <div class="portal-menu">
+            <a href="/eco/">Short Term Locations (Pilot Counts)</a>
+            <a href="/trail/">WisDOT Trails</a>
+            <a href="/wisdot/">WisDOT Intersections</a>
+          </div>
+        </div>
+        <div class="portal-dropdown">
+          <button class="portal-trigger" type="button" aria-haspopup="true">Long Term Counts</button>
+          <div class="portal-menu">
+            <a href="/vivacity/">Vivacity Locations</a>
+            <a href="/live/">Live Object Detection</a>
+          </div>
+        </div>
+        <a class="app-link" href="/se-wi-trails/">SE Wisconsin Trails</a>
+      </nav>
+      <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
+    </header>
+
+    <main class="app-content">
+      <section class="app-card">
+        <h1>Interactive Safety Data Explorer</h1>
+        <p class="app-muted">
+          Adjust filters to discover bicycle and pedestrian activity, view locations on the map,
+          compare sites in the results table, and inspect specific corridors using the detail drawer.
+        </p>
+        <div class="explore-layout">
+          <aside id="filter-panel" class="panel filters" aria-label="Filter panel">
+            <h2>Filters</h2>
+            <div class="filter-chip-group" id="mode-filter" role="group" aria-label="Mode filter"></div>
+            <div class="filter-chip-group" id="season-filter" role="group" aria-label="Season filter"></div>
+          </aside>
+
+          <section class="panel map-panel" aria-label="Map results">
+            <h2>Map</h2>
+            <div id="map-container" role="region" aria-live="polite"></div>
+          </section>
+
+          <section id="results-table" class="panel table-panel" aria-label="Results table">
+            <h2>Results</h2>
+            <div class="table-wrapper">
+              <table aria-describedby="results-summary">
+                <thead>
+                  <tr>
+                    <th scope="col">Location</th>
+                    <th scope="col">Mode</th>
+                    <th scope="col">Season</th>
+                    <th scope="col">Average Volume</th>
+                  </tr>
+                </thead>
+                <tbody id="results-body">
+                  <tr class="empty-state"><td colspan="4">Loading locations…</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p id="results-summary" class="app-muted"></p>
+          </section>
+
+          <aside id="detail-drawer" class="panel drawer" aria-label="Detail drawer">
+            <h2>Details</h2>
+            <div class="drawer-content" id="detail-content">
+              <p class="empty-state">Select a row to see detailed metrics.</p>
+            </div>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script type="module" src="{{ url_for('static', filename='js/explore.js') }}"></script>
+</body>
+</html>

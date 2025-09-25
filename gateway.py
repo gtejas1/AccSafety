@@ -1,7 +1,7 @@
 # gateway.py
 import os
 from urllib.parse import quote
-from flask import Flask, render_template_string, redirect, request, session
+from flask import Flask, render_template, render_template_string, jsonify, redirect, request, session
 
 from pbc_trail_app import create_trail_dash
 from pbc_eco_app import create_eco_dash
@@ -15,7 +15,50 @@ VALID_USERS = {  # change as needed, or load from env/DB
     "user1": "mypassword",
 }
 
-PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")  # guard home + all apps
+PROTECTED_PREFIXES = ("/", "/explore", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")  # guard home + all apps
+
+EXPLORE_LOCATIONS = [
+    {
+        "id": 1,
+        "name": "Oak Leaf Trail – Milwaukee",
+        "mode": "bicycle",
+        "modeLabel": "Bicycle",
+        "season": "summer",
+        "seasonLabel": "Summer",
+        "averageVolume": 214,
+        "description": "Summer peak volumes for regional trail commuters and recreational riders.",
+    },
+    {
+        "id": 2,
+        "name": "State Street – Madison",
+        "mode": "pedestrian",
+        "modeLabel": "Pedestrian",
+        "season": "shoulder",
+        "seasonLabel": "Shoulder",
+        "averageVolume": 168,
+        "description": "Pedestrian counts highlighting special events and evening activity downtown.",
+    },
+    {
+        "id": 3,
+        "name": "Fox River Trail – Green Bay",
+        "mode": "bicycle",
+        "modeLabel": "Bicycle",
+        "season": "winter",
+        "seasonLabel": "Winter",
+        "averageVolume": 72,
+        "description": "Winter ridership response to plowed trail segments and nearby destinations.",
+    },
+    {
+        "id": 4,
+        "name": "Capitol Drive – Milwaukee",
+        "mode": "pedestrian",
+        "modeLabel": "Pedestrian",
+        "season": "summer",
+        "seasonLabel": "Summer",
+        "averageVolume": 194,
+        "description": "Crosswalk monitoring data supporting safety treatments near schools.",
+    },
+]
 
 
 def create_server():
@@ -46,14 +89,14 @@ def create_server():
             if u in VALID_USERS and VALID_USERS[u] == p:
                 session["user"] = u
                 # Safety: only allow same-site redirects
-                nxt = request.args.get("next") or "/"
+                nxt = request.args.get("next") or "/explore"
                 if not nxt.startswith("/"):
-                    nxt = "/"
+                    nxt = "/explore"
                 return redirect(nxt, code=302)
             error = "Invalid username or password."
 
         # GET (or failed POST) → show page
-        nxt = request.args.get("next", "/")
+        nxt = request.args.get("next", "/explore")
         return render_template_string("""
 <!doctype html>
 <html lang="en">
@@ -196,7 +239,7 @@ def create_server():
         <span class="app-subtitle">Secure Portal Access</span>
       </div>
       <nav class="app-nav">
-        <a class="app-link" href="/">Back to Portal</a>
+        <a class="app-link" href="/explore">Back to Portal</a>
       </nav>
     </header>
     <main class="app-content">
@@ -269,75 +312,45 @@ def create_server():
     create_wisdot_files_app(server, prefix="/wisdot/")
     create_se_wi_trails_app(server, prefix="/se-wi-trails/")
 
+    def _filter_explore_locations(mode: str, season: str):
+        mode = (mode or "all").lower()
+        season = (season or "all").lower()
+        filtered = []
+        for item in EXPLORE_LOCATIONS:
+            if mode != "all" and item["mode"] != mode:
+                continue
+            if season != "all" and item["season"] != season:
+                continue
+            filtered.append(item)
+        return filtered
+
+    @server.get("/api/explore-data")
+    def explore_data_api():
+        mode = request.args.get("mode", "all")
+        season = request.args.get("season", "all")
+        results = _filter_explore_locations(mode, season)
+        summary = (
+            f"Showing {len(results)} location(s) filtered by {mode.title()} mode and {season.title()} season."
+            if results
+            else "Try broadening your filters to see available locations."
+        )
+        map_context = {
+            "description": "Locations are sorted by recent activity volume for quick comparison."
+        }
+        return jsonify({
+            "filters": {"mode": mode, "season": season},
+            "summary": summary,
+            "map": map_context,
+            "locations": results,
+        })
+
+    @server.route("/explore")
+    def explore():
+        return render_template("explore.html", user=session.get("user", "user"))
+
     @server.route("/")
     def home():
-        wisdot_link = "/wisdot/"
-        return render_template_string("""
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>AccSafety Portal</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="/static/theme.css">
-  <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css">
-  <script type="module" src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"></script>
-  <script nomodule src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.js"></script>
-</head>
-<body>
-  <div class="app-shell">
-    <header class="app-header">
-      <div class="app-header-title">
-        <span class="app-brand">AccSafety</span>
-        <span class="app-subtitle">Unified Mobility Analytics Portal</span>
-      </div>
-      <nav class="app-nav portal-nav" aria-label="Main navigation">
-        <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
-        <div class="portal-dropdown">
-          <button class="portal-trigger" type="button" aria-haspopup="true">Short Term Counts</button>
-          <div class="portal-menu">
-            <a href="/eco/">Short Term Locations (Pilot Counts)</a>
-            <a href="/trail/">WisDOT Trails</a>
-            {% if wisdot_link %}<a href="{{ wisdot_link }}">WisDOT Intersections</a>{% endif %}
-          </div>
-        </div>
-        <div class="portal-dropdown">
-          <button class="portal-trigger" type="button" aria-haspopup="true">Long Term Counts</button>
-          <div class="portal-menu">
-            <a href="/vivacity/">Vivacity Locations</a>
-            <a href="/live/">Live Object Detection</a>
-          </div>
-        </div>
-        <a class="app-link" href="/se-wi-trails/">SE Wisconsin Trails</a>
-      </nav>
-      <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
-    </header>
-
-    <main class="app-content">
-      <section class="app-card">
-        <h1>Explore Wisconsin Pedestrian and Bicyclist Mobility Data</h1>
-        <p class="app-muted">
-          Use the navigation above to jump between short term and long term count dashboards,
-          download WisDOT files, or explore the regional trails catalog. The interactive map
-          below highlights current study areas.
-        </p>
-        <arcgis-embedded-map
-          class="portal-map"
-          item-id="a1e765b1cec34b2897d6a8b7c1ffe54b"
-          theme="light"
-          bookmarks-enabled
-          legend-enabled
-          information-enabled
-          center="-87.87609699999999,43.122054"
-          scale="577790.554289"
-          portal-url="https://uwm.maps.arcgis.com">
-        </arcgis-embedded-map>
-      </section>
-    </main>
-  </div>
-</body>
-</html>
-        """, wisdot_link=wisdot_link, user=session.get("user", "user"))
+        return redirect("/explore", code=302)
 
 
     # Convenience redirects
