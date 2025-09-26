@@ -9,6 +9,8 @@ from vivacity_app import create_vivacity_dash
 from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
+from unified_explore import create_unified_explore
+
 
 VALID_USERS = {  # change as needed, or load from env/DB
     "admin": "admin",
@@ -268,6 +270,8 @@ def create_server():
     create_live_detection_app(server, prefix="/live/")
     create_wisdot_files_app(server, prefix="/wisdot/")
     create_se_wi_trails_app(server, prefix="/se-wi-trails/")
+    create_unified_explore(server, prefix="/explore/")
+
 
     @server.route("/")
     def home():
@@ -309,6 +313,8 @@ def create_server():
           </div>
         </div>
         <a class="app-link" href="/se-wi-trails/">SE Wisconsin Trails</a>
+        <a class="app-link" href="/explore/">Explore</a>
+
       </nav>
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
     </header>
