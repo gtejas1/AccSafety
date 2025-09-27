@@ -297,24 +297,7 @@ def create_server():
       </div>
       <nav class="app-nav portal-nav" aria-label="Main navigation">
         <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
-        <div class="portal-dropdown">
-          <button class="portal-trigger" type="button" aria-haspopup="true">Short Term Counts</button>
-          <div class="portal-menu">
-            <a href="/eco/">Short Term Locations (Pilot Counts)</a>
-            <a href="/trail/">WisDOT Trails</a>
-            {% if wisdot_link %}<a href="{{ wisdot_link }}">WisDOT Intersections</a>{% endif %}
-          </div>
-        </div>
-        <div class="portal-dropdown">
-          <button class="portal-trigger" type="button" aria-haspopup="true">Long Term Counts</button>
-          <div class="portal-menu">
-            <a href="/vivacity/">Vivacity Locations</a>
-            <a href="/live/">Live Object Detection</a>
-          </div>
-        </div>
-        <a class="app-link" href="/se-wi-trails/">SE Wisconsin Trails</a>
         <a class="app-link" href="/explore/">Explore</a>
-
       </nav>
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
     </header>
