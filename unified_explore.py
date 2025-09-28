@@ -800,6 +800,8 @@
 from __future__ import annotations
 
 import io
+import urllib.parse
+
 import pandas as pd
 from sqlalchemy import create_engine
 
@@ -819,7 +821,43 @@ UNIFIED_COLUMNS = [
     "Source",
     "Counts",
     "Duration (number of days)",
+    "View",
 ]
+
+
+def _format_view(href: str | None) -> str:
+    """Return a markdown link for the stored ViewHref value."""
+
+    if href is None:
+        return ""
+
+    trimmed = str(href).strip()
+    if not trimmed:
+        return ""
+
+    parts = urllib.parse.urlsplit(trimmed)
+    raw_query = parts.query
+
+    query_items = urllib.parse.parse_qsl(raw_query, keep_blank_values=True)
+    if (
+        "&" in raw_query
+        and raw_query.count("=") == 1
+        and (len(query_items) <= 1 or any(k.startswith(" ") for k, _ in query_items))
+    ):
+        key, sep, value = raw_query.partition("=")
+        if sep:
+            query_items = [(key.strip(), value.strip())]
+
+    cleaned_items = [(k.strip(), v.strip()) for k, v in query_items]
+    normalized_query = urllib.parse.urlencode(
+        cleaned_items, doseq=True, quote_via=urllib.parse.quote
+    )
+
+    normalized_url = urllib.parse.urlunsplit(
+        (parts.scheme, parts.netloc, parts.path, normalized_query, parts.fragment)
+    )
+
+    return f"[View]({normalized_url})" if normalized_url else ""
 
 def _query_unified(where: str = "", params: dict | None = None) -> pd.DataFrame:
     sql = """
@@ -856,6 +894,11 @@ def _format_unified_table(df: pd.DataFrame) -> pd.DataFrame:
     end = pd.to_datetime(formatted["End date"], errors="coerce")
     duration = (end - start).dt.days + 1
     formatted["Duration (number of days)"] = duration.astype("Int64")
+
+    if "ViewHref" in formatted:
+        formatted["View"] = formatted["ViewHref"].map(_format_view)
+    else:
+        formatted["View"] = ""
 
     return formatted[UNIFIED_COLUMNS]
 
@@ -980,8 +1023,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         "id": "Duration (number of days)",
                         "type": "numeric",
                     },
+                    {"name": "View", "id": "View", "presentation": "markdown"},
                 ],
                 data=[],
+                markdown_options={"link_target": "_self"},
                 page_size=20,
                 sort_action="native",
                 style_table={"overflowX": "auto"},
