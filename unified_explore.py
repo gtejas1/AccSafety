@@ -967,30 +967,66 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 style={"display": "none"},
                 className="mb-3",
             ),
-            html.Div(
+            dbc.Row(
                 [
-                    html.Label("Date range"),
-                    dcc.DatePickerRange(
-                        id="pf-dates",
-                        min_date_allowed=min_date,
-                        max_date_allowed=max_date,
-                        start_date=min_date,
-                        end_date=max_date,
-                        display_format="YYYY-MM-DD",
+                    dbc.Col(
+                        html.Div(
+                            [
+                                html.Label("Date range"),
+                                dcc.DatePickerRange(
+                                    id="pf-dates",
+                                    min_date_allowed=min_date,
+                                    max_date_allowed=max_date,
+                                    start_date=min_date,
+                                    end_date=max_date,
+                                    display_format="YYYY-MM-DD",
+                                ),
+                            ],
+                            id="wrap-dates",
+                            style={"display": "none"},
+                            className="mb-3",
+                        ),
+                        lg=7,
+                        md=12,
+                        className="mb-1",
+                    ),
+                    dbc.Col(
+                        html.Div(
+                            [
+                                html.Div(
+                                    [
+                                        html.Label("Search"),
+                                        dcc.Input(
+                                            id="pf-search",
+                                            type="text",
+                                            placeholder="Search locations",
+                                            className="form-control",
+                                        ),
+                                    ],
+                                    id="wrap-search",
+                                    className="mb-3",
+                                ),
+                                html.Div(
+                                    [
+                                        html.Button(
+                                            "Download CSV",
+                                            id="pf-download-btn",
+                                            className="btn btn-outline-primary",
+                                        ),
+                                        dcc.Download(id="pf-download"),
+                                    ],
+                                    id="wrap-download",
+                                    style={"display": "none"},
+                                    className="d-flex justify-content-end mb-2",
+                                ),
+                            ]
+                        ),
+                        lg=5,
+                        md=12,
+                        className="mb-1",
                     ),
                 ],
-                id="wrap-dates",
-                style={"display": "none"},
-                className="mb-3",
-            ),
-            html.Div(
-                [
-                    html.Button("Download CSV", id="pf-download-btn", className="btn btn-outline-primary"),
-                    dcc.Download(id="pf-download"),
-                ],
-                id="wrap-download",
-                style={"display": "none"},
-                className="mb-2",
+                className="g-2 align-items-end",
             ),
         ],
         class_name="mb-3",
@@ -1105,7 +1141,15 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     def step_duration(source):
         if not source:
             return {"display": "none"}, None, {"display": "none"}, {"display": "none"}
-        return {"display": "block"}, None, {"display": "block"}, {"display": "block"}
+        return {"display": "block"}, None, {"display": "block"}, {"display": "flex"}
+
+    @app.callback(
+        Output("pf-search", "value"),
+        Input("pf-source", "value"),
+        prevent_initial_call=True,
+    )
+    def reset_search_on_source(_source):
+        return ""
 
     # Render results table (after all are chosen) + show results
     @app.callback(
@@ -1117,20 +1161,39 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         Input("pf-duration", "value"),
         Input("pf-dates", "start_date"),
         Input("pf-dates", "end_date"),
+        Input("pf-search", "value"),
         prevent_initial_call=True,
     )
-    def render_table(mode, facility, source, duration, start_date, end_date):
-        if not (mode and facility and source and duration):
+    def render_table(mode, facility, source, duration, start_date, end_date, search_text):
+        search_text = (search_text or "").strip()
+        has_all_filters = all([mode, facility, source, duration])
+
+        if not has_all_filters and not search_text:
             return [], {"display": "none"}
 
-        where = (
-            '"Mode" = %(m)s AND "Facility type" = %(f)s AND "Source" = %(s)s AND "Duration" = %(d)s'
-        )
-        params = {"m": mode, "f": facility, "s": source, "d": duration}
+        filters: list[str] = []
+        params: dict[str, str] = {}
+        if mode:
+            filters.append('"Mode" = %(m)s')
+            params["m"] = mode
+        if facility:
+            filters.append('"Facility type" = %(f)s')
+            params["f"] = facility
+        if source:
+            filters.append('"Source" = %(s)s')
+            params["s"] = source
+        if duration:
+            filters.append('"Duration" = %(d)s')
+            params["d"] = duration
 
-        df = _query_unified(where, params)
+        where = " AND ".join(filters)
+        df = _query_unified(where, params if filters else None)
         if df.empty:
             return [], {"display": "block"}
+
+        if search_text:
+            lowered = search_text.lower()
+            df = df[df["Location"].str.lower().str.contains(lowered, na=False)]
 
         # Date overlap: keep rows where [Start..End] intersects selected range
         if start_date:
