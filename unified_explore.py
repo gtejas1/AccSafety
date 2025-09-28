@@ -800,6 +800,7 @@
 from __future__ import annotations
 
 import io
+import urllib.parse
 import pandas as pd
 from sqlalchemy import create_engine
 
@@ -814,15 +815,11 @@ ENGINE = create_engine(DB_URL)
 
 UNIFIED_COLUMNS = [
     "Location",
-    "Mode",
-    "Facility type",
-    "Source",
     "Source type",
-    "Duration",
+    "Duration (number of days)",
     "Start date",
     "End date",
     "Total counts",
-    "Avg hourly",
     "View",  # derived from ViewHref
 ]
 
@@ -846,7 +843,51 @@ def _query_unified(where: str = "", params: dict | None = None) -> pd.DataFrame:
         sql += f" WHERE {where}"
     df = pd.read_sql(sql, ENGINE, params=params or {})
     if not df.empty:
-        df["View"] = df["ViewHref"].apply(lambda href: f"[Open]({href})")
+        def _encode_location(href: str) -> str:
+            if not isinstance(href, str):
+                return href
+
+            for marker in ("?location=", "&location="):
+                if marker in href:
+                    prefix, remainder = href.split(marker, 1)
+
+                    location_part = remainder
+                    suffix = ""
+
+                    hash_index = location_part.find("#")
+                    if hash_index != -1:
+                        suffix = location_part[hash_index:]
+                        location_part = location_part[:hash_index]
+                    else:
+                        amp_index = -1
+                        search_start = 0
+                        while True:
+                            amp_index = location_part.find("&", search_start)
+                            if amp_index == -1:
+                                break
+                            after = location_part[amp_index + 1 :]
+                            if after and not after.startswith(" "):
+                                next_segment = after.split("&", 1)[0]
+                                if "=" in next_segment:
+                                    suffix = location_part[amp_index:]
+                                    location_part = location_part[:amp_index]
+                                    break
+                            search_start = amp_index + 1
+
+                    decoded_location = urllib.parse.unquote(location_part)
+                    encoded_location = urllib.parse.quote(decoded_location, safe="")
+                    return f"{prefix}{marker}{encoded_location}{suffix}"
+
+            return href
+
+        df["View"] = df["ViewHref"].apply(lambda href: f"[Open]({_encode_location(href)})")
+
+        # duration in whole days (inclusive)
+        start = pd.to_datetime(df["Start date"], errors="coerce")
+        end = pd.to_datetime(df["End date"], errors="coerce")
+        duration_days = (end - start).dt.days + 1
+        df["Duration (number of days)"] = pd.Series(duration_days, index=df.index, dtype="Int64")
+
         # order + clean
         df = df[UNIFIED_COLUMNS]
     return df
@@ -879,54 +920,52 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     # Layout
     filter_block = card(
         [
-            html.H2("Explore Locations (Progressive Filters)"),
-            html.P("Choose Mode first; subsequent filters appear once you’ve selected the previous one.", className="app-muted"),
-            dbc.Row(
+            html.H2("Explore Locations"),
+            html.P(
+                "Choose filters to refine the available locations.",
+                className="app-muted",
+            ),
+            html.Div(
                 [
-                    dbc.Col(
-                        [
-                            html.Label("Mode"),
-                            dcc.Dropdown(id="pf-mode", placeholder="Select mode", clearable=True),
+                    html.Label("Mode"),
+                    dcc.Dropdown(id="pf-mode", placeholder="Select mode", clearable=True),
+                ],
+                className="mb-3",
+            ),
+            html.Div(
+                [
+                    html.Label("Facility type"),
+                    dcc.Dropdown(id="pf-facility", placeholder="Select facility type", clearable=True),
+                ],
+                id="wrap-facility",
+                style={"display": "none"},
+                className="mb-3",
+            ),
+            html.Div(
+                [
+                    html.Label("Data source"),
+                    dcc.Dropdown(id="pf-source", placeholder="Select data source", clearable=True),
+                ],
+                id="wrap-source",
+                style={"display": "none"},
+                className="mb-3",
+            ),
+            html.Div(
+                [
+                    html.Label("Duration"),
+                    dcc.Dropdown(
+                        id="pf-duration",
+                        options=[
+                            {"label": "Short-term", "value": "short"},
+                            {"label": "Long-term", "value": "long"},
                         ],
-                        lg=3,
-                    ),
-                    dbc.Col(
-                        [
-                            html.Label("Facility type"),
-                            dcc.Dropdown(id="pf-facility", placeholder="Select facility type", clearable=True),
-                        ],
-                        lg=3,
-                        id="wrap-facility",
-                        style={"display": "none"},
-                    ),
-                    dbc.Col(
-                        [
-                            html.Label("Data source"),
-                            dcc.Dropdown(id="pf-source", placeholder="Select data source", clearable=True),
-                        ],
-                        lg=3,
-                        id="wrap-source",
-                        style={"display": "none"},
-                    ),
-                    dbc.Col(
-                        [
-                            html.Label("Duration"),
-                            dcc.Dropdown(
-                                id="pf-duration",
-                                options=[
-                                    {"label": "Short-term", "value": "short"},
-                                    {"label": "Long-term", "value": "long"},
-                                ],
-                                placeholder="Select duration",
-                                clearable=True,
-                            ),
-                        ],
-                        lg=3,
-                        id="wrap-duration",
-                        style={"display": "none"},
+                        placeholder="Select duration",
+                        clearable=True,
                     ),
                 ],
-                className="g-2",
+                id="wrap-duration",
+                style={"display": "none"},
+                className="mb-3",
             ),
             html.Div(
                 [
@@ -941,7 +980,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     ),
                 ],
                 id="wrap-dates",
-                style={"display": "none", "marginTop": "10px"},
+                style={"display": "none"},
+                className="mb-3",
             ),
             html.Div(
                 [
@@ -949,7 +989,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     dcc.Download(id="pf-download"),
                 ],
                 id="wrap-download",
-                style={"display": "none", "marginTop": "10px"},
+                style={"display": "none"},
+                className="mb-2",
             ),
         ],
         class_name="mb-3",
@@ -961,15 +1002,15 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 id="pf-table",
                 columns=[
                     {"name": "Location", "id": "Location"},
-                    {"name": "Mode", "id": "Mode"},
-                    {"name": "Facility type", "id": "Facility type"},
-                    {"name": "Source", "id": "Source"},
                     {"name": "Source type", "id": "Source type"},
-                    {"name": "Duration", "id": "Duration"},
+                    {
+                        "name": "Duration (number of days)",
+                        "id": "Duration (number of days)",
+                        "type": "numeric",
+                    },
                     {"name": "Start date", "id": "Start date"},
                     {"name": "End date", "id": "End date"},
                     {"name": "Total counts", "id": "Total counts", "type": "numeric"},
-                    {"name": "Avg hourly", "id": "Avg hourly", "type": "numeric"},
                     {"name": "View", "id": "View", "presentation": "markdown"},
                 ],
                 data=[],
@@ -989,8 +1030,22 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     app.layout = dash_page(
         "Explore",
         [
-            filter_block,
-            html.Div(id="wrap-results", children=[results_block], style={"display": "none"}),
+            dbc.Row(
+                [
+                    dbc.Col(filter_block, lg=4, md=12, className="mb-3"),
+                    dbc.Col(
+                        html.Div(
+                            id="wrap-results",
+                            children=[results_block],
+                            style={"display": "none"},
+                        ),
+                        lg=8,
+                        md=12,
+                        className="mb-3",
+                    ),
+                ],
+                className="g-3",
+            ),
             dcc.Store(id="pf-store-extent"),  # optional future use
         ],
     )
@@ -1083,7 +1138,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if end_date:
             df = df[pd.to_datetime(df["Start date"]) <= pd.to_datetime(end_date)]
 
-        df = df.sort_values(["Location", "Source"], kind="stable")
+        df = df.sort_values(["Location", "Source type"], kind="stable")
+        df = df[UNIFIED_COLUMNS]
         return df.to_dict("records"), {"display": "block"}
 
     # Download
