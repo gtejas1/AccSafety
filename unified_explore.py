@@ -817,13 +817,9 @@ UNIFIED_COLUMNS = [
     "Mode",
     "Facility type",
     "Source",
-    "Source type",
-    "Duration",
-    "Start date",
-    "End date",
-    "Total counts",
-    "Avg hourly",
-    "View",  # derived from ViewHref
+    "Counts",
+    "Duration (number of days)",
+    "View",
 ]
 
 def _query_unified(where: str = "", params: dict | None = None) -> pd.DataFrame:
@@ -845,11 +841,35 @@ def _query_unified(where: str = "", params: dict | None = None) -> pd.DataFrame:
     if where:
         sql += f" WHERE {where}"
     df = pd.read_sql(sql, ENGINE, params=params or {})
-    if not df.empty:
-        df["View"] = df["ViewHref"].apply(lambda href: f"[Open]({href})")
-        # order + clean
-        df = df[UNIFIED_COLUMNS]
     return df
+
+
+def _format_unified_table(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=UNIFIED_COLUMNS)
+
+    formatted = df.copy()
+
+    counts = pd.to_numeric(formatted["Total counts"], errors="coerce")
+    formatted["Counts"] = counts.round().astype("Int64")
+
+    start = pd.to_datetime(formatted["Start date"], errors="coerce")
+    end = pd.to_datetime(formatted["End date"], errors="coerce")
+    duration = (end - start).dt.days + 1
+    formatted["Duration (number of days)"] = duration.astype("Int64")
+
+    def _format_view(href: str | float) -> str:
+        if not href or not isinstance(href, str) or not href.strip():
+            return ""
+        return f"[Open]({href})"
+
+    if "ViewHref" in formatted:
+        view_values = formatted["ViewHref"].apply(_format_view)
+    else:
+        view_values = pd.Series(["" for _ in range(len(formatted))])
+    formatted["View"] = view_values
+
+    return formatted[UNIFIED_COLUMNS]
 
 def _distinct(col: str, where: str = "", params: dict | None = None) -> list[str]:
     sql = f'SELECT DISTINCT "{col}" AS v FROM unified_site_summary'
@@ -873,8 +893,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
     # Read global extents
     extent_df = _query_unified()
-    min_date = extent_df["Start date"].min() if not extent_df.empty else None
-    max_date = extent_df["End date"].max() if not extent_df.empty else None
+    min_date = pd.to_datetime(extent_df["Start date"], errors="coerce").min() if not extent_df.empty else None
+    max_date = pd.to_datetime(extent_df["End date"], errors="coerce").max() if not extent_df.empty else None
+    min_date = min_date.date() if pd.notna(min_date) else None
+    max_date = max_date.date() if pd.notna(max_date) else None
 
     # Layout
     filter_block = card(
@@ -964,16 +986,16 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     {"name": "Mode", "id": "Mode"},
                     {"name": "Facility type", "id": "Facility type"},
                     {"name": "Source", "id": "Source"},
-                    {"name": "Source type", "id": "Source type"},
-                    {"name": "Duration", "id": "Duration"},
-                    {"name": "Start date", "id": "Start date"},
-                    {"name": "End date", "id": "End date"},
-                    {"name": "Total counts", "id": "Total counts", "type": "numeric"},
-                    {"name": "Avg hourly", "id": "Avg hourly", "type": "numeric"},
+                    {"name": "Counts", "id": "Counts", "type": "numeric"},
+                    {
+                        "name": "Duration (number of days)",
+                        "id": "Duration (number of days)",
+                        "type": "numeric",
+                    },
                     {"name": "View", "id": "View", "presentation": "markdown"},
                 ],
                 data=[],
-                markdown_options={"html": True, "link_target": "_self"},
+                markdown_options={"link_target": "_self"},
                 page_size=20,
                 sort_action="native",
                 style_table={"overflowX": "auto"},
@@ -1083,6 +1105,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if end_date:
             df = df[pd.to_datetime(df["Start date"]) <= pd.to_datetime(end_date)]
 
+        df = _format_unified_table(df)
         df = df.sort_values(["Location", "Source"], kind="stable")
         return df.to_dict("records"), {"display": "block"}
 
