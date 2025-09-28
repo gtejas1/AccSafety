@@ -815,7 +815,6 @@ ENGINE = create_engine(DB_URL)
 
 UNIFIED_COLUMNS = [
     "Location",
-    "Source",
     "Source type",
     "Duration (number of days)",
     "Start date",
@@ -921,57 +920,52 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     # Layout
     filter_block = card(
         [
-            html.H2("Explore Locations (Progressive Filters)"),
+            html.H2("Explore Locations"),
             html.P(
-                "Choose Mode first; subsequent filters appear once you’ve selected the previous one.",
+                "Choose filters to refine the available locations.",
                 className="app-muted",
             ),
-            dbc.Row(
+            html.Div(
                 [
-                    dbc.Col(
-                        [
-                            html.Label("Mode"),
-                            dcc.Dropdown(id="pf-mode", placeholder="Select mode", clearable=True),
+                    html.Label("Mode"),
+                    dcc.Dropdown(id="pf-mode", placeholder="Select mode", clearable=True),
+                ],
+                className="mb-3",
+            ),
+            html.Div(
+                [
+                    html.Label("Facility type"),
+                    dcc.Dropdown(id="pf-facility", placeholder="Select facility type", clearable=True),
+                ],
+                id="wrap-facility",
+                style={"display": "none"},
+                className="mb-3",
+            ),
+            html.Div(
+                [
+                    html.Label("Data source"),
+                    dcc.Dropdown(id="pf-source", placeholder="Select data source", clearable=True),
+                ],
+                id="wrap-source",
+                style={"display": "none"},
+                className="mb-3",
+            ),
+            html.Div(
+                [
+                    html.Label("Duration"),
+                    dcc.Dropdown(
+                        id="pf-duration",
+                        options=[
+                            {"label": "Short-term", "value": "short"},
+                            {"label": "Long-term", "value": "long"},
                         ],
-                        lg=3,
-                    ),
-                    dbc.Col(
-                        [
-                            html.Label("Facility type"),
-                            dcc.Dropdown(id="pf-facility", placeholder="Select facility type", clearable=True),
-                        ],
-                        lg=3,
-                        id="wrap-facility",
-                        style={"display": "none"},
-                    ),
-                    dbc.Col(
-                        [
-                            html.Label("Data source"),
-                            dcc.Dropdown(id="pf-source", placeholder="Select data source", clearable=True),
-                        ],
-                        lg=3,
-                        id="wrap-source",
-                        style={"display": "none"},
-                    ),
-                    dbc.Col(
-                        [
-                            html.Label("Duration"),
-                            dcc.Dropdown(
-                                id="pf-duration",
-                                options=[
-                                    {"label": "Short-term", "value": "short"},
-                                    {"label": "Long-term", "value": "long"},
-                                ],
-                                placeholder="Select duration",
-                                clearable=True,
-                            ),
-                        ],
-                        lg=3,
-                        id="wrap-duration",
-                        style={"display": "none"},
+                        placeholder="Select duration",
+                        clearable=True,
                     ),
                 ],
-                className="g-2",
+                id="wrap-duration",
+                style={"display": "none"},
+                className="mb-3",
             ),
             html.Div(
                 [
@@ -986,7 +980,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     ),
                 ],
                 id="wrap-dates",
-                style={"display": "none", "marginTop": "10px"},
+                style={"display": "none"},
+                className="mb-3",
             ),
             html.Div(
                 [
@@ -994,7 +989,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     dcc.Download(id="pf-download"),
                 ],
                 id="wrap-download",
-                style={"display": "none", "marginTop": "10px"},
+                style={"display": "none"},
+                className="mb-2",
             ),
         ],
         class_name="mb-3",
@@ -1006,7 +1002,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 id="pf-table",
                 columns=[
                     {"name": "Location", "id": "Location"},
-                    {"name": "Source", "id": "Source"},
                     {"name": "Source type", "id": "Source type"},
                     {
                         "name": "Duration (number of days)",
@@ -1143,7 +1138,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if end_date:
             df = df[pd.to_datetime(df["Start date"]) <= pd.to_datetime(end_date)]
 
-        df = df.sort_values(["Location", "Source"], kind="stable")
+        df = df.sort_values(["Location", "Source type"], kind="stable")
         df = df[UNIFIED_COLUMNS]
         return df.to_dict("records"), {"display": "block"}
 
