@@ -815,15 +815,12 @@ ENGINE = create_engine(DB_URL)
 
 UNIFIED_COLUMNS = [
     "Location",
-    "Mode",
-    "Facility type",
     "Source",
     "Source type",
-    "Duration",
+    "Duration (number of days)",
     "Start date",
     "End date",
     "Total counts",
-    "Avg hourly",
     "View",  # derived from ViewHref
 ]
 
@@ -885,6 +882,13 @@ def _query_unified(where: str = "", params: dict | None = None) -> pd.DataFrame:
             return href
 
         df["View"] = df["ViewHref"].apply(lambda href: f"[Open]({_encode_location(href)})")
+
+        # duration in whole days (inclusive)
+        start = pd.to_datetime(df["Start date"], errors="coerce")
+        end = pd.to_datetime(df["End date"], errors="coerce")
+        duration_days = (end - start).dt.days + 1
+        df["Duration (number of days)"] = pd.Series(duration_days, index=df.index, dtype="Int64")
+
         # order + clean
         df = df[UNIFIED_COLUMNS]
     return df
@@ -918,7 +922,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     filter_block = card(
         [
             html.H2("Explore Locations (Progressive Filters)"),
-            html.P("Choose Mode first; subsequent filters appear once you’ve selected the previous one.", className="app-muted"),
+            html.P(
+                "Choose Mode first; subsequent filters appear once you’ve selected the previous one.",
+                className="app-muted",
+            ),
             dbc.Row(
                 [
                     dbc.Col(
@@ -999,15 +1006,16 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 id="pf-table",
                 columns=[
                     {"name": "Location", "id": "Location"},
-                    {"name": "Mode", "id": "Mode"},
-                    {"name": "Facility type", "id": "Facility type"},
                     {"name": "Source", "id": "Source"},
                     {"name": "Source type", "id": "Source type"},
-                    {"name": "Duration", "id": "Duration"},
+                    {
+                        "name": "Duration (number of days)",
+                        "id": "Duration (number of days)",
+                        "type": "numeric",
+                    },
                     {"name": "Start date", "id": "Start date"},
                     {"name": "End date", "id": "End date"},
                     {"name": "Total counts", "id": "Total counts", "type": "numeric"},
-                    {"name": "Avg hourly", "id": "Avg hourly", "type": "numeric"},
                     {"name": "View", "id": "View", "presentation": "markdown"},
                 ],
                 data=[],
@@ -1027,8 +1035,22 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     app.layout = dash_page(
         "Explore",
         [
-            filter_block,
-            html.Div(id="wrap-results", children=[results_block], style={"display": "none"}),
+            dbc.Row(
+                [
+                    dbc.Col(filter_block, lg=4, md=12, className="mb-3"),
+                    dbc.Col(
+                        html.Div(
+                            id="wrap-results",
+                            children=[results_block],
+                            style={"display": "none"},
+                        ),
+                        lg=8,
+                        md=12,
+                        className="mb-3",
+                    ),
+                ],
+                className="g-3",
+            ),
             dcc.Store(id="pf-store-extent"),  # optional future use
         ],
     )
@@ -1122,6 +1144,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             df = df[pd.to_datetime(df["Start date"]) <= pd.to_datetime(end_date)]
 
         df = df.sort_values(["Location", "Source"], kind="stable")
+        df = df[UNIFIED_COLUMNS]
         return df.to_dict("records"), {"display": "block"}
 
     # Download
