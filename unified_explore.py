@@ -985,6 +985,21 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             ),
             html.Div(
                 [
+                    html.Label("Search locations"),
+                    dcc.Input(
+                        id="pf-search",
+                        type="text",
+                        debounce=True,
+                        placeholder="Search by street, trail, or location name",
+                        className="form-control",
+                    ),
+                ],
+                id="wrap-search",
+                style={"display": "none"},
+                className="mb-3",
+            ),
+            html.Div(
+                [
                     html.Button("Download CSV", id="pf-download-btn", className="btn btn-outline-primary"),
                     dcc.Download(id="pf-download"),
                 ],
@@ -1099,13 +1114,29 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         Output("pf-duration", "value"),
         Output("wrap-dates", "style"),
         Output("wrap-download", "style"),
+        Output("wrap-search", "style"),
+        Output("pf-search", "value"),
         Input("pf-source", "value"),
         prevent_initial_call=True,
     )
     def step_duration(source):
         if not source:
-            return {"display": "none"}, None, {"display": "none"}, {"display": "none"}
-        return {"display": "block"}, None, {"display": "block"}, {"display": "block"}
+            return (
+                {"display": "none"},
+                None,
+                {"display": "none"},
+                {"display": "none"},
+                {"display": "none"},
+                "",
+            )
+        return (
+            {"display": "block"},
+            None,
+            {"display": "block"},
+            {"display": "block"},
+            {"display": "block"},
+            "",
+        )
 
     # Render results table (after all are chosen) + show results
     @app.callback(
@@ -1117,9 +1148,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         Input("pf-duration", "value"),
         Input("pf-dates", "start_date"),
         Input("pf-dates", "end_date"),
+        Input("pf-search", "value"),
         prevent_initial_call=True,
     )
-    def render_table(mode, facility, source, duration, start_date, end_date):
+    def render_table(mode, facility, source, duration, start_date, end_date, search_text):
         if not (mode and facility and source and duration):
             return [], {"display": "none"}
 
@@ -1137,6 +1169,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             df = df[pd.to_datetime(df["End date"]) >= pd.to_datetime(start_date)]
         if end_date:
             df = df[pd.to_datetime(df["Start date"]) <= pd.to_datetime(end_date)]
+
+        search_term = (search_text or "").strip()
+        if search_term:
+            df = df[df["Location"].str.contains(search_term, case=False, na=False, regex=False)]
 
         df = df.sort_values(["Location", "Source type"], kind="stable")
         df = df[UNIFIED_COLUMNS]
