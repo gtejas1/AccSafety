@@ -800,6 +800,7 @@
 from __future__ import annotations
 
 import io
+import urllib.parse
 import pandas as pd
 from sqlalchemy import create_engine
 
@@ -846,7 +847,44 @@ def _query_unified(where: str = "", params: dict | None = None) -> pd.DataFrame:
         sql += f" WHERE {where}"
     df = pd.read_sql(sql, ENGINE, params=params or {})
     if not df.empty:
-        df["View"] = df["ViewHref"].apply(lambda href: f"[Open]({href})")
+        def _encode_location(href: str) -> str:
+            if not isinstance(href, str):
+                return href
+
+            for marker in ("?location=", "&location="):
+                if marker in href:
+                    prefix, remainder = href.split(marker, 1)
+
+                    location_part = remainder
+                    suffix = ""
+
+                    hash_index = location_part.find("#")
+                    if hash_index != -1:
+                        suffix = location_part[hash_index:]
+                        location_part = location_part[:hash_index]
+                    else:
+                        amp_index = -1
+                        search_start = 0
+                        while True:
+                            amp_index = location_part.find("&", search_start)
+                            if amp_index == -1:
+                                break
+                            after = location_part[amp_index + 1 :]
+                            if after and not after.startswith(" "):
+                                next_segment = after.split("&", 1)[0]
+                                if "=" in next_segment:
+                                    suffix = location_part[amp_index:]
+                                    location_part = location_part[:amp_index]
+                                    break
+                            search_start = amp_index + 1
+
+                    decoded_location = urllib.parse.unquote(location_part)
+                    encoded_location = urllib.parse.quote(decoded_location, safe="")
+                    return f"{prefix}{marker}{encoded_location}{suffix}"
+
+            return href
+
+        df["View"] = df["ViewHref"].apply(lambda href: f"[Open]({_encode_location(href)})")
         # order + clean
         df = df[UNIFIED_COLUMNS]
     return df
