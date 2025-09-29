@@ -820,6 +820,7 @@ UNIFIED_COLUMNS = [
     "Start date",
     "End date",
     "Total counts",
+    "Estimated Annual Counts",
     "View",  # derived from ViewHref
 ]
 
@@ -835,8 +836,9 @@ def _query_unified(where: str = "", params: dict | None = None) -> pd.DataFrame:
         "Start date",
         "End date",
         "Total counts",
-        "Avg hourly",
-        "ViewHref"
+        "Estimated annual" AS "Estimated Annual Counts",
+        "ViewHref",
+        "Avg hourly"
       FROM unified_site_summary
     """
     if where:
@@ -1047,6 +1049,11 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     {"name": "Start date", "id": "Start date"},
                     {"name": "End date", "id": "End date"},
                     {"name": "Total counts", "id": "Total counts", "type": "numeric"},
+                    {
+                        "name": "Estimated Annual Counts",
+                        "id": "Estimated Annual Counts",
+                        "type": "numeric",
+                    },
                     {"name": "View", "id": "View", "presentation": "markdown"},
                 ],
                 data=[],
@@ -1214,8 +1221,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     )
     def download_csv(n, rows):
         df = pd.DataFrame(rows or [])
+        if df.empty:
+            df = pd.DataFrame(columns=UNIFIED_COLUMNS)
+        else:
+            df = df.reindex(columns=UNIFIED_COLUMNS)
         buf = io.StringIO()
-        (df if not df.empty else pd.DataFrame(columns=UNIFIED_COLUMNS)).to_csv(buf, index=False)
+        df.to_csv(buf, index=False)
         buf.seek(0)
         return dict(content=buf.read(), filename="explore_filtered.csv", type="text/csv")
 
