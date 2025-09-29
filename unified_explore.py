@@ -920,7 +920,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     # Layout
     filter_block = card(
         [
-            html.H2("Explore Locations"),
+            html.H2("Explore Counts"),
             html.P(
                 "Choose filters to refine the available locations.",
                 className="app-muted",
