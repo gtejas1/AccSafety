@@ -138,6 +138,13 @@ body {
   width: 100%;
 }
 
+.portal-grid {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
 .app-card {
   background: var(--bg-surface);
   border-radius: 16px;
@@ -247,6 +254,34 @@ body {
   box-shadow: 0 20px 42px rgba(15, 23, 42, 0.18);
 }
 
+.portal-explore-frame {
+  width: 100%;
+  min-height: 700px;
+  border: 0;
+  border-radius: 18px;
+  margin-top: 18px;
+  background: var(--bg-surface);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+}
+
+.portal-explore-actions {
+  margin-top: 18px;
+}
+
+.portal-explore-full {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--brand-primary);
+}
+
+.portal-explore-full:hover,
+.portal-explore-full:focus {
+  text-decoration: underline;
+}
+
 .table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -316,5 +351,12 @@ body {
   .portal-menu {
     left: auto;
     right: 0;
+  }
+}
+
+@media (min-width: 1200px) {
+  .portal-grid {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+    align-items: start;
   }
 }

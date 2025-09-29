@@ -302,7 +302,7 @@ def create_server():
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
     </header>
 
-    <main class="app-content">
+    <main class="app-content portal-grid">
       <section class="app-card">
         <h1>Explore Wisconsin Pedestrian and Bicyclist Mobility Data</h1>
         <p class="app-muted">
@@ -321,6 +321,23 @@ def create_server():
           scale="577790.554289"
           portal-url="https://uwm.maps.arcgis.com">
         </arcgis-embedded-map>
+      </section>
+      <section class="app-card">
+        <h2>Preview the Unified Explore Experience</h2>
+        <p class="app-muted">
+          Interact with the Explore dashboard directly within the portal or launch it in a full screen
+          view to dive deeper into corridor performance, safety indicators, and downloadable resources.
+        </p>
+        <iframe
+          class="portal-explore-frame"
+          src="/explore/"
+          title="Explore data"
+          loading="lazy">
+          <p>Your browser does not support embedded dashboards. <a href="/explore/" target="_blank" rel="noopener">Open Explore in a new tab</a>.</p>
+        </iframe>
+        <p class="portal-explore-actions">
+          <a class="portal-explore-full" href="/explore/" target="_blank" rel="noopener">Open Explore full screen</a>
+        </p>
       </section>
     </main>
   </div>
