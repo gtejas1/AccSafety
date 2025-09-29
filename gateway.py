@@ -275,8 +275,9 @@ def create_server():
 
     @server.route("/")
     def home():
-        wisdot_link = "/wisdot/"
-        return render_template_string("""
+        return redirect("/explore/", code=302)
+
+    portal_template = """
 <!doctype html>
 <html lang="en">
 <head>
@@ -298,6 +299,7 @@ def create_server():
       <nav class="app-nav portal-nav" aria-label="Main navigation">
         <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
         <a class="app-link" href="/explore/">Explore</a>
+        <a class="app-link" href="/map/">Map</a>
       </nav>
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
     </header>
@@ -326,7 +328,11 @@ def create_server():
   </div>
 </body>
 </html>
-        """, wisdot_link=wisdot_link, user=session.get("user", "user"))
+    """
+
+    @server.route("/map/")
+    def map_view():
+        return render_template_string(portal_template, user=session.get("user", "user"))
 
 
     # Convenience redirects
