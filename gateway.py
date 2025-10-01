@@ -65,117 +65,30 @@ def create_server():
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/theme.css">
   <style>
-    .login-card h1 {
-      margin: 0 0 12px;
-      font-size: 1.4rem;
-    }
-    .login-card p {
-      margin: 0 0 20px;
-      color: var(--brand-muted);
-    }
-    .login-card label {
-      display: block;
-      margin: 12px 0 6px;
-      font-weight: 600;
-      font-size: 0.9rem;
-      color: #0b1736;
-    }
-    .login-card input[type="text"],
-    .login-card input[type="password"] {
-      width: 100%;
-      padding: 12px 14px;
-      border-radius: 10px;
-      border: 1px solid rgba(15, 23, 42, 0.16);
-      background: #f8fafc;
-      font-size: 0.95rem;
+    .login-card h1 { margin: 0 0 12px; font-size: 1.4rem; }
+    .login-card p { margin: 0 0 20px; color: var(--brand-muted); }
+    .login-card label { display: block; margin: 12px 0 6px; font-weight: 600; font-size: 0.9rem; color: #0b1736; }
+    .login-card input[type="text"], .login-card input[type="password"] {
+      width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(15, 23, 42, 0.16);
+      background: #f8fafc; font-size: 0.95rem;
     }
     .login-card button {
-      width: 100%;
-      margin-top: 20px;
-      padding: 12px 16px;
-      border: none;
-      border-radius: 999px;
-      background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary));
-      color: white;
-      font-weight: 600;
-      cursor: pointer;
-      font-size: 1rem;
-      box-shadow: 0 14px 30px rgba(11, 102, 195, 0.28);
+      width: 100%; margin-top: 20px; padding: 12px 16px; border: none; border-radius: 999px;
+      background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary)); color: white; font-weight: 600;
+      cursor: pointer; font-size: 1rem; box-shadow: 0 14px 30px rgba(11, 102, 195, 0.28);
     }
-    .login-card button:hover {
-      filter: brightness(1.05);
-    }
-    .login-card button:disabled {
-      filter: grayscale(0.4);
-      cursor: not-allowed;
-      box-shadow: none;
-      opacity: 0.7;
-    }
-    .login-card .showpw {
-      margin-top: 10px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.85rem;
-      color: #0b1736;
-    }
-    .login-card .error {
-      margin-top: 12px;
-      color: #b91c1c;
-      font-weight: 600;
-      font-size: 0.9rem;
-    }
-    .notice-backdrop {
-      position: fixed;
-      inset: 0;
-      background: rgba(12, 23, 42, 0.72);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      z-index: 999;
-    }
-    .notice-card {
-      max-width: 540px;
-      width: 100%;
-      background: #ffffff;
-      border-radius: 18px;
-      box-shadow: 0 24px 60px rgba(11, 23, 54, 0.32);
-      padding: 28px 32px;
-      color: #0b1736;
-      display: grid;
-      gap: 18px;
-    }
-    .notice-card h2 {
-      margin: 0;
-      font-size: 1.35rem;
-    }
-    .notice-card p {
-      margin: 0;
-      line-height: 1.55;
-    }
-    .notice-actions {
-      display: flex;
-      gap: 12px;
-      justify-content: flex-end;
-      flex-wrap: wrap;
-    }
-    .notice-actions button {
-      border-radius: 999px;
-      border: none;
-      padding: 10px 18px;
-      font-weight: 600;
-      cursor: pointer;
-      font-size: 0.95rem;
-    }
-    .notice-actions .primary {
-      background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary));
-      color: #fff;
-      box-shadow: 0 12px 26px rgba(11, 102, 195, 0.28);
-    }
-    .notice-backdrop[hidden] {
-      display: none;
-    }
+    .login-card button:hover { filter: brightness(1.05); }
+    .login-card button:disabled { filter: grayscale(0.4); cursor: not-allowed; box-shadow: none; opacity: 0.7; }
+    .login-card .showpw { margin-top: 10px; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #0b1736; }
+    .login-card .error { margin-top: 12px; color: #b91c1c; font-weight: 600; font-size: 0.9rem; }
+    .notice-backdrop { position: fixed; inset: 0; background: rgba(12, 23, 42, 0.72); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 999; }
+    .notice-card { max-width: 540px; width: 100%; background: #ffffff; border-radius: 18px; box-shadow: 0 24px 60px rgba(11, 23, 54, 0.32); padding: 28px 32px; color: #0b1736; display: grid; gap: 18px; }
+    .notice-card h2 { margin: 0; font-size: 1.35rem; }
+    .notice-card p { margin: 0; line-height: 1.55; }
+    .notice-actions { display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap; }
+    .notice-actions button { border-radius: 999px; border: none; padding: 10px 18px; font-weight: 600; cursor: pointer; font-size: 0.95rem; }
+    .notice-actions .primary { background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary)); color: #fff; box-shadow: 0 12px 26px rgba(11, 102, 195, 0.28); }
+    .notice-backdrop[hidden] { display: none; }
   </style>
 </head>
 <body>
@@ -272,7 +185,6 @@ def create_server():
     create_se_wi_trails_app(server, prefix="/se-wi-trails/")
     create_unified_explore(server, prefix="/explore/")
 
-
     @server.route("/")
     def home():
         wisdot_link = "/wisdot/"
@@ -287,6 +199,22 @@ def create_server():
   <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css">
   <script type="module" src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"></script>
   <script nomodule src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.js"></script>
+  <style>
+  .cta-explore {
+    display: inline-block;
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary));
+    color: #fff !important;
+    font-weight: 700;
+    text-decoration: none;
+    box-shadow: 0 12px 26px rgba(11, 102, 195, 0.28);
+    position: relative;
+    z-index: 2; /* keep above any overlapping map layers */
+  }
+  .cta-wrap { margin: 8px 0 16px; position: relative; z-index: 2; }
+</style>
+
 </head>
 <body>
   <div class="app-shell">
@@ -297,7 +225,7 @@ def create_server():
       </div>
       <nav class="app-nav portal-nav" aria-label="Main navigation">
         <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
-        <a class="app-link" href="/explore/">Explore</a>
+        <!-- Removed Explore link from top nav -->
       </nav>
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
     </header>
@@ -305,11 +233,15 @@ def create_server():
     <main class="app-content">
       <section class="app-card">
         <h1>Explore Wisconsin Pedestrian and Bicyclist Mobility Data</h1>
-        <p class="app-muted">
-          Use the navigation above to jump between short term and long term count dashboards,
-          download WisDOT files, or explore the regional trails catalog. The interactive map
-          below highlights current study areas.
-        </p>
+
+        <!-- Added Explore link BELOW the title -->
+        <div class="cta-wrap">
+          <a class="cta-explore" href="/explore/">Open Explore</a>
+        </div>
+
+
+        <!-- Removed the explanatory paragraph per request -->
+
         <arcgis-embedded-map
           class="portal-map"
           item-id="a1e765b1cec34b2897d6a8b7c1ffe54b"
@@ -327,7 +259,6 @@ def create_server():
 </body>
 </html>
         """, wisdot_link=wisdot_link, user=session.get("user", "user"))
-
 
     # Convenience redirects
     @server.route("/trail")
