@@ -236,7 +236,7 @@ def create_server():
 
         <!-- Added Explore link BELOW the title -->
         <div class="cta-wrap">
-          <a class="cta-explore" href="/explore/">Open Explore</a>
+          <a class="cta-explore" href="/explore/">Explore Available Datasets</a>
         </div>
 
 
