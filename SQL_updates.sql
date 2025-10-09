@@ -33,7 +33,6 @@ trail_agg AS (
    2) STATEWIDE: parse `duration` text → numeric hours → bucket
       Handles "6 hr", "6 hrs", "6 hours", also minutes/days if present
    ============================================================ */
--- helper: canonical bucket order
 dur_map AS (
   SELECT * FROM (VALUES
     ('0-15hrs', 1),
@@ -46,20 +45,18 @@ dur_map AS (
   ) AS dm(bucket, ord)
 ),
 
--- Parse duration text into hours (robust), then map to bucket
+-- Pedestrian statewide
 swp_row AS (
   SELECT
     COALESCE(p.location_name, '(Unknown)') AS location_name,
     p.estimated_annual                      AS est,
     p.longitude,
     p.latitude,
-    /* ---- numeric hours from text ---- */
     CASE
       WHEN p.duration ~* '\d' THEN
         CASE
-          WHEN p.duration ~* 'min'      THEN NULLIF(regexp_replace(p.duration, '[^0-9\.]', '', 'g'), '')::double precision / 60.0
-          WHEN p.duration ~* 'day'      THEN NULLIF(regexp_replace(p.duration, '[^0-9\.]', '', 'g'), '')::double precision * 24.0
-          /* default: hr/hour/hrs/hours */
+          WHEN p.duration ~* 'min' THEN NULLIF(regexp_replace(p.duration, '[^0-9\.]', '', 'g'), '')::double precision / 60.0
+          WHEN p.duration ~* 'day' THEN NULLIF(regexp_replace(p.duration, '[^0-9\.]', '', 'g'), '')::double precision * 24.0
           ELSE NULLIF(regexp_replace(p.duration, '[^0-9\.]', '', 'g'), '')::double precision
         END
       ELSE NULL
@@ -72,7 +69,6 @@ swp AS (
     SUM(r.est)::bigint AS total_counts,
     MIN(r.longitude)   AS longitude,
     MIN(r.latitude)    AS latitude,
-    /* Map hours → bucket; if hours unknown, assume longest */
     CASE
       WHEN COALESCE(MAX(r.dur_hours), 999999) <= 15 THEN '0-15hrs'
       WHEN COALESCE(MAX(r.dur_hours), 999999) <= 48 THEN '15-48hrs'
@@ -86,6 +82,7 @@ swp AS (
   GROUP BY r.location_name
 ),
 
+-- Bicyclist statewide
 swb_row AS (
   SELECT
     COALESCE(b.location_name, '(Unknown)') AS location_name,
@@ -95,8 +92,8 @@ swb_row AS (
     CASE
       WHEN b.duration ~* '\d' THEN
         CASE
-          WHEN b.duration ~* 'min'      THEN NULLIF(regexp_replace(b.duration, '[^0-9\.]', '', 'g'), '')::double precision / 60.0
-          WHEN b.duration ~* 'day'      THEN NULLIF(regexp_replace(b.duration, '[^0-9\.]', '', 'g'), '')::double precision * 24.0
+          WHEN b.duration ~* 'min' THEN NULLIF(regexp_replace(b.duration, '[^0-9\.]', '', 'g'), '')::double precision / 60.0
+          WHEN b.duration ~* 'day' THEN NULLIF(regexp_replace(b.duration, '[^0-9\.]', '', 'g'), '')::double precision * 24.0
           ELSE NULLIF(regexp_replace(b.duration, '[^0-9\.]', '', 'g'), '')::double precision
         END
       ELSE NULL
@@ -122,6 +119,7 @@ swb AS (
   GROUP BY r.location_name
 ),
 
+-- Trail user statewide
 swt_row AS (
   SELECT
     COALESCE(t.location_name, '(Unknown)') AS location_name,
@@ -131,8 +129,8 @@ swt_row AS (
     CASE
       WHEN t.duration ~* '\d' THEN
         CASE
-          WHEN t.duration ~* 'min'      THEN NULLIF(regexp_replace(t.duration, '[^0-9\.]', '', 'g'), '')::double precision / 60.0
-          WHEN t.duration ~* 'day'      THEN NULLIF(regexp_replace(t.duration, '[^0-9\.]', '', 'g'), '')::double precision * 24.0
+          WHEN t.duration ~* 'min' THEN NULLIF(regexp_replace(t.duration, '[^0-9\.]', '', 'g'), '')::double precision / 60.0
+          WHEN t.duration ~* 'day' THEN NULLIF(regexp_replace(t.duration, '[^0-9\.]', '', 'g'), '')::double precision * 24.0
           ELSE NULLIF(regexp_replace(t.duration, '[^0-9\.]', '', 'g'), '')::double precision
         END
       ELSE NULL
@@ -159,10 +157,10 @@ swt AS (
 )
 
 /* ============================================================
-   3) FINAL UNION
+   3) FINAL UNION  (merge/rename facility types & merge trail source)
    ============================================================ */
 
-/* ---- ECO: PEDESTRIAN (actual) ---- */
+-- ECO: PEDESTRIAN (actual)  → On-Street (sidewalk)
 SELECT
   e.location_name AS "Location",
   CASE
@@ -186,7 +184,7 @@ SELECT
 FROM eco_agg e
 
 UNION ALL
-/* ---- ECO: BICYCLIST (actual) ---- */
+-- ECO: BICYCLIST (actual)  → On-Street (sidewalk/bike lane)
 SELECT
   e.location_name AS "Location",
   CASE
@@ -210,7 +208,7 @@ SELECT
 FROM eco_agg e
 
 UNION ALL
-/* ---- ECO: BOTH (actual) ---- */
+-- ECO: BOTH (actual)  (keep generic On-Street label)
 SELECT
   e.location_name AS "Location",
   CASE
@@ -234,7 +232,7 @@ SELECT
 FROM eco_agg e
 
 UNION ALL
-/* ---- TRAIL (SEWRPC actual) ---- */
+-- TRAIL (SEWRPC actual)  **merged source label**
 SELECT
   t.location_name AS "Location",
   CASE
@@ -251,14 +249,14 @@ SELECT
   'Actual' AS "Source type",
   NULL::double precision AS "Longitude",
   NULL::double precision AS "Latitude",
-  'Off-Street Trail (SEWRPC Trail User Counts)' AS "Source",
+  'Wisconsin Ped/Bike Database (Statewide)' AS "Source",
   'Off-Street Trail' AS "Facility type",
   'Off-Street Trail' AS "Facility group",
   'Both' AS "Mode"
 FROM trail_agg t
 
 UNION ALL
-/* ---- STATEWIDE (modeled) – PEDESTRIAN ---- */
+-- STATEWIDE (modeled) – PEDESTRIAN  → On-Street (sidewalk)
 SELECT
   swp.location_name AS "Location",
   swp.duration_bucket AS "Duration",
@@ -267,13 +265,13 @@ SELECT
   swp.longitude AS "Longitude",
   swp.latitude AS "Latitude",
   'Wisconsin Ped/Bike Database (Statewide)' AS "Source",
-  'On-Street' AS "Facility type",
+  'On-Street (sidewalk)' AS "Facility type",
   'On-Street' AS "Facility group",
   'Pedestrian' AS "Mode"
 FROM swp
 
 UNION ALL
-/* ---- STATEWIDE (modeled) – BICYCLIST ---- */
+-- STATEWIDE (modeled) – BICYCLIST  → On-Street (sidewalk/bike lane)
 SELECT
   swb.location_name AS "Location",
   swb.duration_bucket AS "Duration",
@@ -282,13 +280,13 @@ SELECT
   swb.longitude AS "Longitude",
   swb.latitude AS "Latitude",
   'Wisconsin Ped/Bike Database (Statewide)' AS "Source",
-  'On-Street' AS "Facility type",
+  'On-Street (sidewalk/bike lane)' AS "Facility type",
   'On-Street' AS "Facility group",
   'Bicyclist' AS "Mode"
 FROM swb
 
 UNION ALL
-/* ---- STATEWIDE (modeled) – TRAIL USER ---- */
+-- STATEWIDE (modeled) – TRAIL USER  (still Off-Street; merged source already)
 SELECT
   swt.location_name AS "Location",
   swt.duration_bucket AS "Duration",

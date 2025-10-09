@@ -76,7 +76,7 @@ def _build_view_link(row: pd.Series) -> str:
     return "[Open](/statewide-map)"
 
 def _opts(vals) -> list[dict]:
-    uniq = sorted({v for v in vals if isinstance(v, str) and v.strip()})
+    uniq = sorted([v for v in vals if isinstance(v, str) and v.strip()])
     return [{"label": v, "value": v} for v in uniq]
 
 def create_unified_explore(server, prefix: str = "/explore/"):
@@ -100,7 +100,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             html.H2("Explore Counts"),
             html.P("Pick Mode, then Facility, then Source, then Duration.", className="app-muted"),
 
-            # Mode
             html.Div(
                 [
                     html.Label("Mode"),
@@ -114,7 +113,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 className="mb-3",
             ),
 
-            # Facility (hidden until Mode)
             html.Div(
                 [
                     html.Label("Facility type"),
@@ -125,7 +123,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 className="mb-3",
             ),
 
-            # Source (hidden until Facility)
             html.Div(
                 [
                     html.Label("Data source"),
@@ -136,7 +133,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 className="mb-3",
             ),
 
-            # Duration (hidden until Source)
             html.Div(
                 [
                     html.Label("Duration"),
@@ -152,7 +148,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 className="mb-2",
             ),
 
-            # Download (only shown when table is visible)
             html.Div(
                 [
                     html.Button("Download CSV", id="pf-download-btn", className="btn btn-outline-primary"),
@@ -166,7 +161,9 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         class_name="mb-3",
     )
 
-    # Results (initially hidden; only show when all filters are selected)
+    # Description block (shown conditionally) + Results (hidden initially)
+    desc_block = card([html.Div(id="pf-desc", children=[])], class_name="mb-3")
+
     results_block = card(
         [
             dash_table.DataTable(
@@ -193,7 +190,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 [
                     dbc.Col(filter_block, lg=4, md=12, className="mb-3"),
                     dbc.Col(
-                        html.Div(id="wrap-results", children=[results_block], style={"display": "none"}),
+                        html.Div(id="wrap-results", children=[desc_block, results_block], style={"display": "none"}),
                         lg=8, md=12, className="mb-3",
                     ),
                 ],
@@ -244,11 +241,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             return {"display": "none"}, None
         return {"display": "block"}, None
 
-    # ---- Apply filters AND control table + download visibility ----
+    # ---- Apply filters AND control table/description/download visibility ----
     @app.callback(
         Output("pf-table", "data"),
         Output("wrap-results", "style"),
         Output("wrap-download", "style"),
+        Output("pf-desc", "children"),
         Input("pf-mode", "value"),
         Input("pf-facility", "value"),
         Input("pf-source", "value"),
@@ -259,23 +257,62 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         # only show results when all filters are selected
         has_all = all([mode, facility, source, duration_key])
         if not has_all:
-            return [], {"display": "none"}, {"display": "none"}
+            return [], {"display": "none"}, {"display": "none"}, []
 
         df = base_df.copy()
-        cf = str.casefold  # tiny helper
+        cf = str.casefold
 
         df = df[df["Mode"].str.casefold() == cf(str(mode).strip())]
         df = df[df["Facility type"].str.casefold() == cf(str(facility).strip())]
         df = df[df["Source"].str.casefold() == cf(str(source).strip())]
         df = df[df["Duration"].str.casefold() == cf(str(duration_key).strip())]
 
+        
+        fac_exact = str(facility or "").strip()
+        desc_needed = (
+            str(mode or "").strip().lower() == "pedestrian"
+            and str(fac_exact or "").strip().lower() == "on-street (sidewalk)"
+            and str(source or "").strip() == "Wisconsin Ped/Bike Database (Statewide)"
+        )
+
         if df.empty:
-            return [], {"display": "block"}, {"display": "flex"}  # visible (empty) + allow download of empty CSV
+            # table empty → hide description
+            return [], {"display": "block"}, {"display": "flex"}, []
 
         df = df.copy()
         df["View"] = df.apply(_build_view_link, axis=1)
         df = df[[c["id"] for c in DISPLAY_COLUMNS]]
-        return df.to_dict("records"), {"display": "block"}, {"display": "flex"}
+
+        description = _description_block() if desc_needed else []
+        return df.to_dict("records"), {"display": "block"}, {"display": "flex"}, description
+
+    def _description_block():
+        return html.Div(
+            [
+                html.P(
+                    [
+                        "The estimated counts have been developed by utilizing statewide short-term intersectional pedestrian and long-term trail counts. ",
+                        "For information regarding the source of the data, please refer to the project pages ",
+                        html.A(
+                            "“Pedestrian Exposure Data for the Wisconsin State Highway System: WisDOT Southeast Region Pilot Study”",
+                            href="https://uwm.edu/ipit/projects/pedestrian-exposure-data-for-the-wisconsin-state-highway-system-wisdot-southeast-region-pilot-study/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        " and ",
+                        html.A(
+                            "“Practical Application of Pedestrian Exposure Tools: Expanding Southeast Region Results Statewide”",
+                            href="https://uwm.edu/ipit/projects/practical-application-of-pedestrian-exposure-tools-expanding-southeast-region-results-statewide/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        ".",
+                    ],
+                    className="app-muted",
+                    style={"margin": "0"},
+                )
+            ]
+        )
 
     # ---- Download filtered CSV (click-only) ----
     @app.callback(
