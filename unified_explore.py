@@ -73,7 +73,7 @@ def _build_view_link(row: pd.Series) -> str:
     if src == "Off-Street Trail (SEWRPC Trail User Counts)":
         return f"[Open](/trail/dashboard?location={loc_q})"
     # Statewide modeled (renamed in SQL) and anything else
-    return "[Open](/statewide-map)"
+    return "[Open](https://uwm.edu/ipit/wisconsin-pedestrian-volume-model/)"
 
 def _opts(vals) -> list[dict]:
     uniq = sorted([v for v in vals if isinstance(v, str) and v.strip()])

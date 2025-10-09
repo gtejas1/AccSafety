@@ -208,7 +208,7 @@ SELECT
 FROM eco_agg e
 
 UNION ALL
--- ECO: BOTH (actual)  (keep generic On-Street label)
+-- ECO: BOTH (actual)  ❗ rename Facility type On-Street → Intersection (everything else same)
 SELECT
   e.location_name AS "Location",
   CASE
@@ -226,8 +226,8 @@ SELECT
   NULL::double precision AS "Longitude",
   NULL::double precision AS "Latitude",
   'Wisconsin Pilot Counting Counts' AS "Source",
-  'On-Street' AS "Facility type",
-  'On-Street' AS "Facility group",
+  'Intersection' AS "Facility type",          -- 👈 renamed here
+  'On-Street'  AS "Facility group",           -- unchanged per your note
   'Both' AS "Mode"
 FROM eco_agg e
 
@@ -286,7 +286,7 @@ SELECT
 FROM swb
 
 UNION ALL
--- STATEWIDE (modeled) – TRAIL USER  (still Off-Street; merged source already)
+-- STATEWIDE (modeled) – TRAIL USER
 SELECT
   swt.location_name AS "Location",
   swt.duration_bucket AS "Duration",
