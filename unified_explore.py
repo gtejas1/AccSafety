@@ -59,6 +59,7 @@ def _fetch_all() -> pd.DataFrame:
         df = pd.read_sql(UNIFIED_SQL, ENGINE)
     except Exception:
         df = pd.DataFrame(columns=[c["id"] for c in DISPLAY_COLUMNS] + ["Source", "Facility type", "Mode"])
+    # Normalize key fields once to prevent mismatch from whitespace/case
     for col in ["Mode", "Facility type", "Source", "Duration", "Location", "Source type"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
@@ -77,6 +78,7 @@ def _build_view_link(row: pd.Series) -> str:
         return f"[Open](/eco/dashboard?location={loc_q})"
     if src == "Off-Street Trail (SEWRPC Trail User Counts)":
         return f"[Open](/trail/dashboard?location={loc_q})"
+    # Statewide modeled (renamed in SQL) and anything else
     return "[Open](https://uwm.edu/ipit/wisconsin-pedestrian-volume-model/)"
 
 def _opts(vals) -> list[dict]:
@@ -96,13 +98,15 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     )
     app.title = "Explore"
 
+    # Base data (filters applied client-side)
     base_df = _fetch_all()
 
-    # Controls
+    # Controls — progressive flow
     filter_block = card(
         [
             html.H2("Explore Counts"),
             html.P("Pick Mode, then Facility, then Source, then Duration.", className="app-muted"),
+
             html.Div(
                 [
                     html.Label("Mode"),
@@ -115,18 +119,21 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 ],
                 className="mb-3",
             ),
+
             html.Div(
                 [html.Label("Facility type"), dcc.Dropdown(id="pf-facility", placeholder="Select facility type", clearable=True)],
                 id="wrap-facility",
                 style={"display": "none"},
                 className="mb-3",
             ),
+
             html.Div(
                 [html.Label("Data source"), dcc.Dropdown(id="pf-source", placeholder="Select data source", clearable=True)],
                 id="wrap-source",
                 style={"display": "none"},
                 className="mb-3",
             ),
+
             html.Div(
                 [
                     html.Label("Duration"),
@@ -141,6 +148,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 style={"display": "none"},
                 className="mb-2",
             ),
+
             html.Div(
                 [html.Button("Download CSV", id="pf-download-btn", className="btn btn-outline-primary"), dcc.Download(id="pf-download")],
                 id="wrap-download",
@@ -151,8 +159,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         class_name="mb-3",
     )
 
-    # Description + Results
+    # Description block (shown conditionally) + Results (hidden initially)
     desc_block = card([html.Div(id="pf-desc", children=[])], class_name="mb-3")
+
+    # Results: map/image placeholder OR table
     results_block = card(
         [
             html.Div(id="pf-map", style={"display": "none"}),  # map/image area
@@ -184,14 +194,17 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             dbc.Row(
                 [
                     dbc.Col(filter_block, lg=4, md=12, className="mb-3"),
-                    dbc.Col(html.Div(id="wrap-results", children=[desc_block, results_block], style={"display": "none"}), lg=8, md=12, className="mb-3"),
+                    dbc.Col(
+                        html.Div(id="wrap-results", children=[desc_block, results_block], style={"display": "none"}),
+                        lg=8, md=12, className="mb-3",
+                    ),
                 ],
                 className="g-3",
             ),
         ],
     )
 
-    # Progressive options
+    # ── Progressive options / reveal ─────────────────────────────
     @app.callback(
         Output("pf-facility", "options"),
         Output("wrap-facility", "style"),
@@ -220,11 +233,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if not (mode and facility):
             return [], {"display": "none"}, None
         df = base_df[
-            (base_df["Mode"].str.casefold() == str(mode).strip().casefold())
-            & (base_df["Facility type"].str.casefold() == str(facility).strip().casefold())
+            (base_df["Mode"].str.casefold() == str(mode).strip().casefold()) &
+            (base_df["Facility type"].str.casefold() == str(facility).strip().casefold())
         ]
         sources = df["Source"].unique().tolist()
-        if str(mode).strip().casefold() == NEW_MODE.casefold() and str(facility).strip().casefold() == NEW_FACILITY.casefold():
+        if (str(mode).strip().casefold() == NEW_MODE.casefold()
+            and str(facility).strip().casefold() == NEW_FACILITY.casefold()):
             sources = list(set(sources) | {NEW_SOURCE_NAME})
         return _opts(sources), {"display": "block"}, None
 
@@ -239,7 +253,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             return {"display": "none"}, None
         return {"display": "block"}, None
 
-    # Apply filters + toggle map/table + description
+    # ── Apply filters + control table/description/download visibility ──
     @app.callback(
         Output("pf-map", "children"),
         Output("pf-map", "style"),
@@ -255,27 +269,28 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         prevent_initial_call=False,
     )
     def _apply_filters(mode, facility, source, duration_key):
+        # only show results when all filters are selected
         has_all = all([mode, facility, source, duration_key])
         if not has_all:
             return [], {"display": "none"}, [], {"display": "none"}, {"display": "none"}, {"display": "none"}, []
 
         df = base_df.copy()
         cf = str.casefold
+
         df = df[df["Mode"].str.casefold() == cf(str(mode).strip())]
         df = df[df["Facility type"].str.casefold() == cf(str(facility).strip())]
         df = df[df["Source"].str.casefold() == cf(str(source).strip())]
         df = df[df["Duration"].str.casefold() == cf(str(duration_key).strip())]
 
+        # --- Path 1: custom Milwaukee map (Both + NEW_FACILITY + NEW_SOURCE_NAME) ---
         show_custom = (
             str(mode or "").strip().casefold() == NEW_MODE.casefold()
             and str(facility or "").strip().casefold() == NEW_FACILITY.casefold()
             and str(source or "").strip() == NEW_SOURCE_NAME
         )
 
-        description = _custom_mke_estimated_desc() if show_custom else []
-
         if show_custom:
-            # Title link above the image/map
+            # Show clickable title + image; hide table; show custom description; keep download visible per existing behavior
             title_link = html.H4(
                 html.A(
                     "Exploring Non-Motorist Activities in Milwaukee",
@@ -290,7 +305,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             map_children = html.Div(
                 [
                     title_link,
-                    # Make the image clickable with the same hyperlink
                     html.A(
                         html.Img(
                             src=img_src,
@@ -307,25 +321,33 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         rel="noopener noreferrer",
                         style={"display": "block"},
                     ),
-                    html.Div(
-                        "Placeholder map image — will be replaced by an embedded ArcGIS map.",
-                        className="app-muted",
-                        style={"marginTop": "6px"},
-                    ),
                 ]
             )
+
+            description = _custom_mke_estimated_desc()
             return map_children, {"display": "block"}, [], {"display": "none"}, {"display": "block"}, {"display": "flex"}, description
 
-        if df.empty:
-            return [], {"display": "none"}, [], {"display": "block"}, {"display": "block"}, {"display": "flex"}, description
+        # --- Path 2: pedestrian statewide description (only when table has non-empty results) ---
+        ped_mode = str(mode or "").strip().lower() == "pedestrian"
+        ped_fac  = str(facility or "").strip().lower() == "on-street (sidewalk)"
+        ped_src  = str(source or "").strip().lower() == "wisconsin ped/bike database (statewide)"
 
+        if df.empty:
+            # Empty table → show panel and allow download (unchanged behavior) but no description
+            return [], {"display": "none"}, [], {"display": "block"}, {"display": "block"}, {"display": "flex"}, []
+
+        # Non-empty rows → show table
         df = df.copy()
         df["View"] = df.apply(_build_view_link, axis=1)
-        df = df[[c["id"] for c in DISPLAY_COLUMNS]]
-        rows = df.to_dict("records")
+        rows = df[[c["id"] for c in DISPLAY_COLUMNS]].to_dict("records")
+
+        # Show the pedestrian statewide description iff the 3 filters match and rows exist
+        description = _ped_statewide_desc() if (ped_mode and ped_fac and ped_src) else []
+
         return [], {"display": "none"}, rows, {"display": "block"}, {"display": "block"}, {"display": "flex"}, description
 
     def _custom_mke_estimated_desc():
+        # Description for the Milwaukee County estimated counts (custom source)
         return html.Div(
             [
                 html.P(
@@ -353,6 +375,36 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             ]
         )
 
+    def _ped_statewide_desc():
+        # Description to show for Pedestrian / On-Street (sidewalk/bike lane) / Wisconsin Ped/Bike Database (Statewide)
+        return html.Div(
+            [
+                html.P(
+                    [
+                        "The estimated counts have been developed by utilizing statewide short-term intersectional pedestrian and long-term trail counts. ",
+                        "For information regarding the source of the data, please refer to the project pages ",
+                        html.A(
+                            "“Pedestrian Exposure Data for the Wisconsin State Highway System: WisDOT Southeast Region Pilot Study”",
+                            href="https://uwm.edu/ipit/projects/pedestrian-exposure-data-for-the-wisconsin-state-highway-system-wisdot-southeast-region-pilot-study/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        " and ",
+                        html.A(
+                            "“Practical Application of Pedestrian Exposure Tools: Expanding Southeast Region Results Statewide”",
+                            href="https://uwm.edu/ipit/projects/practical-application-of-pedestrian-exposure-tools-expanding-southeast-region-results-statewide/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        ".",
+                    ],
+                    className="app-muted",
+                    style={"margin": "0"},
+                )
+            ]
+        )
+
+    # ---- Download filtered CSV (click-only) ----
     @app.callback(
         Output("pf-download", "data"),
         Input("pf-download-btn", "n_clicks"),
