@@ -31,7 +31,7 @@ SP_LOCATION     = "W Wells St & N 68th St Intersection"
 SP_MODE         = "Both"
 SP_FACILITY     = "Intersection"
 SP_SOURCE       = "Wisconsin Pilot Counting Counts"
-SP_DURATION     = ">6months"
+SP_DURATION     = ">6months"          # default label used previously (kept for compatibility)
 SP_SOURCE_TYPE  = "Actual"
 
 # Vivacity API (optional) for special row total
@@ -169,24 +169,13 @@ def _viv_sum_window(ids: list[str], dt_from: datetime, dt_to: datetime) -> int:
         return 0
     return _parse_counts_payload(payload)
 
-def _viv_total_last_n_months(ids: list[str], months: int = 6) -> int:
-    """
-    Sum pedestrian + cyclist across both directions for the last N months by chunking
-    the request into ≤169-hour aligned windows (Vivacity limit for 1h bucket).
-    """
-    if not (VIV_API_KEY and ids):
-        return 0
-
-    now_local = datetime.now(LOCAL_TZ)
-    dt_to = now_local.astimezone(timezone.utc)
-    dt_from = (now_local - timedelta(days=30 * months)).astimezone(timezone.utc)
-
-    # Align to bucket boundaries for time_bucket=1h (to is exclusive)
-    dt_from = _align_hour(dt_from, ceil=False)  # floor to hour
-    dt_to   = _align_hour(dt_to,   ceil=True)   # ceil to next hour (exclusive)
-
+def _viv_total_windowed(ids: list[str], dt_from: datetime, dt_to: datetime) -> int:
+    """Sum counts across [dt_from, dt_to) by chunking into ≤169-hour aligned windows."""
     if dt_to <= dt_from:
-        dt_to = dt_from + timedelta(hours=1)
+        return 0
+    # Align to bucket boundaries
+    dt_from = _align_hour(dt_from, ceil=False)
+    dt_to   = _align_hour(dt_to,   ceil=True)
 
     grand_total = 0
     cur_from = dt_from
@@ -194,18 +183,80 @@ def _viv_total_last_n_months(ids: list[str], months: int = 6) -> int:
 
     while cur_from < dt_to:
         cur_to = min(cur_from + max_delta, dt_to)
-        # Safety: ensure at least 1h
         if cur_to <= cur_from:
             cur_to = cur_from + timedelta(hours=1)
-
-        # Fetch one window
         grand_total += _viv_sum_window(ids, cur_from, cur_to)
-
-        # Small jitter to be polite with back-to-back requests
-        time.sleep(0.15)
+        time.sleep(0.15)  # polite pacing
         cur_from = cur_to
 
     return int(grand_total)
+
+def _duration_to_window(duration_key: str, now_local: datetime) -> tuple[datetime, datetime]:
+    """
+    Convert UI duration bucket into a [from, to) window in LOCAL_TZ.
+    Strategy: use the UPPER bound of the bucket as the lookback length.
+    For '>6months', we keep 6 months (consistent with prior behavior).
+    """
+    key = (duration_key or "").strip().lower()
+    # default: 6 months
+    months = 6
+    hours = None
+    days = None
+
+    if key == "0-15hrs":
+        hours = 15
+    elif key == "15-48hrs":
+        hours = 48
+    elif key == "2days-14days":
+        days = 14
+    elif key == "14days-30days":
+        days = 30
+    elif key == "1month-3months":
+        months = 3
+    elif key == "3months-6months":
+        months = 6
+    elif key == ">6months":
+        months = 6  # keep consistent with earlier implementation
+
+    if hours is not None:
+        dt_to_local = now_local
+        dt_from_local = now_local - timedelta(hours=hours)
+    elif days is not None:
+        dt_to_local = now_local
+        dt_from_local = now_local - timedelta(days=days)
+    else:
+        # month-based (approximate months as 30 days each for summary totals)
+        dt_to_local = now_local
+        dt_from_local = now_local - timedelta(days=30 * months)
+
+    return dt_from_local, dt_to_local
+
+def _viv_total_for_duration(ids: list[str], duration_key: str) -> int:
+    """Compute total for the given duration bucket by mapping to a window and chunking requests."""
+    if not (VIV_API_KEY and ids):
+        return 0
+    now_local = datetime.now(LOCAL_TZ)
+    dt_from_local, dt_to_local = _duration_to_window(duration_key, now_local)
+    # convert to UTC
+    dt_from = dt_from_local.astimezone(timezone.utc)
+    dt_to   = dt_to_local.astimezone(timezone.utc)
+    return _viv_total_windowed(ids, dt_from, dt_to)
+
+def _viv_total_last_n_months(ids: list[str], months: int = 6) -> int:
+    """
+    (Kept for compatibility) Sum counts for the last N 'months' (30*months days) by chunking.
+    """
+    if not (VIV_API_KEY and ids):
+        return 0
+
+    now_local = datetime.now(LOCAL_TZ)
+    dt_to_local = now_local
+    dt_from_local = now_local - timedelta(days=30 * months)
+
+    dt_from = dt_from_local.astimezone(timezone.utc)
+    dt_to   = dt_to_local.astimezone(timezone.utc)
+
+    return _viv_total_windowed(ids, dt_from, dt_to)
 
 def _build_view_link(row: pd.Series) -> str:
     src = (row.get("Source") or "").strip()
@@ -478,20 +529,20 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             description = _custom_mke_estimated_desc()
             return map_children, {"display": "block"}, [], {"display": "none"}, {"display": "block"}, {"display": "flex"}, description
 
-        # --- Special Intersection row injection (ONLY when exact filters match) ---
+        # --- Special Intersection row injection (NOW for any selected duration) ---
         is_special = (
             str(mode or "").strip().casefold() == SP_MODE.casefold()
             and str(facility or "").strip().casefold() == SP_FACILITY.casefold()
             and str(source or "").strip().casefold() == SP_SOURCE.casefold()
-            and str(duration_key or "").strip().casefold() == SP_DURATION.casefold()
         )
 
         if is_special:
             ids = [s.strip() for s in (VIV_IDS_ENV.split(",") if VIV_IDS_ENV else []) if s.strip()]
-            total = _viv_total_last_n_months(ids, months=6) if ids else 0
+            # Fetch total counts based on the selected duration bucket
+            total = _viv_total_for_duration(ids, duration_key) if ids else 0
             sp_row = {
                 "Location": SP_LOCATION,
-                "Duration": SP_DURATION,
+                "Duration": str(duration_key),   # reflect the selected duration bucket
                 "Total counts": int(total),
                 "Source type": SP_SOURCE_TYPE,
                 "Source": SP_SOURCE,
