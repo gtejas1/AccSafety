@@ -2,10 +2,15 @@
 from __future__ import annotations
 
 import io
+import os
+import time
+import random
+from datetime import datetime, timedelta, timezone
 import urllib.parse
 import pandas as pd
 from sqlalchemy import create_engine
 
+import requests  # <-- added
 import dash
 from dash import dcc, html, Input, Output, State, dash_table
 import dash_bootstrap_components as dbc
@@ -20,6 +25,28 @@ NEW_SOURCE_NAME = "Annual Average Estimated Counts (Milwaukee County)"
 NEW_FACILITY    = "On-Street (Sidewalk/Crosswalk/Bike Lane)"
 NEW_MODE        = "Both"
 STORYMAP_URL    = "https://storymaps.arcgis.com/stories/281bfdde23a7411ca63f84d1fafa2098"
+
+# ---- Special row (Intersection) — additive, affects only the exact filter path ----
+SP_LOCATION     = "W Wells St & N 68th St Intersection"
+SP_MODE         = "Both"
+SP_FACILITY     = "Intersection"
+SP_SOURCE       = "Wisconsin Pilot Counting Counts"
+SP_DURATION     = ">6months"
+SP_SOURCE_TYPE  = "Actual"
+
+# Vivacity API (optional) for special row total
+VIV_API_BASE = "https://api.vivacitylabs.com"
+VIV_API_KEY  = "e8893g6wfj7muf89s93n6xfu.rltm9dd6bei47gwbibjog20k"
+VIV_IDS_ENV  = "54315,54316,54317,54318"  # comma-separated ids
+VIV_TIMEOUT  = 30
+VIV_RETRIES  = 3
+VIV_MAX_HOURS_PER_REQ = 169  # documented limit for 1h bucket
+
+try:
+    from zoneinfo import ZoneInfo
+    LOCAL_TZ = ZoneInfo("America/Chicago")
+except Exception:
+    LOCAL_TZ = timezone.utc
 
 # Visible columns (no Lon/Lat)
 DISPLAY_COLUMNS = [
@@ -70,9 +97,124 @@ def _encode_location_for_href(text: str) -> str:
         return ""
     return urllib.parse.quote(urllib.parse.unquote(text), safe="")
 
+def _viv_headers():
+    return {"x-vivacity-api-key": VIV_API_KEY} if VIV_API_KEY else {}
+
+def _viv_get(path: str, params: dict | None = None) -> requests.Response:
+    url = f"{VIV_API_BASE}{path}"
+    last_err = None
+    for attempt in range(1, VIV_RETRIES + 1):
+        try:
+            r = requests.get(url, headers=_viv_headers(), params=params, timeout=VIV_TIMEOUT)
+            if r.status_code == 429:
+                wait = float(r.headers.get("Retry-After") or (1.5 ** attempt))
+                time.sleep(wait + random.uniform(0, 0.5))
+                last_err = Exception(f"429: {r.text[:200]}")
+                continue
+            if r.status_code >= 500:
+                time.sleep((1.5 ** attempt) + random.uniform(0, 0.5))
+                last_err = Exception(f"{r.status_code}: {r.text[:200]}")
+                continue
+            r.raise_for_status()
+            return r
+        except requests.RequestException as e:
+            last_err = e
+            time.sleep((1.5 ** attempt) + random.uniform(0, 0.5))
+    raise RuntimeError(f"Vivacity GET failed: {last_err}")
+
+def _viv_iso_z(dt: datetime) -> str:
+    # Truncate to whole seconds and format as RFC3339 without fractional seconds
+    dt_utc = dt.astimezone(timezone.utc).replace(microsecond=0)
+    return dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+def _align_hour(dt: datetime, ceil: bool = False) -> datetime:
+    """Align to the hour in UTC. If ceil=True, round up to next hour when not already aligned."""
+    dt = dt.astimezone(timezone.utc)
+    base = dt.replace(minute=0, second=0, microsecond=0)
+    if ceil and dt != base:
+        base += timedelta(hours=1)
+    return base
+
+def _parse_counts_payload(payload) -> int:
+    """Sum pedestrian + cyclist across both directions from a single API response payload."""
+    total = 0
+    if isinstance(payload, dict):
+        for _, arr in payload.items():
+            if not isinstance(arr, list):
+                continue
+            for rec in arr:
+                for direction in ("clockwise", "anti_clockwise"):
+                    d = rec.get(direction) or {}
+                    if isinstance(d, dict):
+                        for cls in ("pedestrian", "cyclist"):
+                            try:
+                                total += int(float(d.get(cls, 0) or 0))
+                            except Exception:
+                                pass
+    return int(total)
+
+def _viv_sum_window(ids: list[str], dt_from: datetime, dt_to: datetime) -> int:
+    """Fetch and sum counts for a single aligned window [dt_from, dt_to) with time_bucket=1h."""
+    params = {
+        "countline_ids": ",".join(ids),
+        "from": _viv_iso_z(dt_from),
+        "to": _viv_iso_z(dt_to),
+        "time_bucket": "1h",
+        "fill_zeros": "false",
+        "classes": "pedestrian,cyclist",
+    }
+    try:
+        payload = _viv_get("/countline/counts", params=params).json()
+    except Exception:
+        return 0
+    return _parse_counts_payload(payload)
+
+def _viv_total_last_n_months(ids: list[str], months: int = 6) -> int:
+    """
+    Sum pedestrian + cyclist across both directions for the last N months by chunking
+    the request into ≤169-hour aligned windows (Vivacity limit for 1h bucket).
+    """
+    if not (VIV_API_KEY and ids):
+        return 0
+
+    now_local = datetime.now(LOCAL_TZ)
+    dt_to = now_local.astimezone(timezone.utc)
+    dt_from = (now_local - timedelta(days=30 * months)).astimezone(timezone.utc)
+
+    # Align to bucket boundaries for time_bucket=1h (to is exclusive)
+    dt_from = _align_hour(dt_from, ceil=False)  # floor to hour
+    dt_to   = _align_hour(dt_to,   ceil=True)   # ceil to next hour (exclusive)
+
+    if dt_to <= dt_from:
+        dt_to = dt_from + timedelta(hours=1)
+
+    grand_total = 0
+    cur_from = dt_from
+    max_delta = timedelta(hours=VIV_MAX_HOURS_PER_REQ)
+
+    while cur_from < dt_to:
+        cur_to = min(cur_from + max_delta, dt_to)
+        # Safety: ensure at least 1h
+        if cur_to <= cur_from:
+            cur_to = cur_from + timedelta(hours=1)
+
+        # Fetch one window
+        grand_total += _viv_sum_window(ids, cur_from, cur_to)
+
+        # Small jitter to be polite with back-to-back requests
+        time.sleep(0.15)
+        cur_from = cur_to
+
+    return int(grand_total)
+
 def _build_view_link(row: pd.Series) -> str:
     src = (row.get("Source") or "").strip()
     loc = (row.get("Location") or "").strip()
+    # Special row routes to Vivacity
+    if loc == SP_LOCATION and src == SP_SOURCE:
+        loc_q = _encode_location_for_href(loc)
+        return f"[Open](/vivacity/?location={loc_q})"
+    # Existing behavior (unchanged)
     loc_q = _encode_location_for_href(loc)
     if src == "Wisconsin Pilot Counting Counts":
         return f"[Open](/eco/dashboard?location={loc_q})"
@@ -217,8 +359,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             return [], {"display": "none"}, None
         df = base_df[base_df["Mode"].str.casefold() == str(mode).strip().casefold()]
         facilities = df["Facility type"].unique().tolist()
+        # Keep existing special Milwaukee path
         if str(mode).strip().casefold() == NEW_MODE.casefold():
             facilities = list(set(facilities) | {NEW_FACILITY})
+        # Add Intersection facility only for Mode=Both (additive)
+        if str(mode).strip().casefold() == SP_MODE.casefold():
+            facilities = list(set(facilities) | {SP_FACILITY})
         return _opts(facilities), {"display": "block"}, None
 
     @app.callback(
@@ -237,9 +383,14 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             (base_df["Facility type"].str.casefold() == str(facility).strip().casefold())
         ]
         sources = df["Source"].unique().tolist()
+        # Existing special source (Milwaukee estimated)
         if (str(mode).strip().casefold() == NEW_MODE.casefold()
             and str(facility).strip().casefold() == NEW_FACILITY.casefold()):
             sources = list(set(sources) | {NEW_SOURCE_NAME})
+        # Add Wisconsin Pilot Counting Counts for Intersection facility (additive)
+        if (str(mode).strip().casefold() == SP_MODE.casefold()
+            and str(facility).strip().casefold() == SP_FACILITY.casefold()):
+            sources = list(set(sources) | {SP_SOURCE})
         return _opts(sources), {"display": "block"}, None
 
     @app.callback(
@@ -326,6 +477,29 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
             description = _custom_mke_estimated_desc()
             return map_children, {"display": "block"}, [], {"display": "none"}, {"display": "block"}, {"display": "flex"}, description
+
+        # --- Special Intersection row injection (ONLY when exact filters match) ---
+        is_special = (
+            str(mode or "").strip().casefold() == SP_MODE.casefold()
+            and str(facility or "").strip().casefold() == SP_FACILITY.casefold()
+            and str(source or "").strip().casefold() == SP_SOURCE.casefold()
+            and str(duration_key or "").strip().casefold() == SP_DURATION.casefold()
+        )
+
+        if is_special:
+            ids = [s.strip() for s in (VIV_IDS_ENV.split(",") if VIV_IDS_ENV else []) if s.strip()]
+            total = _viv_total_last_n_months(ids, months=6) if ids else 0
+            sp_row = {
+                "Location": SP_LOCATION,
+                "Duration": SP_DURATION,
+                "Total counts": int(total),
+                "Source type": SP_SOURCE_TYPE,
+                "Source": SP_SOURCE,
+                "Facility type": SP_FACILITY,
+                "Mode": SP_MODE,
+            }
+            # Append the special row without disturbing DB results
+            df = pd.concat([df, pd.DataFrame([sp_row])], ignore_index=True)
 
         # --- Path 2: pedestrian statewide description (only when table has non-empty results) ---
         ped_mode = str(mode or "").strip().lower() == "pedestrian"
