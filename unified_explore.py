@@ -34,6 +34,15 @@ SP_SOURCE       = "Wisconsin Pilot Counting Counts"
 SP_DURATION     = ">6months"          # default label used previously (kept for compatibility)
 SP_SOURCE_TYPE  = "Actual"
 
+# ---- Extra special row (Intersection) — additive, same filter path ----
+# (Requested: link to /live/, Duration/Total counts not available)
+SP2_LOCATION     = "N Santa Monica Blvd & Silver Spring Drive - Village of Whitefish Bay"
+SP2_MODE         = "Both"
+SP2_FACILITY     = "Intersection"
+SP2_SOURCE       = "Wisconsin Pilot Counting Counts"
+SP2_SOURCE_TYPE  = "Actual"
+SP2_VIEW_ROUTE   = "/live/"
+
 # Vivacity API (optional) for special row total
 VIV_API_BASE = "https://api.vivacitylabs.com"
 VIV_API_KEY  = "e8893g6wfj7muf89s93n6xfu.rltm9dd6bei47gwbibjog20k"
@@ -261,10 +270,16 @@ def _viv_total_last_n_months(ids: list[str], months: int = 6) -> int:
 def _build_view_link(row: pd.Series) -> str:
     src = (row.get("Source") or "").strip()
     loc = (row.get("Location") or "").strip()
+
+    # New: Whitefish Bay special row routes to /live/
+    if loc == SP2_LOCATION and src == SP2_SOURCE:
+        return f"[Open]({SP2_VIEW_ROUTE})"
+
     # Special row routes to Vivacity
     if loc == SP_LOCATION and src == SP_SOURCE:
         loc_q = _encode_location_for_href(loc)
         return f"[Open](/vivacity/?location={loc_q})"
+
     # Existing behavior (unchanged)
     loc_q = _encode_location_for_href(loc)
     if src == "Wisconsin Pilot Counting Counts":
@@ -358,23 +373,31 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     # Results: map/image placeholder OR table
     results_block = card(
         [
-            html.Div(id="pf-map", style={"display": "none"}),  # map/image area
-            html.Div(  # table area
-                id="wrap-table",
+            # Wrap the results area in a loader; it will spin while _apply_filters is computing/awaiting API.
+            dcc.Loading(
+                id="pf-main-loader",
+                type="default",  # 'default' | 'circle' | 'dot' | 'cube'
                 children=[
-                    dash_table.DataTable(
-                        id="pf-table",
-                        columns=DISPLAY_COLUMNS,
-                        data=[],
-                        markdown_options={"html": True, "link_target": "_self"},
-                        page_size=25,
-                        sort_action="native",
-                        style_table={"overflowX": "auto"},
-                        style_as_list_view=True,
-                        style_header={"backgroundColor": "#f1f5f9", "fontWeight": "bold", "fontSize": "15px"},
-                        style_cell={"textAlign": "left", "padding": "8px"},
-                        style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "rgba(15,23,42,0.03)"}],
-                    )
+                    html.Div(id="pf-map", style={"display": "none", "minHeight": "240px"}),  # spinner shows in this space
+                    html.Div(  # table area
+                        id="wrap-table",
+                        children=[
+                            dash_table.DataTable(
+                                id="pf-table",
+                                columns=DISPLAY_COLUMNS,
+                                data=[],
+                                markdown_options={"html": True, "link_target": "_self"},
+                                page_size=25,
+                                sort_action="native",
+                                style_table={"overflowX": "auto"},
+                                style_as_list_view=True,
+                                style_header={"backgroundColor": "#f1f5f9", "fontWeight": "bold", "fontSize": "15px"},
+                                style_cell={"textAlign": "left", "padding": "8px"},
+                                style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "rgba(15,23,42,0.03)"}],
+                            )
+                        ],
+                        style={"minHeight": "240px"},  # keep the spinner visible if table is hidden
+                    ),
                 ],
             ),
         ],
@@ -388,7 +411,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 [
                     dbc.Col(filter_block, lg=4, md=12, className="mb-3"),
                     dbc.Col(
-                        html.Div(id="wrap-results", children=[desc_block, results_block], style={"display": "none"}),
+                        # Also wrap the whole results column so the spinner can show while description/table/map update together.
+                        dcc.Loading(
+                            id="pf-wrap-loader",
+                            type="default",  # 'default' | 'circle' | 'dot' | 'cube'
+                            children=html.Div(id="wrap-results", children=[desc_block, results_block], style={"display": "none"}),
+                        ),
                         lg=8, md=12, className="mb-3",
                     ),
                 ],
@@ -549,8 +577,20 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 "Facility type": SP_FACILITY,
                 "Mode": SP_MODE,
             }
-            # Append the special row without disturbing DB results
+            # Append the existing special row
             df = pd.concat([df, pd.DataFrame([sp_row])], ignore_index=True)
+
+            # New: append Whitefish Bay row (Duration/Total counts not available)
+            sp2_row = {
+                "Location": SP2_LOCATION,
+                "Duration": "Not available",
+                "Total counts": None,            # shows blank in table
+                "Source type": SP2_SOURCE_TYPE,
+                "Source": SP2_SOURCE,
+                "Facility type": SP2_FACILITY,
+                "Mode": SP2_MODE,
+            }
+            df = pd.concat([df, pd.DataFrame([sp2_row])], ignore_index=True)
 
         # --- Path 2: pedestrian statewide description (only when table has non-empty results) ---
         ped_mode = str(mode or "").strip().lower() == "pedestrian"
