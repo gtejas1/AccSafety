@@ -1,3 +1,40 @@
+-- Pedestrian (already suggested)
+CREATE TABLE IF NOT EXISTS eco_ped_traffic_data (
+  location_name text NOT NULL,
+  date timestamptz NOT NULL,
+  direction text,
+  count integer NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ecoped_loc_date ON eco_ped_traffic_data(location_name, date);
+
+-- Bicyclist (already suggested)
+CREATE TABLE IF NOT EXISTS eco_bike_traffic_data (
+  location_name text NOT NULL,
+  date timestamptz NOT NULL,
+  direction text,
+  count integer NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ecobike_loc_date ON eco_bike_traffic_data(location_name, date);
+
+-- NEW: Both (combined) — sourced from your `Both` folder
+CREATE TABLE IF NOT EXISTS eco_both_traffic_data (
+  location_name text NOT NULL,
+  date timestamptz NOT NULL,
+  direction text,
+  count integer NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ecoboth_loc_date ON eco_both_traffic_data(location_name, date);
+
+-- Trail (if you need it for Trails_Pilot_Counts)
+CREATE TABLE IF NOT EXISTS trail_traffic_data (
+  location_name text NOT NULL,
+  date timestamptz NOT NULL,
+  direction text,
+  count integer NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_trail_loc_date ON trail_traffic_data(location_name, date);
+
+
 -- ============================================================
 -- Replace unified_site_summary to use separated ECO tables:
 --   eco_ped_traffic_data, eco_bike_traffic_data, eco_both_traffic_data
