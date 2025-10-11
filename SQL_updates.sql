@@ -1,3 +1,9 @@
+-- ============================================================
+-- Replace unified_site_summary to use separated ECO tables:
+--   eco_ped_traffic_data, eco_bike_traffic_data, eco_both_traffic_data
+-- Keep Trail (hr_traffic_data) + Statewide as-is.
+-- ============================================================
+
 DROP VIEW IF EXISTS unified_site_summary;
 
 CREATE OR REPLACE VIEW unified_site_summary AS
@@ -6,7 +12,7 @@ WITH
    1) ECO & TRAIL: derive duration as inclusive span of rows
       total_hours = (max(date) - min(date)) in hours + 1
    ============================================================ */
-eco_agg AS (
+eco_ped_agg AS (
   SELECT
     e.location_name,
     SUM(e.count)::bigint AS total_counts,
@@ -14,7 +20,29 @@ eco_agg AS (
          THEN GREATEST(EXTRACT(EPOCH FROM (MAX(e.date) - MIN(e.date))) / 3600.0 + 1, 0)
          ELSE 0
     END AS total_hours
-  FROM eco_traffic_data e
+  FROM eco_ped_traffic_data e
+  GROUP BY e.location_name
+),
+eco_bike_agg AS (
+  SELECT
+    e.location_name,
+    SUM(e.count)::bigint AS total_counts,
+    CASE WHEN COUNT(*) > 0
+         THEN GREATEST(EXTRACT(EPOCH FROM (MAX(e.date) - MIN(e.date))) / 3600.0 + 1, 0)
+         ELSE 0
+    END AS total_hours
+  FROM eco_bike_traffic_data e
+  GROUP BY e.location_name
+),
+eco_both_agg AS (
+  SELECT
+    e.location_name,
+    SUM(e.count)::bigint AS total_counts,
+    CASE WHEN COUNT(*) > 0
+         THEN GREATEST(EXTRACT(EPOCH FROM (MAX(e.date) - MIN(e.date))) / 3600.0 + 1, 0)
+         ELSE 0
+    END AS total_hours
+  FROM eco_both_traffic_data e
   GROUP BY e.location_name
 ),
 trail_agg AS (
@@ -181,7 +209,7 @@ SELECT
   'On-Street (sidewalk)' AS "Facility type",
   'On-Street' AS "Facility group",
   'Pedestrian' AS "Mode"
-FROM eco_agg e
+FROM eco_ped_agg e
 
 UNION ALL
 -- ECO: BICYCLIST (actual)  → On-Street (sidewalk/bike lane)
@@ -205,10 +233,10 @@ SELECT
   'On-Street (sidewalk/bike lane)' AS "Facility type",
   'On-Street' AS "Facility group",
   'Bicyclist' AS "Mode"
-FROM eco_agg e
+FROM eco_bike_agg e
 
 UNION ALL
--- ECO: BOTH (actual)  ❗ rename Facility type On-Street → Intersection (everything else same)
+-- ECO: BOTH (actual)  → rename Facility type On-Street → Intersection
 SELECT
   e.location_name AS "Location",
   CASE
@@ -226,13 +254,13 @@ SELECT
   NULL::double precision AS "Longitude",
   NULL::double precision AS "Latitude",
   'Wisconsin Pilot Counting Counts' AS "Source",
-  'Intersection' AS "Facility type",          -- 👈 renamed here
-  'On-Street'  AS "Facility group",           -- unchanged per your note
+  'Intersection' AS "Facility type",
+  'On-Street'  AS "Facility group",
   'Both' AS "Mode"
-FROM eco_agg e
+FROM eco_both_agg e
 
 UNION ALL
--- TRAIL (SEWRPC actual)  **merged source label**
+-- TRAIL (SEWRPC actual)  **merged source label, unchanged from your script**
 SELECT
   t.location_name AS "Location",
   CASE

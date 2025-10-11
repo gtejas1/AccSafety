@@ -36,7 +36,7 @@ SP_SOURCE_TYPE  = "Actual"
 
 # ---- Extra special row (Intersection) — additive, same filter path ----
 # (Requested: link to /live/, Duration/Total counts not available)
-SP2_LOCATION     = "N Santa Monica Blvd & Silver Spring Drive - Village of Whitefish Bay"
+SP2_LOCATION     = "N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay"
 SP2_MODE         = "Both"
 SP2_FACILITY     = "Intersection"
 SP2_SOURCE       = "Wisconsin Pilot Counting Counts"

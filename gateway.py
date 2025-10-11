@@ -239,20 +239,22 @@ def create_server():
           <a class="cta-explore" href="/explore/">Explore Available Datasets</a>
         </div>
 
-
-        <!-- Removed the explanatory paragraph per request -->
-
+        <!-- >>> REPLACED MAP STARTS HERE <<< -->
         <arcgis-embedded-map
           class="portal-map"
-          item-id="a1e765b1cec34b2897d6a8b7c1ffe54b"
+          item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
           theme="light"
-          bookmarks-enabled
+          portal-url="https://uwm.maps.arcgis.com"
+          center="-88.01501274592921,43.039734737956515"
+          scale="1155581.108577"
           legend-enabled
           information-enabled
-          center="-87.87609699999999,43.122054"
-          scale="577790.554289"
-          portal-url="https://uwm.maps.arcgis.com">
+          bookmarks-enabled
+          layer-list-enabled
+          search-enabled>
         </arcgis-embedded-map>
+        <!-- >>> REPLACED MAP ENDS HERE <<< -->
+
       </section>
     </main>
   </div>

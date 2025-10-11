@@ -1,4 +1,4 @@
-# pbc_eco_app.py
+# pbc_eco_app.py  — uses separated ECO tables with Pedestrian / Bicyclist / Both
 import io
 import urllib.parse
 import pandas as pd
@@ -19,6 +19,17 @@ VALID_USERS = {"admin": "admin", "user1": "mypassword"}
 DB_URL = "postgresql://postgres:gw2ksoft@localhost/TrafficDB"
 ENGINE = create_engine(DB_URL)
 
+# Map "Mode" -> underlying table
+MODE_TABLE = {
+    "Pedestrian": "eco_ped_traffic_data",
+    "Bicyclist": "eco_bike_traffic_data",
+    "Both": "eco_both_traffic_data",
+}
+MODE_OPTIONS = [{"label": m, "value": m} for m in ["Pedestrian", "Bicyclist", "Both"]]
+
+def _table_for_mode(mode: str) -> str:
+    return MODE_TABLE.get(mode or "", "")
+
 def create_eco_dash(server, prefix="/eco/"):
     app = dash.Dash(
         name="eco_dash",
@@ -31,27 +42,41 @@ def create_eco_dash(server, prefix="/eco/"):
     )
     app.title = "Temporary Counts - TRCC Statewide Pilot Counting Projects"
 
-    # ── Summary table data ────────────────────────────────────────────────────
+    # ── Summary table data (union of the three ECO tables) ────────────────────
     summary_query = """
-        SELECT
-            location_name,
-            MIN(date) AS start_date,
-            MAX(date) AS end_date,
-            SUM(count)::bigint AS total_counts,
-            AVG(count)::numeric(12,2) AS average_hourly_count
-        FROM eco_traffic_data
+        SELECT 'Pedestrian' AS mode, location_name,
+               MIN(date) AS start_date, MAX(date) AS end_date,
+               SUM(count)::bigint AS total_counts,
+               AVG(count)::numeric(12,2) AS average_hourly_count
+        FROM eco_ped_traffic_data
         GROUP BY location_name
-        ORDER BY location_name
+        UNION ALL
+        SELECT 'Bicyclist' AS mode, location_name,
+               MIN(date), MAX(date),
+               SUM(count)::bigint,
+               AVG(count)::numeric(12,2)
+        FROM eco_bike_traffic_data
+        GROUP BY location_name
+        UNION ALL
+        SELECT 'Both' AS mode, location_name,
+               MIN(date), MAX(date),
+               SUM(count)::bigint,
+               AVG(count)::numeric(12,2)
+        FROM eco_both_traffic_data
+        GROUP BY location_name
+        ORDER BY location_name, mode;
     """
     summary_df = pd.read_sql(summary_query, ENGINE)
-    summary_df["start_date"] = summary_df["start_date"].dt.date
-    summary_df["end_date"] = summary_df["end_date"].dt.date
-    summary_df["average_hourly_count"] = summary_df["average_hourly_count"].round(0).astype(int)
-    summary_df["View"] = summary_df["location_name"].apply(
-        lambda loc: f"[View]({prefix}dashboard?location={urllib.parse.quote(loc)})"
-    )
+    if not summary_df.empty:
+        summary_df["start_date"] = pd.to_datetime(summary_df["start_date"]).dt.date
+        summary_df["end_date"] = pd.to_datetime(summary_df["end_date"]).dt.date
+        summary_df["average_hourly_count"] = summary_df["average_hourly_count"].round(0).astype(int)
+        summary_df["View"] = summary_df.apply(
+            lambda r: f"[View]({prefix}dashboard?location={urllib.parse.quote(str(r['location_name']))}&mode={urllib.parse.quote(str(r['mode']))})",
+            axis=1,
+        )
 
-    # ── Pages (no welcome) ────────────────────────────────────────────────────
+    # ── Pages (login + summary + dashboard) ───────────────────────────────────
     login_page_layout = centered(
         card(
             [
@@ -89,13 +114,14 @@ def create_eco_dash(server, prefix="/eco/"):
             id="eco-summary-table",
             columns=[
                 {"name": "Location", "id": "location_name"},
+                {"name": "Mode", "id": "mode"},
                 {"name": "Start Date", "id": "start_date"},
                 {"name": "End Date", "id": "end_date"},
                 {"name": "Total Counts", "id": "total_counts", "type": "numeric"},
                 {"name": "Avg Hourly Count", "id": "average_hourly_count", "type": "numeric"},
                 {"name": "View", "id": "View", "presentation": "markdown"},
             ],
-            data=summary_df.to_dict("records"),
+            data=summary_df.to_dict("records") if not summary_df.empty else [],
             markdown_options={"html": True, "link_target": "_self"},
             style_as_list_view=True,
             style_cell={"textAlign": "center", "padding": "8px"},
@@ -103,6 +129,7 @@ def create_eco_dash(server, prefix="/eco/"):
             style_data_conditional=[
                 {"if": {"row_index": "odd"}, "backgroundColor": "rgba(15, 23, 42, 0.03)"}
             ],
+            page_size=20,
         ),
     ])
 
@@ -120,7 +147,18 @@ def create_eco_dash(server, prefix="/eco/"):
             )
         ]),
         dbc.Row([
-            dbc.Col(dcc.DatePickerRange(id="eco-date-picker", display_format="MM-DD-YYYY"), width=12, lg=6),
+            dbc.Col(
+                dcc.Dropdown(
+                    id="eco-mode",
+                    options=MODE_OPTIONS,
+                    value="Pedestrian",
+                    clearable=False,
+                    placeholder="Mode",
+                ),
+                xs=12, md=6, lg=4
+            ),
+            dbc.Col(dcc.DatePickerRange(id="eco-date-picker", display_format="MM-DD-YYYY"),
+                    xs=12, md=6, lg=4),
             dbc.Col(
                 html.Div(
                     html.A(
@@ -131,8 +169,7 @@ def create_eco_dash(server, prefix="/eco/"):
                         className="btn btn-outline-primary float-end",
                     )
                 ),
-                width=12,
-                lg=6,
+                xs=12, lg=4,
             ),
         ], className="g-3"),
         html.Hr(),
@@ -167,15 +204,18 @@ def create_eco_dash(server, prefix="/eco/"):
     # ── Scoped download endpoint ──────────────────────────────────────────────
     def _eco_download():
         location = flask_request.args.get("location")
-        if not location:
-            return "Location not specified", 400
+        mode = flask_request.args.get("mode", "Pedestrian")
+        table = _table_for_mode(mode)
+        if not location or not table:
+            return "Location or mode not specified", 400
         df = pd.read_sql(
-            "SELECT * FROM eco_traffic_data WHERE location_name = %(location)s",
+            f"SELECT * FROM {table} WHERE location_name = %(location)s ORDER BY date",
             ENGINE, params={"location": location}
         )
         buf = io.StringIO(); df.to_csv(buf, index=False); buf.seek(0)
+        fname = f"{location}_{mode}_traffic_data.csv"
         return send_file(io.BytesIO(buf.read().encode()), mimetype="text/csv",
-                         as_attachment=True, download_name=f"{location}_traffic_data.csv")
+                         as_attachment=True, download_name=fname)
     server.add_url_rule(f"{prefix}download", endpoint="eco_download", view_func=_eco_download)
 
     # ── Routing (default → summary) ───────────────────────────────────────────
@@ -188,8 +228,9 @@ def create_eco_dash(server, prefix="/eco/"):
             return dashboard_layout
         return summary_layout
 
-    # seed dashboard controls from URL (?location=…)
+    # seed dashboard controls from URL (?location=…&mode=…)
     @app.callback(
+        Output("eco-mode", "value"),
         Output("eco-date-picker", "min_date_allowed"),
         Output("eco-date-picker", "max_date_allowed"),
         Output("eco-date-picker", "start_date"),
@@ -201,22 +242,40 @@ def create_eco_dash(server, prefix="/eco/"):
     def eco_set_date_range(search):
         q = dict(urllib.parse.parse_qsl((search or "").lstrip("?")))
         loc = q.get("location")
-        if not loc:
-            return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+        mode = q.get("mode") or "Pedestrian"
+        table = _table_for_mode(mode)
+        if not (loc and table):
+            return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, "", "Temporary Counts"
 
         date_range = pd.read_sql(
-            "SELECT MIN(date) AS min_date, MAX(date) AS max_date FROM eco_traffic_data WHERE location_name = %(l)s",
+            f"SELECT MIN(date) AS min_date, MAX(date) AS max_date FROM {table} WHERE location_name = %(l)s",
             ENGINE, params={"l": loc}
         )
         if date_range.empty or pd.isna(date_range.iloc[0]["min_date"]):
-            return None, None, None, None, "", loc
+            dl = f"{prefix}download?location={urllib.parse.quote(loc)}&mode={urllib.parse.quote(mode)}"
+            return mode, None, None, None, None, dl, f"{loc} · {mode}"
 
-        min_date = date_range.iloc[0]["min_date"]
-        max_date = date_range.iloc[0]["max_date"]
-        dl = f"{prefix}download?location={urllib.parse.quote(loc)}"
-        return min_date, max_date, min_date, max_date, dl, loc
+        min_date = pd.to_datetime(date_range.iloc[0]["min_date"])
+        max_date = pd.to_datetime(date_range.iloc[0]["max_date"])
+        dl = f"{prefix}download?location={urllib.parse.quote(loc)}&mode={urllib.parse.quote(mode)}"
+        return mode, min_date, max_date, min_date, max_date, dl, f"{loc} · {mode}"
 
-    # draw graphs
+    # When the user changes the Mode dropdown, update URL (keeps location)
+    @app.callback(
+        Output("eco-url", "search"),
+        Input("eco-mode", "value"),
+        State("eco-url", "search"),
+    )
+    def eco_update_mode_in_url(mode, search):
+        if not mode:
+            return dash.no_update
+        q = dict(urllib.parse.parse_qsl((search or "").lstrip("?")))
+        if q.get("mode") == mode:
+            return dash.no_update
+        q["mode"] = mode
+        return "?" + urllib.parse.urlencode(q)
+
+    # draw graphs using selected table/mode
     @app.callback(
         Output("eco-hourly-traffic", "figure"),
         Output("eco-daily-traffic", "figure"),
@@ -228,25 +287,44 @@ def create_eco_dash(server, prefix="/eco/"):
     def eco_update_graphs(start_date, end_date, search):
         q = dict(urllib.parse.parse_qsl((search or "").lstrip("?")))
         loc = q.get("location")
-        if not (start_date and end_date and loc):
+        mode = q.get("mode") or "Pedestrian"
+        table = _table_for_mode(mode)
+
+        if not (start_date and end_date and loc and table):
             empty = go.Figure()
             return empty, empty, empty
 
         data = pd.read_sql(
-            "SELECT * FROM eco_traffic_data WHERE location_name=%(l)s AND date BETWEEN %(s)s AND %(e)s",
+            f"""
+            SELECT date, direction, count
+            FROM {table}
+            WHERE location_name=%(l)s AND date BETWEEN %(s)s AND %(e)s
+            ORDER BY date
+            """,
             ENGINE, params={"l": loc, "s": start_date, "e": end_date}
         )
         if data.empty:
             empty = go.Figure(); empty.update_layout(title="No data in selected range")
             return empty, empty, empty
 
-        data["date"] = pd.to_datetime(data["date"]); data.set_index("date", inplace=True)
-        daily = data.resample("D").sum(numeric_only=True)
-        hourly_fig = px.line(data, x=data.index, y="count", color="direction", title="Hourly Traffic Trends")
-        daily_fig  = px.line(daily, x=daily.index, y="count", title="Total Daily Traffic")
-        dow_avg = data.groupby(data.index.dayofweek)["count"].mean().reindex([0,1,2,3,4,5,6]).fillna(0)
-        dow_fig = px.bar(x=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
-                         y=dow_avg, title="Average Traffic by Day of the Week")
+        data["date"] = pd.to_datetime(data["date"])
+        data = data.sort_values("date")
+        # Hourly (as recorded) — colored by direction
+        hourly_fig = px.line(data, x="date", y="count", color="direction", title="Hourly Traffic Trends")
+
+        # Daily totals
+        tmp = data.set_index("date")
+        daily = tmp["count"].resample("D").sum().reset_index()
+        daily_fig = px.line(daily, x="date", y="count", title="Total Daily Traffic")
+
+        # Day-of-week average
+        tmp["dow"] = tmp.index.dayofweek
+        dow_avg = tmp.groupby("dow")["count"].mean().reindex([0,1,2,3,4,5,6]).fillna(0)
+        dow_fig = px.bar(
+            x=["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+            y=[dow_avg.get(i, 0) for i in range(7)],
+            title="Average Traffic by Day of the Week"
+        )
         return hourly_fig, daily_fig, dow_fig
 
     # login → go straight to summary
