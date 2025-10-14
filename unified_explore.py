@@ -667,6 +667,20 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             # If it's the statewide on-street combo we show statewide_onstreet;
             # if it's Pilot Intersection, we'll fall through to pilot description below.
             description = _statewide_onstreet_desc() if fac_val != "intersection" else _pilot_counts_desc()
+
+        # ✅ Statewide + Intersection (Bicyclist)
+        elif (mode_val == "bicyclist"
+              and fac_val == "intersection"
+              and source_val == "wisconsin ped/bike database (statewide)"):
+            # Reuse the statewide text that references intersectional counts
+            description = _statewide_onstreet_desc()
+
+        # ✅ Statewide + Intersection (Pedestrian)
+        elif (mode_val == "pedestrian"
+              and fac_val == "intersection"
+              and source_val == "wisconsin ped/bike database (statewide)"):
+            description = _ped_statewide_desc()
+
         elif (mode_val == "pedestrian"
               and fac_val == "on-street (sidewalk)"
               and source_val == "wisconsin ped/bike database (statewide)"):
