@@ -1,4 +1,4 @@
--- Pedestrian (already suggested)
+-- (Assumes these ECO per-mode tables exist; shown for reference)
 CREATE TABLE IF NOT EXISTS eco_ped_traffic_data (
   location_name text NOT NULL,
   date timestamptz NOT NULL,
@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS eco_ped_traffic_data (
 );
 CREATE INDEX IF NOT EXISTS idx_ecoped_loc_date ON eco_ped_traffic_data(location_name, date);
 
--- Bicyclist (already suggested)
 CREATE TABLE IF NOT EXISTS eco_bike_traffic_data (
   location_name text NOT NULL,
   date timestamptz NOT NULL,
@@ -16,7 +15,6 @@ CREATE TABLE IF NOT EXISTS eco_bike_traffic_data (
 );
 CREATE INDEX IF NOT EXISTS idx_ecobike_loc_date ON eco_bike_traffic_data(location_name, date);
 
--- NEW: Both (combined) — sourced from your `Both` folder
 CREATE TABLE IF NOT EXISTS eco_both_traffic_data (
   location_name text NOT NULL,
   date timestamptz NOT NULL,
@@ -25,7 +23,8 @@ CREATE TABLE IF NOT EXISTS eco_both_traffic_data (
 );
 CREATE INDEX IF NOT EXISTS idx_ecoboth_loc_date ON eco_both_traffic_data(location_name, date);
 
--- Trail (if you need it for Trails_Pilot_Counts)
+-- ECO Trails_Pilot_Counts folder table (your existing input for the pilot trails)
+-- If you already created it, this is a no-op.
 CREATE TABLE IF NOT EXISTS trail_traffic_data (
   location_name text NOT NULL,
   date timestamptz NOT NULL,
@@ -34,20 +33,12 @@ CREATE TABLE IF NOT EXISTS trail_traffic_data (
 );
 CREATE INDEX IF NOT EXISTS idx_trail_loc_date ON trail_traffic_data(location_name, date);
 
-
--- ============================================================
--- Replace unified_site_summary to use separated ECO tables:
---   eco_ped_traffic_data, eco_bike_traffic_data, eco_both_traffic_data
--- Keep Trail (hr_traffic_data) + Statewide as-is.
--- ============================================================
-
 DROP VIEW IF EXISTS unified_site_summary;
 
 CREATE OR REPLACE VIEW unified_site_summary AS
 WITH
 /* ============================================================
-   1) ECO & TRAIL: derive duration as inclusive span of rows
-      total_hours = (max(date) - min(date)) in hours + 1
+   1) ECO aggregates (Intersection + Trails_Pilot_Counts)
    ============================================================ */
 eco_ped_agg AS (
   SELECT
@@ -82,7 +73,8 @@ eco_both_agg AS (
   FROM eco_both_traffic_data e
   GROUP BY e.location_name
 ),
-trail_agg AS (
+-- NEW: ECO Trails_Pilot_Counts aggregated once (we will present it under both modes in the final union)
+eco_trail_pilot_agg AS (
   SELECT
     t.location_name,
     SUM(t.count)::bigint AS total_counts,
@@ -90,27 +82,13 @@ trail_agg AS (
          THEN GREATEST(EXTRACT(EPOCH FROM (MAX(t.date) - MIN(t.date))) / 3600.0 + 1, 0)
          ELSE 0
     END AS total_hours
-  FROM hr_traffic_data t
+  FROM trail_traffic_data t
   GROUP BY t.location_name
 ),
 
 /* ============================================================
-   2) STATEWIDE: parse `duration` text → numeric hours → bucket
-      Handles "6 hr", "6 hrs", "6 hours", also minutes/days if present
+   2) STATEWIDE: parse text Duration → hours → bucket (Ped, Bike, Trail)
    ============================================================ */
-dur_map AS (
-  SELECT * FROM (VALUES
-    ('0-15hrs', 1),
-    ('15-48hrs', 2),
-    ('2days-14days', 3),
-    ('14days-30days', 4),
-    ('1month-3months', 5),
-    ('3months-6months', 6),
-    ('>6months', 7)
-  ) AS dm(bucket, ord)
-),
-
--- Pedestrian statewide
 swp_row AS (
   SELECT
     COALESCE(p.location_name, '(Unknown)') AS location_name,
@@ -135,8 +113,8 @@ swp AS (
     MIN(r.longitude)   AS longitude,
     MIN(r.latitude)    AS latitude,
     CASE
-      WHEN COALESCE(MAX(r.dur_hours), 999999) <= 15 THEN '0-15hrs'
-      WHEN COALESCE(MAX(r.dur_hours), 999999) <= 48 THEN '15-48hrs'
+      WHEN COALESCE(MAX(r.dur_hours), 999999) <=  15 THEN '0-15hrs'
+      WHEN COALESCE(MAX(r.dur_hours), 999999) <=  48 THEN '15-48hrs'
       WHEN COALESCE(MAX(r.dur_hours), 999999) <= 336 THEN '2days-14days'
       WHEN COALESCE(MAX(r.dur_hours), 999999) <= 720 THEN '14days-30days'
       WHEN COALESCE(MAX(r.dur_hours), 999999) <= 2160 THEN '1month-3months'
@@ -147,7 +125,6 @@ swp AS (
   GROUP BY r.location_name
 ),
 
--- Bicyclist statewide
 swb_row AS (
   SELECT
     COALESCE(b.location_name, '(Unknown)') AS location_name,
@@ -172,8 +149,8 @@ swb AS (
     MIN(r.longitude)   AS longitude,
     MIN(r.latitude)    AS latitude,
     CASE
-      WHEN COALESCE(MAX(r.dur_hours), 999999) <= 15 THEN '0-15hrs'
-      WHEN COALESCE(MAX(r.dur_hours), 999999) <= 48 THEN '15-48hrs'
+      WHEN COALESCE(MAX(r.dur_hours), 999999) <=  15 THEN '0-15hrs'
+      WHEN COALESCE(MAX(r.dur_hours), 999999) <=  48 THEN '15-48hrs'
       WHEN COALESCE(MAX(r.dur_hours), 999999) <= 336 THEN '2days-14days'
       WHEN COALESCE(MAX(r.dur_hours), 999999) <= 720 THEN '14days-30days'
       WHEN COALESCE(MAX(r.dur_hours), 999999) <= 2160 THEN '1month-3months'
@@ -184,7 +161,6 @@ swb AS (
   GROUP BY r.location_name
 ),
 
--- Trail user statewide
 swt_row AS (
   SELECT
     COALESCE(t.location_name, '(Unknown)') AS location_name,
@@ -209,8 +185,8 @@ swt AS (
     MIN(r.longitude)   AS longitude,
     MIN(r.latitude)    AS latitude,
     CASE
-      WHEN COALESCE(MAX(r.dur_hours), 999999) <= 15 THEN '0-15hrs'
-      WHEN COALESCE(MAX(r.dur_hours), 999999) <= 48 THEN '15-48hrs'
+      WHEN COALESCE(MAX(r.dur_hours), 999999) <=  15 THEN '0-15hrs'
+      WHEN COALESCE(MAX(r.dur_hours), 999999) <=  48 THEN '15-48hrs'
       WHEN COALESCE(MAX(r.dur_hours), 999999) <= 336 THEN '2days-14days'
       WHEN COALESCE(MAX(r.dur_hours), 999999) <= 720 THEN '14days-30days'
       WHEN COALESCE(MAX(r.dur_hours), 999999) <= 2160 THEN '1month-3months'
@@ -222,65 +198,17 @@ swt AS (
 )
 
 /* ============================================================
-   3) FINAL UNION  (merge/rename facility types & merge trail source)
+   3) FINAL UNION — mappings & labels per your rules
    ============================================================ */
 
--- ECO: PEDESTRIAN (actual)  → On-Street (sidewalk)
+-- ECO Intersection: Pedestrian (Actual)
 SELECT
   e.location_name AS "Location",
   CASE
     WHEN e.total_hours <= 15 THEN '0-15hrs'
-    WHEN e.total_hours > 15  AND e.total_hours <= 48   THEN '15-48hrs'
-    WHEN e.total_hours > 48  AND e.total_hours <= 336  THEN '2days-14days'
-    WHEN e.total_hours > 336 AND e.total_hours <= 720  THEN '14days-30days'
-    WHEN e.total_hours > 720 AND e.total_hours <= 2160 THEN '1month-3months'
-    WHEN e.total_hours > 2160 AND e.total_hours <= 4320 THEN '3months-6months'
-    WHEN e.total_hours > 4320 THEN '>6months'
-    ELSE 'Unknown'
-  END AS "Duration",
-  e.total_counts AS "Total counts",
-  'Actual' AS "Source type",
-  NULL::double precision AS "Longitude",
-  NULL::double precision AS "Latitude",
-  'Wisconsin Pilot Counting Counts' AS "Source",
-  'On-Street (sidewalk)' AS "Facility type",
-  'On-Street' AS "Facility group",
-  'Pedestrian' AS "Mode"
-FROM eco_ped_agg e
-
-UNION ALL
--- ECO: BICYCLIST (actual)  → On-Street (sidewalk/bike lane)
-SELECT
-  e.location_name AS "Location",
-  CASE
-    WHEN e.total_hours <= 15 THEN '0-15hrs'
-    WHEN e.total_hours > 15  AND e.total_hours <= 48   THEN '15-48hrs'
-    WHEN e.total_hours > 48  AND e.total_hours <= 336  THEN '2days-14days'
-    WHEN e.total_hours > 336 AND e.total_hours <= 720  THEN '14days-30days'
-    WHEN e.total_hours > 720 AND e.total_hours <= 2160 THEN '1month-3months'
-    WHEN e.total_hours > 2160 AND e.total_hours <= 4320 THEN '3months-6months'
-    WHEN e.total_hours > 4320 THEN '>6months'
-    ELSE 'Unknown'
-  END AS "Duration",
-  e.total_counts AS "Total counts",
-  'Actual' AS "Source type",
-  NULL::double precision AS "Longitude",
-  NULL::double precision AS "Latitude",
-  'Wisconsin Pilot Counting Counts' AS "Source",
-  'On-Street (sidewalk/bike lane)' AS "Facility type",
-  'On-Street' AS "Facility group",
-  'Bicyclist' AS "Mode"
-FROM eco_bike_agg e
-
-UNION ALL
--- ECO: BOTH (actual)  → rename Facility type On-Street → Intersection
-SELECT
-  e.location_name AS "Location",
-  CASE
-    WHEN e.total_hours <= 15 THEN '0-15hrs'
-    WHEN e.total_hours > 15  AND e.total_hours <= 48   THEN '15-48hrs'
-    WHEN e.total_hours > 48  AND e.total_hours <= 336  THEN '2days-14days'
-    WHEN e.total_hours > 336 AND e.total_hours <= 720  THEN '14days-30days'
+    WHEN e.total_hours > 15  AND e.total_hours <=  48 THEN '15-48hrs'
+    WHEN e.total_hours > 48  AND e.total_hours <= 336 THEN '2days-14days'
+    WHEN e.total_hours > 336 AND e.total_hours <= 720 THEN '14days-30days'
     WHEN e.total_hours > 720 AND e.total_hours <= 2160 THEN '1month-3months'
     WHEN e.total_hours > 2160 AND e.total_hours <= 4320 THEN '3months-6months'
     WHEN e.total_hours > 4320 THEN '>6months'
@@ -292,19 +220,67 @@ SELECT
   NULL::double precision AS "Latitude",
   'Wisconsin Pilot Counting Counts' AS "Source",
   'Intersection' AS "Facility type",
-  'On-Street'  AS "Facility group",
+  'On-Street' AS "Facility group",
+  'Pedestrian' AS "Mode"
+FROM eco_ped_agg e
+
+UNION ALL
+-- ECO Intersection: Bicyclist (Actual)
+SELECT
+  e.location_name AS "Location",
+  CASE
+    WHEN e.total_hours <= 15 THEN '0-15hrs'
+    WHEN e.total_hours > 15  AND e.total_hours <=  48 THEN '15-48hrs'
+    WHEN e.total_hours > 48  AND e.total_hours <= 336 THEN '2days-14days'
+    WHEN e.total_hours > 336 AND e.total_hours <= 720 THEN '14days-30days'
+    WHEN e.total_hours > 720 AND e.total_hours <= 2160 THEN '1month-3months'
+    WHEN e.total_hours > 2160 AND e.total_hours <= 4320 THEN '3months-6months'
+    WHEN e.total_hours > 4320 THEN '>6months'
+    ELSE 'Unknown'
+  END AS "Duration",
+  e.total_counts AS "Total counts",
+  'Actual' AS "Source type",
+  NULL::double precision AS "Longitude",
+  NULL::double precision AS "Latitude",
+  'Wisconsin Pilot Counting Counts' AS "Source",
+  'Intersection' AS "Facility type",
+  'On-Street' AS "Facility group",
+  'Bicyclist' AS "Mode"
+FROM eco_bike_agg e
+
+UNION ALL
+-- ECO Intersection: Both (Actual) — unchanged mapping
+SELECT
+  e.location_name AS "Location",
+  CASE
+    WHEN e.total_hours <= 15 THEN '0-15hrs'
+    WHEN e.total_hours > 15  AND e.total_hours <=  48 THEN '15-48hrs'
+    WHEN e.total_hours > 48  AND e.total_hours <= 336 THEN '2days-14days'
+    WHEN e.total_hours > 336 AND e.total_hours <= 720 THEN '14days-30days'
+    WHEN e.total_hours > 720 AND e.total_hours <= 2160 THEN '1month-3months'
+    WHEN e.total_hours > 2160 AND e.total_hours <= 4320 THEN '3months-6months'
+    WHEN e.total_hours > 4320 THEN '>6months'
+    ELSE 'Unknown'
+  END AS "Duration",
+  e.total_counts AS "Total counts",
+  'Actual' AS "Source type",
+  NULL::double precision AS "Longitude",
+  NULL::double precision AS "Latitude",
+  'Wisconsin Pilot Counting Counts' AS "Source",
+  'Intersection' AS "Facility type",
+  'On-Street' AS "Facility group",
   'Both' AS "Mode"
 FROM eco_both_agg e
 
 UNION ALL
--- TRAIL (SEWRPC actual)  **merged source label, unchanged from your script**
+-- ✅ NEW: ECO Trails_Pilot_Counts shown under Bicyclist · Off-Street Trail · Wisconsin Pilot Counting Counts
 SELECT
   t.location_name AS "Location",
   CASE
     WHEN t.total_hours <= 15 THEN '0-15hrs'
-    WHEN t.total_hours > 15  AND t.total_hours <= 48   THEN '15-48hrs'
-    WHEN t.total_hours > 48  AND t.total_hours <= 336  THEN '2days-14days'
-    WHEN t.total_hours > 336 AND t.total_hours <= 720  THEN '14days-30days'
+    WHEN t.total_hours > 15  AND t.total_hours <=  48 THEN '15-48hrs'
+    WHEN t.total_hours > 48  AND t.total_hours <= 336 THEN '2days-14days'
+    WHEN t.total_hours > 336 AND t.total_hours <= 720 THEN '14days-30days'
     WHEN t.total_hours > 720 AND t.total_hours <= 2160 THEN '1month-3months'
     WHEN t.total_hours > 2160 AND t.total_hours <= 4320 THEN '3months-6months'
     WHEN t.total_hours > 4320 THEN '>6months'
@@ -314,14 +290,38 @@ SELECT
   'Actual' AS "Source type",
   NULL::double precision AS "Longitude",
   NULL::double precision AS "Latitude",
-  'Wisconsin Ped/Bike Database (Statewide)' AS "Source",
+  'Wisconsin Pilot Counting Counts' AS "Source",
   'Off-Street Trail' AS "Facility type",
   'Off-Street Trail' AS "Facility group",
-  'Both' AS "Mode"
-FROM trail_agg t
+  'Bicyclist' AS "Mode"
+FROM eco_trail_pilot_agg t
 
 UNION ALL
--- STATEWIDE (modeled) – PEDESTRIAN  → On-Street (sidewalk)
+-- ✅ NEW: ECO Trails_Pilot_Counts shown under Pedestrian · Off-Street Trail · Wisconsin Pilot Counting Counts
+SELECT
+  t.location_name AS "Location",
+  CASE
+    WHEN t.total_hours <= 15 THEN '0-15hrs'
+    WHEN t.total_hours > 15  AND t.total_hours <=  48 THEN '15-48hrs'
+    WHEN t.total_hours > 48  AND t.total_hours <= 336 THEN '2days-14days'
+    WHEN t.total_hours > 336 AND t.total_hours <= 720 THEN '14days-30days'
+    WHEN t.total_hours > 720 AND t.total_hours <= 2160 THEN '1month-3months'
+    WHEN t.total_hours > 2160 AND t.total_hours <= 4320 THEN '3months-6months'
+    WHEN t.total_hours > 4320 THEN '>6months'
+    ELSE 'Unknown'
+  END AS "Duration",
+  t.total_counts AS "Total counts",
+  'Actual' AS "Source type",
+  NULL::double precision AS "Longitude",
+  NULL::double precision AS "Latitude",
+  'Wisconsin Pilot Counting Counts' AS "Source",
+  'Off-Street Trail' AS "Facility type",
+  'Off-Street Trail' AS "Facility group",
+  'Pedestrian' AS "Mode"
+FROM eco_trail_pilot_agg t
+
+UNION ALL
+-- STATEWIDE (Modeled) – Pedestrian → On-Street (sidewalk)
 SELECT
   swp.location_name AS "Location",
   swp.duration_bucket AS "Duration",
@@ -336,7 +336,7 @@ SELECT
 FROM swp
 
 UNION ALL
--- STATEWIDE (modeled) – BICYCLIST  → On-Street (sidewalk/bike lane)
+-- STATEWIDE (Modeled) – Bicyclist → On-Street (sidewalk/bike lane)
 SELECT
   swb.location_name AS "Location",
   swb.duration_bucket AS "Duration",
@@ -351,7 +351,7 @@ SELECT
 FROM swb
 
 UNION ALL
--- STATEWIDE (modeled) – TRAIL USER
+-- STATEWIDE Trails (Modeled) → Mode = Both · Off-Street Trail · Source = SEWRPC Trail User Counts
 SELECT
   swt.location_name AS "Location",
   swt.duration_bucket AS "Duration",
@@ -359,7 +359,7 @@ SELECT
   'Modeled' AS "Source type",
   swt.longitude AS "Longitude",
   swt.latitude AS "Latitude",
-  'Wisconsin Ped/Bike Database (Statewide)' AS "Source",
+  'SEWRPC Trail User Counts' AS "Source",
   'Off-Street Trail' AS "Facility type",
   'Off-Street Trail' AS "Facility group",
   'Both' AS "Mode"
