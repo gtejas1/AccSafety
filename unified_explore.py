@@ -66,7 +66,6 @@ MKE_AAEC_FLAGS   = [
 SP_LOCATION     = "W Wells St & N 68th St Intersection"
 SP_FACILITY     = "Intersection"
 SP_SOURCE       = "Wisconsin Pilot Counting Counts"
-SP_DURATION     = ">6months"
 SP_SOURCE_TYPE  = "Actual"
 
 SP2_LOCATION     = "N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay"
@@ -108,17 +107,6 @@ DISPLAY_COLUMNS = [
     {"name": "Total counts", "id": "Total counts", "type": "numeric"},
     {"name": "Source type", "id": "Source type"},
     {"name": "View", "id": "View", "presentation": "markdown"},
-]
-
-# ---- Duration options ----
-DURATION_OPTIONS = [
-    "0-15hrs",
-    "15-48hrs",
-    "2days-14days",
-    "14days-30days",
-    "1month-3months",
-    "3months-6months",
-    ">6months",
 ]
 
 UNIFIED_SQL = """
@@ -233,43 +221,11 @@ def _viv_total_windowed(ids: list[str], dt_from: datetime, dt_to: datetime) -> i
         cur_from = cur_to
     return int(grand_total)
 
-def _duration_to_window(duration_key: str, now_local: datetime) -> tuple[datetime, datetime]:
-    key = (duration_key or "").strip().lower()
-    months = 6
-    hours = None
-    days = None
-    if key == "0-15hrs":
-        hours = 15
-    elif key == "15-48hrs":
-        hours = 48
-    elif key == "2days-14days":
-        days = 14
-    elif key == "14days-30days":
-        days = 30
-    elif key == "1month-3months":
-        months = 3
-    elif key == "3months-6months":
-        months = 6
-    elif key == ">6months":
-        months = 6
-    if hours is not None:
-        dt_to_local = now_local
-        dt_from_local = now_local - timedelta(hours=hours)
-    elif days is not None:
-        dt_to_local = now_local
-        dt_from_local = now_local - timedelta(days=days)
-    else:
-        dt_to_local = now_local
-        dt_from_local = now_local - timedelta(days=30 * months)
-    return dt_from_local, dt_to_local
-
-def _viv_total_for_duration(ids: list[str], duration_key: str) -> int:
-    if not (VIV_API_KEY and ids):
-        return 0
+# NEW: helper to total last N days (used instead of duration dropdown)
+def _viv_total_last_days(ids: list[str], days: int = 7) -> int:
     now_local = datetime.now(LOCAL_TZ)
-    dt_from_local, dt_to_local = _duration_to_window(duration_key, now_local)
-    dt_from = dt_from_local.astimezone(timezone.utc)
-    dt_to   = dt_to_local.astimezone(timezone.utc)
+    dt_to = now_local.astimezone(timezone.utc)
+    dt_from = (now_local - timedelta(days=days)).astimezone(timezone.utc)
     return _viv_total_windowed(ids, dt_from, dt_to)
 
 def _build_view_link(row: pd.Series) -> str:
@@ -363,7 +319,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     filter_block = card(
         [
             html.H2("Explore Counts"),
-            html.P("Pick Mode, then Facility, then Source, then Duration.", className="app-muted"),
+            html.P("Pick Mode, then Facility, then Source.", className="app-muted"),
 
             html.Div(
                 [
@@ -389,20 +345,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 style={"display": "none"},
                 className="mb-3",
             ),
-            html.Div(
-                [
-                    html.Label("Duration"),
-                    dcc.Dropdown(
-                        id="pf-duration",
-                        options=[{"label": d, "value": d} for d in DURATION_OPTIONS],
-                        placeholder="Select duration",
-                        clearable=True,
-                    ),
-                ],
-                id="wrap-duration",
-                style={"display": "none"},
-                className="mb-2",
-            ),
+            # Duration filter REMOVED
             html.Div(
                 [html.Button("Download CSV", id="pf-download-btn", className="btn btn-outline-primary"), dcc.Download(id="pf-download")],
                 id="wrap-download",
@@ -522,17 +465,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             sources = list(set(sources) | {SP_SOURCE})
         return _opts(sources), {"display": "block"}, None
 
-    @app.callback(
-        Output("wrap-duration", "style"),
-        Output("pf-duration", "value"),
-        Input("pf-source", "value"),
-        prevent_initial_call=True,
-    )
-    def _on_source(source):
-        if not source:
-            return {"display": "none"}, None
-        return {"display": "block"}, None
-
     # ---------- Apply filters & toggle visibility ----------
     @app.callback(
         Output("pf-map", "children"),     # 0 map content
@@ -546,12 +478,11 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         Input("pf-mode", "value"),
         Input("pf-facility", "value"),
         Input("pf-source", "value"),
-        Input("pf-duration", "value"),
         prevent_initial_call=False,
     )
-    def _apply_filters(mode, facility, source, duration_key):
-        # wait until all filters selected
-        has_all = all([mode, facility, source, duration_key])
+    def _apply_filters(mode, facility, source):
+        # wait until all filters selected (Duration removed)
+        has_all = all([mode, facility, source])
         if not has_all:
             return [], {"display": "none"}, [], {"display": "none"}, {"display": "none"}, {"display": "none"}, [], {"display": "none"}
 
@@ -560,7 +491,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         df = df[df["Mode"].str.casefold() == cf(str(mode).strip())]
         df = df[df["Facility type"].str.casefold() == cf(str(facility).strip())]
         df = df[df["Source"].str.casefold() == cf(str(source).strip())]
-        df = df[df["Duration"].str.casefold() == cf(str(duration_key).strip())]
+        # NOTE: No Duration filter here; we take all rows for this combination.
 
         # --- Special Intersection rows (additive) ---
         # Trigger for Pilot special rows ONLY when mode is Pedestrian OR Bicyclist (not Both)
@@ -571,15 +502,16 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         )
         if is_special:
             ids = [s.strip() for s in (VIV_IDS_ENV.split(",") if VIV_IDS_ENV else []) if s.strip()]
-            total = _viv_total_for_duration(ids, duration_key) if ids else 0
+            # fetch last 7 days when hitting the API
+            total = _viv_total_last_days(ids, days=7) if ids else 0
             sp_row = {
                 "Location": SP_LOCATION,
-                "Duration": str(duration_key),
+                "Duration": "Last 7 days",          # Duration field shown for clarity
                 "Total counts": int(total),
                 "Source type": SP_SOURCE_TYPE,
                 "Source": SP_SOURCE,
                 "Facility type": SP_FACILITY,
-                "Mode": str(mode).strip(),  # use selected mode (Pedestrian/Bicyclist)
+                "Mode": str(mode).strip(),          # use selected mode (Pedestrian/Bicyclist)
             }
             df = pd.concat([df, pd.DataFrame([sp_row])], ignore_index=True)
             sp2_row = {
@@ -589,7 +521,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 "Source type": SP2_SOURCE_TYPE,
                 "Source": SP2_SOURCE,
                 "Facility type": SP2_FACILITY,
-                "Mode": str(mode).strip(),  # use selected mode (Pedestrian/Bicyclist)
+                "Mode": str(mode).strip(),
             }
             df = pd.concat([df, pd.DataFrame([sp2_row])], ignore_index=True)
 
@@ -668,14 +600,13 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             # if it's Pilot Intersection, we'll fall through to pilot description below.
             description = _statewide_onstreet_desc() if fac_val != "intersection" else _pilot_counts_desc()
 
-        # ✅ Statewide + Intersection (Bicyclist)
+        # Statewide + Intersection (Bicyclist)
         elif (mode_val == "bicyclist"
               and fac_val == "intersection"
               and source_val == "wisconsin ped/bike database (statewide)"):
-            # Reuse the statewide text that references intersectional counts
             description = _statewide_onstreet_desc()
 
-        # ✅ Statewide + Intersection (Pedestrian)
+        # Statewide + Intersection (Pedestrian)
         elif (mode_val == "pedestrian"
               and fac_val == "intersection"
               and source_val == "wisconsin ped/bike database (statewide)"):
