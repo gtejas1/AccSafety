@@ -62,6 +62,7 @@ eco_bike_agg AS (
   FROM eco_bike_traffic_data e
   GROUP BY e.location_name
 ),
+-- kept for compatibility; no longer used in final UNION
 eco_both_agg AS (
   SELECT
     e.location_name,
@@ -73,7 +74,7 @@ eco_both_agg AS (
   FROM eco_both_traffic_data e
   GROUP BY e.location_name
 ),
--- NEW: ECO Trails_Pilot_Counts aggregated once (we will present it under both modes in the final union)
+-- ECO Trails_Pilot_Counts aggregated once (presented under both modes in the final union)
 eco_trail_pilot_agg AS (
   SELECT
     t.location_name,
@@ -248,32 +249,10 @@ SELECT
   'Bicyclist' AS "Mode"
 FROM eco_bike_agg e
 
-UNION ALL
--- ECO Intersection: Both (Actual) — unchanged mapping
-SELECT
-  e.location_name AS "Location",
-  CASE
-    WHEN e.total_hours <= 15 THEN '0-15hrs'
-    WHEN e.total_hours > 15  AND e.total_hours <=  48 THEN '15-48hrs'
-    WHEN e.total_hours > 48  AND e.total_hours <= 336 THEN '2days-14days'
-    WHEN e.total_hours > 336 AND e.total_hours <= 720 THEN '14days-30days'
-    WHEN e.total_hours > 720 AND e.total_hours <= 2160 THEN '1month-3months'
-    WHEN e.total_hours > 2160 AND e.total_hours <= 4320 THEN '3months-6months'
-    WHEN e.total_hours > 4320 THEN '>6months'
-    ELSE 'Unknown'
-  END AS "Duration",
-  e.total_counts AS "Total counts",
-  'Actual' AS "Source type",
-  NULL::double precision AS "Longitude",
-  NULL::double precision AS "Latitude",
-  'Wisconsin Pilot Counting Counts' AS "Source",
-  'Intersection' AS "Facility type",
-  'On-Street' AS "Facility group",
-  'Both' AS "Mode"
-FROM eco_both_agg e
+-- NOTE: The former "ECO Intersection: Both (Actual)" UNION has been removed.
 
 UNION ALL
--- ✅ NEW: ECO Trails_Pilot_Counts shown under Bicyclist · Off-Street Trail · Wisconsin Pilot Counting Counts
+-- ECO Trails_Pilot_Counts shown under Bicyclist · Off-Street Trail · Wisconsin Pilot Counting Counts
 SELECT
   t.location_name AS "Location",
   CASE
@@ -297,7 +276,7 @@ SELECT
 FROM eco_trail_pilot_agg t
 
 UNION ALL
--- ✅ NEW: ECO Trails_Pilot_Counts shown under Pedestrian · Off-Street Trail · Wisconsin Pilot Counting Counts
+-- ECO Trails_Pilot_Counts shown under Pedestrian · Off-Street Trail · Wisconsin Pilot Counting Counts
 SELECT
   t.location_name AS "Location",
   CASE

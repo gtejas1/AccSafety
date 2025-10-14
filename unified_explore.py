@@ -64,14 +64,12 @@ MKE_AAEC_FLAGS   = [
 
 # ---- Special rows (Intersection) ----
 SP_LOCATION     = "W Wells St & N 68th St Intersection"
-SP_MODE         = "Both"
 SP_FACILITY     = "Intersection"
 SP_SOURCE       = "Wisconsin Pilot Counting Counts"
 SP_DURATION     = ">6months"
 SP_SOURCE_TYPE  = "Actual"
 
 SP2_LOCATION     = "N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay"
-SP2_MODE         = "Both"
 SP2_FACILITY     = "Intersection"
 SP2_SOURCE       = "Wisconsin Pilot Counting Counts"
 SP2_SOURCE_TYPE  = "Actual"
@@ -494,7 +492,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         facilities = df["Facility type"].unique().tolist()
         if str(mode).strip().casefold() == NEW_MODE.casefold():
             facilities = list(set(facilities) | {NEW_FACILITY})
-        if str(mode).strip().casefold() == SP_MODE.casefold():
+        # Add Intersection option for Pilot special rows when mode is Pedestrian or Bicyclist
+        if str(mode).strip().casefold() in {"pedestrian", "bicyclist"}:
             facilities = list(set(facilities) | {SP_FACILITY})
         return _opts(facilities), {"display": "block"}, None
 
@@ -517,8 +516,9 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if (str(mode).strip().casefold() == NEW_MODE.casefold()
             and str(facility).strip().casefold() == NEW_FACILITY.casefold()):
             sources = list(set(sources) | {NEW_SOURCE_NAME})
-        if (str(mode).strip().casefold() == SP_MODE.casefold()
-            and str(facility).strip().casefold() == SP_FACILITY.casefold()):
+        # Add Pilot source for Intersection when mode is Pedestrian or Bicyclist
+        if (str(mode).strip().casefold() in {"pedestrian", "bicyclist"} and
+            str(facility).strip().casefold() == SP_FACILITY.casefold()):
             sources = list(set(sources) | {SP_SOURCE})
         return _opts(sources), {"display": "block"}, None
 
@@ -563,10 +563,11 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         df = df[df["Duration"].str.casefold() == cf(str(duration_key).strip())]
 
         # --- Special Intersection rows (additive) ---
+        # Trigger for Pilot special rows ONLY when mode is Pedestrian OR Bicyclist (not Both)
         is_special = (
-            str(mode or "").strip().casefold() == SP_MODE.casefold()
-            and str(facility or "").strip().casefold() == SP_FACILITY.casefold()
-            and str(source or "").strip().casefold() == SP_SOURCE.casefold()
+            str(mode or "").strip().casefold() in {"pedestrian", "bicyclist"} and
+            str(facility or "").strip().casefold() == SP_FACILITY.casefold() and
+            str(source or "").strip().casefold() == SP_SOURCE.casefold()
         )
         if is_special:
             ids = [s.strip() for s in (VIV_IDS_ENV.split(",") if VIV_IDS_ENV else []) if s.strip()]
@@ -578,13 +579,17 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 "Source type": SP_SOURCE_TYPE,
                 "Source": SP_SOURCE,
                 "Facility type": SP_FACILITY,
-                "Mode": SP_MODE,
+                "Mode": str(mode).strip(),  # use selected mode (Pedestrian/Bicyclist)
             }
             df = pd.concat([df, pd.DataFrame([sp_row])], ignore_index=True)
             sp2_row = {
-                "Location": SP2_LOCATION, "Duration": "Not available", "Total counts": None,
-                "Source type": SP2_SOURCE_TYPE, "Source": SP2_SOURCE,
-                "Facility type": SP2_FACILITY, "Mode": SP2_MODE,
+                "Location": SP2_LOCATION,
+                "Duration": "Not available",
+                "Total counts": None,
+                "Source type": SP2_SOURCE_TYPE,
+                "Source": SP2_SOURCE,
+                "Facility type": SP2_FACILITY,
+                "Mode": str(mode).strip(),  # use selected mode (Pedestrian/Bicyclist)
             }
             df = pd.concat([df, pd.DataFrame([sp2_row])], ignore_index=True)
 
@@ -651,16 +656,25 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
         bicyclist_combo = (
             mode_val == "bicyclist"
+            and fac_val == "intersection" and source_val == "wisconsin pilot counting counts"
+        ) or (
+            mode_val == "bicyclist"
             and fac_val == "on-street (sidewalk/bike lane)"
             and source_val == "wisconsin ped/bike database (statewide)"
         )
 
         if bicyclist_combo:
-            description = _statewide_onstreet_desc()
+            # If it's the statewide on-street combo we show statewide_onstreet;
+            # if it's Pilot Intersection, we'll fall through to pilot description below.
+            description = _statewide_onstreet_desc() if fac_val != "intersection" else _pilot_counts_desc()
         elif (mode_val == "pedestrian"
               and fac_val == "on-street (sidewalk)"
               and source_val == "wisconsin ped/bike database (statewide)"):
             description = _ped_statewide_desc()
+        elif (mode_val == "pedestrian"
+              and fac_val == "intersection"
+              and source_val == "wisconsin pilot counting counts"):
+            description = _pilot_counts_desc()
         elif source_val == "wisconsin pilot counting counts":
             description = _pilot_counts_desc()
         elif source_val in {
@@ -711,7 +725,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             ]
         )
 
-    # NEW: Description for Bicyclist + On-Street (sidewalk/bike lane) + Statewide source
+    # Description for Bicyclist + On-Street (sidewalk/bike lane) + Statewide source
     def _statewide_onstreet_desc():
         return html.Div(
             [
@@ -775,7 +789,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             ]
         )
 
-    # NEW: Description for Wisconsin Pilot Counting Counts
+    # Description for Wisconsin Pilot Counting Counts
     def _pilot_counts_desc():
         return html.Div(
             [
