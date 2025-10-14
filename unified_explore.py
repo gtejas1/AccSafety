@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import io
-import os
 import time
 import random
 from datetime import datetime, timedelta, timezone
@@ -10,7 +9,7 @@ import urllib.parse
 import pandas as pd
 from sqlalchemy import create_engine
 
-import requests  # <-- added
+import requests
 import dash
 from dash import dcc, html, Input, Output, State, dash_table
 import dash_bootstrap_components as dbc
@@ -20,22 +19,57 @@ from theme import card, dash_page
 DB_URL = "postgresql://postgres:gw2ksoft@localhost/TrafficDB"
 ENGINE = create_engine(DB_URL)
 
-# ---- New constants for the custom UI source ----
+# ---- Custom UI source (Milwaukee StoryMap image card path) ----
 NEW_SOURCE_NAME = "Annual Average Estimated Counts (Milwaukee County)"
 NEW_FACILITY    = "On-Street (Sidewalk/Bike Lane)"
 NEW_MODE        = "Both"
 STORYMAP_URL    = "https://storymaps.arcgis.com/stories/281bfdde23a7411ca63f84d1fafa2098"
 
-# ---- Special row (Intersection) — additive, affects only the exact filter path ----
+# ---- ArcGIS config for Wisconsin Ped/Bike Database (Statewide) ----
+SW_ITEM_ID = "5badd855f3384cb1ab03eb0470a93f20"
+SW_CENTER  = "-88.15601552734218,43.07196694820907"
+SW_SCALE   = "1155581.108577"
+SW_THEME   = "light"
+SW_FLAGS   = [
+    "bookmarks-enabled",
+    "heading-enabled",
+    "legend-enabled",
+    "information-enabled",
+    "share-enabled",
+]
+
+# ---- ArcGIS config for SEWRPC Trail User Counts ----
+SEWRPC_ITEM_ID = "5e8b05a112b94650a301851d1e1a2261"
+SEWRPC_CENTER  = "-88.03767204768742,43.16456958096229"
+SEWRPC_SCALE   = "1155581.108577"
+SEWRPC_THEME   = "light"
+SEWRPC_FLAGS   = [
+    "bookmarks-enabled",
+    "legend-enabled",
+    "information-enabled",
+    "share-enabled",
+]
+
+# ---- ArcGIS config for Milwaukee AAEC map (NEW_SOURCE_NAME) ----
+MKE_AAEC_ITEM_ID = "7ff38f1ef8fa4f43a939a7fdefc06129"
+MKE_AAEC_CENTER  = "-87.92059898860481,43.02041024549958"
+MKE_AAEC_SCALE   = "288895.277144"
+MKE_AAEC_THEME   = "light"
+MKE_AAEC_FLAGS   = [
+    "bookmarks-enabled",
+    "legend-enabled",
+    "information-enabled",
+    "share-enabled",
+]
+
+# ---- Special rows (Intersection) ----
 SP_LOCATION     = "W Wells St & N 68th St Intersection"
 SP_MODE         = "Both"
 SP_FACILITY     = "Intersection"
 SP_SOURCE       = "Wisconsin Pilot Counting Counts"
-SP_DURATION     = ">6months"          # default label used previously (kept for compatibility)
+SP_DURATION     = ">6months"
 SP_SOURCE_TYPE  = "Actual"
 
-# ---- Extra special row (Intersection) — additive, same filter path ----
-# (Requested: link to /live/, Duration/Total counts not available)
 SP2_LOCATION     = "N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay"
 SP2_MODE         = "Both"
 SP2_FACILITY     = "Intersection"
@@ -43,13 +77,13 @@ SP2_SOURCE       = "Wisconsin Pilot Counting Counts"
 SP2_SOURCE_TYPE  = "Actual"
 SP2_VIEW_ROUTE   = "/live/"
 
-# Vivacity API (optional) for special row total
+# Vivacity API (optional) for special totals
 VIV_API_BASE = "https://api.vivacitylabs.com"
 VIV_API_KEY  = "e8893g6wfj7muf89s93n6xfu.rltm9dd6bei47gwbibjog20k"
-VIV_IDS_ENV  = "54315,54316,54317,54318"  # comma-separated ids
+VIV_IDS_ENV  = "54315,54316,54317,54318"
 VIV_TIMEOUT  = 30
 VIV_RETRIES  = 3
-VIV_MAX_HOURS_PER_REQ = 169  # documented limit for 1h bucket
+VIV_MAX_HOURS_PER_REQ = 169
 
 try:
     from zoneinfo import ZoneInfo
@@ -57,7 +91,19 @@ try:
 except Exception:
     LOCAL_TZ = timezone.utc
 
-# Visible columns (no Lon/Lat)
+# ---- ArcGIS embeddable (Pilot map defaults) ----
+ARCGIS_EMBED_SCRIPT_SRC = "https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"
+ARCGIS_ITEM_ID          = "b1c8cf7f6ace440ea97743ef95e7b1f6"
+ARCGIS_PORTAL_URL       = "https://uwm.maps.arcgis.com"
+ARCGIS_CENTER           = "-88.29241753108553,43.84041853130462"
+ARCGIS_SCALE            = "2311162.217155"
+ARCGIS_THEME            = "light"
+ARCGIS_BOOKMARKS        = True
+ARCGIS_LEGEND           = True
+ARCGIS_INFO             = True
+ARCGIS_MIN_HEIGHT       = "420px"
+
+# ---- Table display columns ----
 DISPLAY_COLUMNS = [
     {"name": "Location", "id": "Location"},
     {"name": "Duration", "id": "Duration"},
@@ -66,7 +112,7 @@ DISPLAY_COLUMNS = [
     {"name": "View", "id": "View", "presentation": "markdown"},
 ]
 
-# Duration buckets produced by the unified view
+# ---- Duration options ----
 DURATION_OPTIONS = [
     "0-15hrs",
     "15-48hrs",
@@ -77,7 +123,6 @@ DURATION_OPTIONS = [
     ">6months",
 ]
 
-# Query exactly what we need from the view
 UNIFIED_SQL = """
   SELECT
     "Location",
@@ -95,7 +140,6 @@ def _fetch_all() -> pd.DataFrame:
         df = pd.read_sql(UNIFIED_SQL, ENGINE)
     except Exception:
         df = pd.DataFrame(columns=[c["id"] for c in DISPLAY_COLUMNS] + ["Source", "Facility type", "Mode"])
-    # Normalize key fields once to prevent mismatch from whitespace/case
     for col in ["Mode", "Facility type", "Source", "Duration", "Location", "Source type"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
@@ -132,12 +176,10 @@ def _viv_get(path: str, params: dict | None = None) -> requests.Response:
     raise RuntimeError(f"Vivacity GET failed: {last_err}")
 
 def _viv_iso_z(dt: datetime) -> str:
-    # Truncate to whole seconds and format as RFC3339 without fractional seconds
     dt_utc = dt.astimezone(timezone.utc).replace(microsecond=0)
     return dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
 def _align_hour(dt: datetime, ceil: bool = False) -> datetime:
-    """Align to the hour in UTC. If ceil=True, round up to next hour when not already aligned."""
     dt = dt.astimezone(timezone.utc)
     base = dt.replace(minute=0, second=0, microsecond=0)
     if ceil and dt != base:
@@ -145,7 +187,6 @@ def _align_hour(dt: datetime, ceil: bool = False) -> datetime:
     return base
 
 def _parse_counts_payload(payload) -> int:
-    """Sum pedestrian + cyclist across both directions from a single API response payload."""
     total = 0
     if isinstance(payload, dict):
         for _, arr in payload.items():
@@ -163,7 +204,6 @@ def _parse_counts_payload(payload) -> int:
     return int(total)
 
 def _viv_sum_window(ids: list[str], dt_from: datetime, dt_to: datetime) -> int:
-    """Fetch and sum counts for a single aligned window [dt_from, dt_to) with time_bucket=1h."""
     params = {
         "countline_ids": ",".join(ids),
         "from": _viv_iso_z(dt_from),
@@ -179,39 +219,27 @@ def _viv_sum_window(ids: list[str], dt_from: datetime, dt_to: datetime) -> int:
     return _parse_counts_payload(payload)
 
 def _viv_total_windowed(ids: list[str], dt_from: datetime, dt_to: datetime) -> int:
-    """Sum counts across [dt_from, dt_to) by chunking into ≤169-hour aligned windows."""
     if dt_to <= dt_from:
         return 0
-    # Align to bucket boundaries
     dt_from = _align_hour(dt_from, ceil=False)
     dt_to   = _align_hour(dt_to,   ceil=True)
-
     grand_total = 0
     cur_from = dt_from
     max_delta = timedelta(hours=VIV_MAX_HOURS_PER_REQ)
-
     while cur_from < dt_to:
         cur_to = min(cur_from + max_delta, dt_to)
         if cur_to <= cur_from:
             cur_to = cur_from + timedelta(hours=1)
         grand_total += _viv_sum_window(ids, cur_from, cur_to)
-        time.sleep(0.15)  # polite pacing
+        time.sleep(0.15)
         cur_from = cur_to
-
     return int(grand_total)
 
 def _duration_to_window(duration_key: str, now_local: datetime) -> tuple[datetime, datetime]:
-    """
-    Convert UI duration bucket into a [from, to) window in LOCAL_TZ.
-    Strategy: use the UPPER bound of the bucket as the lookback length.
-    For '>6months', we keep 6 months (consistent with prior behavior).
-    """
     key = (duration_key or "").strip().lower()
-    # default: 6 months
     months = 6
     hours = None
     days = None
-
     if key == "0-15hrs":
         hours = 15
     elif key == "15-48hrs":
@@ -225,8 +253,7 @@ def _duration_to_window(duration_key: str, now_local: datetime) -> tuple[datetim
     elif key == "3months-6months":
         months = 6
     elif key == ">6months":
-        months = 6  # keep consistent with earlier implementation
-
+        months = 6
     if hours is not None:
         dt_to_local = now_local
         dt_from_local = now_local - timedelta(hours=hours)
@@ -234,65 +261,91 @@ def _duration_to_window(duration_key: str, now_local: datetime) -> tuple[datetim
         dt_to_local = now_local
         dt_from_local = now_local - timedelta(days=days)
     else:
-        # month-based (approximate months as 30 days each for summary totals)
         dt_to_local = now_local
         dt_from_local = now_local - timedelta(days=30 * months)
-
     return dt_from_local, dt_to_local
 
 def _viv_total_for_duration(ids: list[str], duration_key: str) -> int:
-    """Compute total for the given duration bucket by mapping to a window and chunking requests."""
     if not (VIV_API_KEY and ids):
         return 0
     now_local = datetime.now(LOCAL_TZ)
     dt_from_local, dt_to_local = _duration_to_window(duration_key, now_local)
-    # convert to UTC
     dt_from = dt_from_local.astimezone(timezone.utc)
     dt_to   = dt_to_local.astimezone(timezone.utc)
-    return _viv_total_windowed(ids, dt_from, dt_to)
-
-def _viv_total_last_n_months(ids: list[str], months: int = 6) -> int:
-    """
-    (Kept for compatibility) Sum counts for the last N 'months' (30*months days) by chunking.
-    """
-    if not (VIV_API_KEY and ids):
-        return 0
-
-    now_local = datetime.now(LOCAL_TZ)
-    dt_to_local = now_local
-    dt_from_local = now_local - timedelta(days=30 * months)
-
-    dt_from = dt_from_local.astimezone(timezone.utc)
-    dt_to   = dt_to_local.astimezone(timezone.utc)
-
     return _viv_total_windowed(ids, dt_from, dt_to)
 
 def _build_view_link(row: pd.Series) -> str:
     src = (row.get("Source") or "").strip()
     loc = (row.get("Location") or "").strip()
-
-    # New: Whitefish Bay special row routes to /live/
     if loc == SP2_LOCATION and src == SP2_SOURCE:
         return f"[Open]({SP2_VIEW_ROUTE})"
-
-    # Special row routes to Vivacity
     if loc == SP_LOCATION and src == SP_SOURCE:
         loc_q = _encode_location_for_href(loc)
         return f"[Open](/vivacity/?location={loc_q})"
-
-    # Existing behavior (unchanged)
     loc_q = _encode_location_for_href(loc)
     if src == "Wisconsin Pilot Counting Counts":
         return f"[Open](/eco/dashboard?location={loc_q})"
     if src == "Off-Street Trail (SEWRPC Trail User Counts)":
         return f"[Open](/trail/dashboard?location={loc_q})"
-    # Statewide modeled (renamed in SQL) and anything else
     return "[Open](https://uwm.edu/ipit/wisconsin-pedestrian-volume-model/)"
 
 def _opts(vals) -> list[dict]:
     uniq = sorted({v for v in vals if isinstance(v, str) and v.strip()})
     return [{"label": v, "value": v} for v in uniq]
 
+# ---------- ArcGIS iframe helper (reusable for multiple sources) ----------
+def _arcgis_embedded_map_component(
+    container_id: str,
+    *,
+    item_id: str,
+    center: str,
+    scale: str,
+    theme: str = "light",
+    flags: list[str] | None = None,
+) -> html.Iframe:
+    flags = (flags or [])
+    flags_html = " ".join(flags)
+    srcdoc = f"""<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1"/>
+    <script type="module" src="{ARCGIS_EMBED_SCRIPT_SRC}"></script>
+    <style>
+      html,body{{margin:0;padding:0;height:100%;width:100%;background:transparent}}
+      #holder{{height:100%;width:100%;display:flex;align-items:stretch;justify-content:stretch}}
+      arcgis-embedded-map{{height:100%;width:100%}}
+    </style>
+  </head>
+  <body>
+    <div id="holder">
+      <arcgis-embedded-map
+        item-id="{item_id}"
+        theme="{theme}"
+        portal-url="{ARCGIS_PORTAL_URL}"
+        center="{center}"
+        scale="{scale}"
+        {flags_html}
+      ></arcgis-embedded-map>
+    </div>
+  </body>
+</html>"""
+    return html.Iframe(
+        id=container_id,
+        srcDoc=srcdoc,
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms",
+        style={
+            "width": "100%",
+            "height": "600px",
+            "minHeight": ARCGIS_MIN_HEIGHT,
+            "border": "0",
+            "borderRadius": "10px",
+            "boxShadow": "0 1px 4px rgba(0,0,0,0.1)",
+            "background": "transparent",
+        },
+    )
+
+# ---------- App ----------
 def create_unified_explore(server, prefix: str = "/explore/"):
     app = dash.Dash(
         name="unified_explore",
@@ -306,10 +359,9 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     )
     app.title = "Explore"
 
-    # Base data (filters applied client-side)
     base_df = _fetch_all()
 
-    # Controls — progressive flow
+    # Left: Filters
     filter_block = card(
         [
             html.H2("Explore Counts"),
@@ -327,21 +379,18 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 ],
                 className="mb-3",
             ),
-
             html.Div(
                 [html.Label("Facility type"), dcc.Dropdown(id="pf-facility", placeholder="Select facility type", clearable=True)],
                 id="wrap-facility",
                 style={"display": "none"},
                 className="mb-3",
             ),
-
             html.Div(
                 [html.Label("Data source"), dcc.Dropdown(id="pf-source", placeholder="Select data source", clearable=True)],
                 id="wrap-source",
                 style={"display": "none"},
                 className="mb-3",
             ),
-
             html.Div(
                 [
                     html.Label("Duration"),
@@ -356,7 +405,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 style={"display": "none"},
                 className="mb-2",
             ),
-
             html.Div(
                 [html.Button("Download CSV", id="pf-download-btn", className="btn btn-outline-primary"), dcc.Download(id="pf-download")],
                 id="wrap-download",
@@ -367,65 +415,71 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         class_name="mb-3",
     )
 
-    # Description block (shown conditionally) + Results (hidden initially)
+    # Description (left under filters)
     desc_block = card([html.Div(id="pf-desc", children=[])], class_name="mb-3")
 
-    # Results: map/image placeholder OR table
-    results_block = card(
+    # Map (right, top)
+    map_card = card([html.Div(id="pf-map", children=[])], class_name="mb-3")
+
+    # Table (right, bottom)
+    table_block = card(
         [
-            # Wrap the results area in a loader; it will spin while _apply_filters is computing/awaiting API.
             dcc.Loading(
-                id="pf-main-loader",
-                type="default",  # 'default' | 'circle' | 'dot' | 'cube'
+                id="pf-table-loader",
+                type="default",
                 children=[
-                    html.Div(id="pf-map", style={"display": "none", "minHeight": "240px"}),  # spinner shows in this space
-                    html.Div(  # table area
-                        id="wrap-table",
-                        children=[
-                            dash_table.DataTable(
-                                id="pf-table",
-                                columns=DISPLAY_COLUMNS,
-                                data=[],
-                                markdown_options={"html": True, "link_target": "_self"},
-                                page_size=25,
-                                sort_action="native",
-                                style_table={"overflowX": "auto"},
-                                style_as_list_view=True,
-                                style_header={"backgroundColor": "#f1f5f9", "fontWeight": "bold", "fontSize": "15px"},
-                                style_cell={"textAlign": "left", "padding": "8px"},
-                                style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "rgba(15,23,42,0.03)"}],
-                            )
-                        ],
-                        style={"minHeight": "240px"},  # keep the spinner visible if table is hidden
-                    ),
+                    dash_table.DataTable(
+                        id="pf-table",
+                        columns=DISPLAY_COLUMNS,
+                        data=[],
+                        markdown_options={"html": True, "link_target": "_self"},
+                        page_size=25,
+                        sort_action="native",
+                        style_table={"overflowX": "auto"},
+                        style_as_list_view=True,
+                        style_header={"backgroundColor": "#f1f5f9", "fontWeight": "bold", "fontSize": "15px"},
+                        style_cell={"textAlign": "left", "padding": "8px"},
+                        style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "rgba(15,23,42,0.03)"}],
+                    )
                 ],
-            ),
+            )
         ],
         class_name="mb-3",
     )
 
+    # Layout: Left (Filters + Description) | Right (Map + Table)
     app.layout = dash_page(
         "Explore",
         [
             dbc.Row(
                 [
-                    dbc.Col(filter_block, lg=4, md=12, className="mb-3"),
                     dbc.Col(
-                        # Also wrap the whole results column so the spinner can show while description/table/map update together.
-                        dcc.Loading(
-                            id="pf-wrap-loader",
-                            type="default",  # 'default' | 'circle' | 'dot' | 'cube'
-                            children=html.Div(id="wrap-results", children=[desc_block, results_block], style={"display": "none"}),
-                        ),
+                        [
+                            filter_block,
+                            html.Div(id="wrap-desc", children=[desc_block], style={"display": "none"}),
+                        ],
+                        lg=4, md=12, className="mb-3",
+                    ),
+                    dbc.Col(
+                        [
+                            html.Div(id="wrap-map", children=[map_card], style={"display": "none"}),
+                            dcc.Loading(
+                                id="pf-wrap-loader",
+                                type="default",
+                                children=html.Div(id="wrap-table", children=[table_block], style={"display": "none"}),
+                            ),
+                        ],
                         lg=8, md=12, className="mb-3",
                     ),
                 ],
                 className="g-3",
             ),
+            # sentinel to keep older show/hide logic happy (no children needed)
+            html.Div(id="wrap-results", style={"display": "none"}),
         ],
     )
 
-    # ── Progressive options / reveal ─────────────────────────────
+    # ---------- Progressive options ----------
     @app.callback(
         Output("pf-facility", "options"),
         Output("wrap-facility", "style"),
@@ -438,10 +492,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             return [], {"display": "none"}, None
         df = base_df[base_df["Mode"].str.casefold() == str(mode).strip().casefold()]
         facilities = df["Facility type"].unique().tolist()
-        # Keep existing special Milwaukee path
         if str(mode).strip().casefold() == NEW_MODE.casefold():
             facilities = list(set(facilities) | {NEW_FACILITY})
-        # Add Intersection facility only for Mode=Both (additive)
         if str(mode).strip().casefold() == SP_MODE.casefold():
             facilities = list(set(facilities) | {SP_FACILITY})
         return _opts(facilities), {"display": "block"}, None
@@ -462,11 +514,9 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             (base_df["Facility type"].str.casefold() == str(facility).strip().casefold())
         ]
         sources = df["Source"].unique().tolist()
-        # Existing special source (Milwaukee estimated)
         if (str(mode).strip().casefold() == NEW_MODE.casefold()
             and str(facility).strip().casefold() == NEW_FACILITY.casefold()):
             sources = list(set(sources) | {NEW_SOURCE_NAME})
-        # Add Wisconsin Pilot Counting Counts for Intersection facility (additive)
         if (str(mode).strip().casefold() == SP_MODE.casefold()
             and str(facility).strip().casefold() == SP_FACILITY.casefold()):
             sources = list(set(sources) | {SP_SOURCE})
@@ -483,15 +533,16 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             return {"display": "none"}, None
         return {"display": "block"}, None
 
-    # ── Apply filters + control table/description/download visibility ──
+    # ---------- Apply filters & toggle visibility ----------
     @app.callback(
-        Output("pf-map", "children"),
-        Output("pf-map", "style"),
-        Output("pf-table", "data"),
-        Output("wrap-table", "style"),
-        Output("wrap-results", "style"),
-        Output("wrap-download", "style"),
-        Output("pf-desc", "children"),
+        Output("pf-map", "children"),     # 0 map content
+        Output("wrap-map", "style"),      # 1 map card visibility
+        Output("pf-table", "data"),       # 2 table rows
+        Output("wrap-table", "style"),    # 3 table card visibility
+        Output("wrap-results", "style"),  # 4 (sentinel) keep as block once ready
+        Output("wrap-download", "style"), # 5 download
+        Output("pf-desc", "children"),    # 6 description content
+        Output("wrap-desc", "style"),     # 7 description visibility
         Input("pf-mode", "value"),
         Input("pf-facility", "value"),
         Input("pf-source", "value"),
@@ -499,120 +550,140 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         prevent_initial_call=False,
     )
     def _apply_filters(mode, facility, source, duration_key):
-        # only show results when all filters are selected
+        # wait until all filters selected
         has_all = all([mode, facility, source, duration_key])
         if not has_all:
-            return [], {"display": "none"}, [], {"display": "none"}, {"display": "none"}, {"display": "none"}, []
+            return [], {"display": "none"}, [], {"display": "none"}, {"display": "none"}, {"display": "none"}, [], {"display": "none"}
 
         df = base_df.copy()
         cf = str.casefold
-
         df = df[df["Mode"].str.casefold() == cf(str(mode).strip())]
         df = df[df["Facility type"].str.casefold() == cf(str(facility).strip())]
         df = df[df["Source"].str.casefold() == cf(str(source).strip())]
         df = df[df["Duration"].str.casefold() == cf(str(duration_key).strip())]
 
-        # --- Path 1: custom Milwaukee map (Both + NEW_FACILITY + NEW_SOURCE_NAME) ---
-        show_custom = (
-            str(mode or "").strip().casefold() == NEW_MODE.casefold()
-            and str(facility or "").strip().casefold() == NEW_FACILITY.casefold()
-            and str(source or "").strip() == NEW_SOURCE_NAME
-        )
-
-        if show_custom:
-            # Show clickable title + image; hide table; show custom description; keep download visible per existing behavior
-            title_link = html.H4(
-                html.A(
-                    "Exploring Non-Motorist Activities in Milwaukee",
-                    href=STORYMAP_URL,
-                    target="_blank",
-                    rel="noopener noreferrer",
-                ),
-                style={"margin": "0 0 10px 0"},
-            )
-
-            img_src = app.get_asset_url("mke_estimated_counts.png")
-            map_children = html.Div(
-                [
-                    title_link,
-                    html.A(
-                        html.Img(
-                            src=img_src,
-                            alt="Milwaukee non-motorist activity map",
-                            style={
-                                "width": "100%",
-                                "height": "auto",
-                                "borderRadius": "10px",
-                                "boxShadow": "0 1px 4px rgba(0,0,0,0.1)",
-                            },
-                        ),
-                        href=STORYMAP_URL,
-                        target="_blank",
-                        rel="noopener noreferrer",
-                        style={"display": "block"},
-                    ),
-                ]
-            )
-
-            description = _custom_mke_estimated_desc()
-            return map_children, {"display": "block"}, [], {"display": "none"}, {"display": "block"}, {"display": "flex"}, description
-
-        # --- Special Intersection row injection (NOW for any selected duration) ---
+        # --- Special Intersection rows (additive) ---
         is_special = (
             str(mode or "").strip().casefold() == SP_MODE.casefold()
             and str(facility or "").strip().casefold() == SP_FACILITY.casefold()
             and str(source or "").strip().casefold() == SP_SOURCE.casefold()
         )
-
         if is_special:
             ids = [s.strip() for s in (VIV_IDS_ENV.split(",") if VIV_IDS_ENV else []) if s.strip()]
-            # Fetch total counts based on the selected duration bucket
             total = _viv_total_for_duration(ids, duration_key) if ids else 0
             sp_row = {
                 "Location": SP_LOCATION,
-                "Duration": str(duration_key),   # reflect the selected duration bucket
+                "Duration": str(duration_key),
                 "Total counts": int(total),
                 "Source type": SP_SOURCE_TYPE,
                 "Source": SP_SOURCE,
                 "Facility type": SP_FACILITY,
                 "Mode": SP_MODE,
             }
-            # Append the existing special row
             df = pd.concat([df, pd.DataFrame([sp_row])], ignore_index=True)
-
-            # New: append Whitefish Bay row (Duration/Total counts not available)
             sp2_row = {
-                "Location": SP2_LOCATION,
-                "Duration": "Not available",
-                "Total counts": None,            # shows blank in table
-                "Source type": SP2_SOURCE_TYPE,
-                "Source": SP2_SOURCE,
-                "Facility type": SP2_FACILITY,
-                "Mode": SP2_MODE,
+                "Location": SP2_LOCATION, "Duration": "Not available", "Total counts": None,
+                "Source type": SP2_SOURCE_TYPE, "Source": SP2_SOURCE,
+                "Facility type": SP2_FACILITY, "Mode": SP2_MODE,
             }
             df = pd.concat([df, pd.DataFrame([sp2_row])], ignore_index=True)
 
-        # --- Path 2: pedestrian statewide description (only when table has non-empty results) ---
-        ped_mode = str(mode or "").strip().lower() == "pedestrian"
-        ped_fac  = str(facility or "").strip().lower() == "on-street (sidewalk)"
-        ped_src  = str(source or "").strip().lower() == "wisconsin ped/bike database (statewide)"
+        # --- Map selection (Pilot OR Statewide OR SEWRPC Trails OR Milwaukee AAEC) ---
+        source_val = str(source or "").strip().casefold()
+        map_children = []
+        map_style = {"display": "none"}
+
+        if source_val == "wisconsin pilot counting counts":
+            pilot_flags = []
+            if ARCGIS_BOOKMARKS: pilot_flags.append("bookmarks-enabled")
+            if ARCGIS_LEGEND:    pilot_flags.append("legend-enabled")
+            if ARCGIS_INFO:      pilot_flags.append("information-enabled")
+            map_children = _arcgis_embedded_map_component(
+                container_id="pilot-map-container",
+                item_id=ARCGIS_ITEM_ID,
+                center=ARCGIS_CENTER,
+                scale=ARCGIS_SCALE,
+                theme=ARCGIS_THEME,
+                flags=pilot_flags,
+            )
+            map_style = {"display": "block"}
+
+        elif source_val == "wisconsin ped/bike database (statewide)":
+            map_children = _arcgis_embedded_map_component(
+                container_id="statewide-map-container",
+                item_id=SW_ITEM_ID,
+                center=SW_CENTER,
+                scale=SW_SCALE,
+                theme=SW_THEME,
+                flags=SW_FLAGS,
+            )
+            map_style = {"display": "block"}
+
+        elif source_val in {
+            "sewrpc trail user counts",
+            "off-street trail (sewrpc trail user counts)",
+        }:
+            map_children = _arcgis_embedded_map_component(
+                container_id="sewrpc-trails-map",
+                item_id=SEWRPC_ITEM_ID,
+                center=SEWRPC_CENTER,
+                scale=SEWRPC_SCALE,
+                theme=SEWRPC_THEME,
+                flags=SEWRPC_FLAGS,
+            )
+            map_style = {"display": "block"}
+
+        elif source_val == NEW_SOURCE_NAME.strip().casefold():
+            # Embedded ArcGIS map for Milwaukee AAEC (replaces old static image)
+            map_children = _arcgis_embedded_map_component(
+                container_id="mke-aaec-map",
+                item_id=MKE_AAEC_ITEM_ID,
+                center=MKE_AAEC_CENTER,
+                scale=MKE_AAEC_SCALE,
+                theme=MKE_AAEC_THEME,
+                flags=MKE_AAEC_FLAGS,
+            )
+            map_style = {"display": "block"}
+
+        # --- Descriptions by source selection ---
+        mode_val = (mode or "").strip().lower()
+        fac_val  = (facility or "").strip().lower()
+
+        bicyclist_combo = (
+            mode_val == "bicyclist"
+            and fac_val == "on-street (sidewalk/bike lane)"
+            and source_val == "wisconsin ped/bike database (statewide)"
+        )
+
+        if bicyclist_combo:
+            description = _statewide_onstreet_desc()
+        elif (mode_val == "pedestrian"
+              and fac_val == "on-street (sidewalk)"
+              and source_val == "wisconsin ped/bike database (statewide)"):
+            description = _ped_statewide_desc()
+        elif source_val == "wisconsin pilot counting counts":
+            description = _pilot_counts_desc()
+        elif source_val in {
+            "sewrpc trail user counts",
+            "off-street trail (sewrpc trail user counts)",
+        }:
+            description = _sewrpc_trails_desc()
+        elif source_val == NEW_SOURCE_NAME.strip().casefold():
+            description = _custom_mke_estimated_desc()
+        else:
+            description = []
+
+        desc_style = {"display": "block"} if description else {"display": "none"}
 
         if df.empty:
-            # Empty table → show panel and allow download (unchanged behavior) but no description
-            return [], {"display": "none"}, [], {"display": "block"}, {"display": "block"}, {"display": "flex"}, []
+            return map_children, map_style, [], {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
 
-        # Non-empty rows → show table
         df = df.copy()
         df["View"] = df.apply(_build_view_link, axis=1)
         rows = df[[c["id"] for c in DISPLAY_COLUMNS]].to_dict("records")
-
-        # Show the pedestrian statewide description iff the 3 filters match and rows exist
-        description = _ped_statewide_desc() if (ped_mode and ped_fac and ped_src) else []
-
-        return [], {"display": "none"}, rows, {"display": "block"}, {"display": "block"}, {"display": "flex"}, description
+        return map_children, map_style, rows, {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
 
     def _custom_mke_estimated_desc():
-        # Description for the Milwaukee County estimated counts (custom source)
         return html.Div(
             [
                 html.P(
@@ -640,8 +711,43 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             ]
         )
 
+    # NEW: Description for Bicyclist + On-Street (sidewalk/bike lane) + Statewide source
+    def _statewide_onstreet_desc():
+        return html.Div(
+            [
+                html.P(
+                    [
+                        "The estimated counts have been developed by utilizing statewide short-term intersectional pedestrian and bicyclist, as well as long-term trail counts. ",
+                        "For information regarding the source of the data, please refer to the project page ",
+                        html.A(
+                            "Wisconsin Pedestrian and Bicycle Count Database and Expansion Factor Development",
+                            href="https://uwm.edu/ipit/projects/wisconsin-pedestrian-and-bicycle-count-database-and-expansion-factor-development/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        ", as well as the previous foundational work of the statewide modeling: ",
+                        html.A(
+                            "“Pedestrian Exposure Data for the Wisconsin State Highway System: WisDOT Southeast Region Pilot Study”",
+                            href="https://uwm.edu/ipit/projects/pedestrian-exposure-data-for-the-wisconsin-state-highway-system-wisdot-southeast-region-pilot-study/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        " and ",
+                        html.A(
+                            "“Practical Application of Pedestrian Exposure Tools: Expanding Southeast Region Results Statewide”",
+                            href="https://uwm.edu/ipit/projects/practical-application-of-pedestrian-exposure-tools-expanding-southeast-region-results-statewide/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        ".",
+                    ],
+                    className="app-muted",
+                    style={"margin": "0"},
+                )
+            ]
+        )
+
     def _ped_statewide_desc():
-        # Description to show for Pedestrian / On-Street (sidewalk/bike lane) / Wisconsin Ped/Bike Database (Statewide)
         return html.Div(
             [
                 html.P(
@@ -669,7 +775,51 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             ]
         )
 
-    # ---- Download filtered CSV (click-only) ----
+    # NEW: Description for Wisconsin Pilot Counting Counts
+    def _pilot_counts_desc():
+        return html.Div(
+            [
+                html.P(
+                    [
+                        "The Pilot Pedestrian and Bicycle Count Program, led by UWM in collaboration with WisDOT, is a regional effort focused on Southeast Wisconsin to establish the foundation for a future statewide non-motorist counting network. ",
+                        "It integrates new and historical data to improve the accuracy and availability of pedestrian and bicycle volume information. ",
+                        "Using technologies like Axis radar-video cameras, Viva V2 sensors, and Eco-Counter units, the program gathers data from diverse environments. ",
+                        "This dashboard visualizes the results to support safer, more equitable, and sustainable transportation planning across Wisconsin."
+                    ],
+                    className="app-muted",
+                    style={"margin": "0"},
+                )
+            ]
+        )
+
+    def _sewrpc_trails_desc():
+        return html.Div(
+            [
+                html.P(
+                    [
+                        "The counts have been collected via the hyperlink ",
+                        html.A(
+                            "SEWRPC’s Regional Non-Motorized Count Program",
+                            href="https://www.sewrpc.org/Info-and-Data/Non-Motorized-Count-Program",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        ", and this list only contains portion of the counts before 2018, for the use in the project of hyperlink ",
+                        html.A(
+                            "“Wisconsin Pedestrian and Bicycle Count Database and Expansion Factor Development”",
+                            href="https://uwm.edu/ipit/projects/wisconsin-pedestrian-and-bicycle-count-database-and-expansion-factor-development/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        ". For more information, please refer to the program page listed above.",
+                    ],
+                    className="app-muted",
+                    style={"margin": "0"},
+                )
+            ]
+        )
+
+    # ---- Download filtered CSV ----
     @app.callback(
         Output("pf-download", "data"),
         Input("pf-download-btn", "n_clicks"),
