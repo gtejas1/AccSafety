@@ -12,33 +12,28 @@ from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore
 
 
-VALID_USERS = {  # change as needed, or load from env/DB
-    "admin": "admin",
-    "user1": "mypassword",
-}
-
-PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")  # guard home + all apps
+VALID_USERS = {"admin": "admin", "user1": "mypassword"}
+PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
 
 
 def create_server():
     server = Flask(__name__)
     server.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_secret_key")
 
-    # ---- Global auth guard (protects home and app routes) -------------------
+    # ---- Global Auth Guard ----
     @server.before_request
     def require_login():
-        # allow login, logout, static, favicon
         path = request.path or "/"
-        if path.startswith("/static/") or path == "/login" or path == "/logout" or path == "/favicon.ico":
+        # allow login, logout, favicon, and static assets
+        if path.startswith("/static/") or path in ("/login", "/logout", "/favicon.ico"):
             return None
-        # gate protected prefixes
         if path.startswith(PROTECTED_PREFIXES) and "user" not in session:
-            full = request.full_path  # includes "?..." and trailing "?"
+            full = request.full_path
             next_target = full[:-1] if full.endswith("?") else full
             return redirect(f"/login?next={quote(next_target)}", code=302)
         return None
 
-    # ---- Login page ---------------------------------------------------------
+    # ---- Login / Logout ----
     @server.route("/login", methods=["GET", "POST"])
     def login():
         error = None
@@ -47,15 +42,14 @@ def create_server():
             p = request.form.get("password") or ""
             if u in VALID_USERS and VALID_USERS[u] == p:
                 session["user"] = u
-                # Safety: only allow same-site redirects
                 nxt = request.args.get("next") or "/"
                 if not nxt.startswith("/"):
                     nxt = "/"
                 return redirect(nxt, code=302)
             error = "Invalid username or password."
 
-        # GET (or failed POST) → show page
         nxt = request.args.get("next", "/")
+        # Styled login with policy modal and show-password toggle
         return render_template_string("""
 <!doctype html>
 <html lang="en">
@@ -81,6 +75,7 @@ def create_server():
     .login-card button:disabled { filter: grayscale(0.4); cursor: not-allowed; box-shadow: none; opacity: 0.7; }
     .login-card .showpw { margin-top: 10px; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #0b1736; }
     .login-card .error { margin-top: 12px; color: #b91c1c; font-weight: 600; font-size: 0.9rem; }
+
     .notice-backdrop { position: fixed; inset: 0; background: rgba(12, 23, 42, 0.72); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 999; }
     .notice-card { max-width: 540px; width: 100%; background: #ffffff; border-radius: 18px; box-shadow: 0 24px 60px rgba(11, 23, 54, 0.32); padding: 28px 32px; color: #0b1736; display: grid; gap: 18px; }
     .notice-card h2 { margin: 0; font-size: 1.35rem; }
@@ -92,6 +87,7 @@ def create_server():
   </style>
 </head>
 <body>
+  <!-- Policy gate modal -->
   <div id="policy-modal" class="notice-backdrop" role="dialog" aria-modal="true" aria-labelledby="policy-title" aria-describedby="policy-copy">
     <div class="notice-card">
       <h2 id="policy-title">Data Use &amp; Liability Notice</h2>
@@ -104,6 +100,7 @@ def create_server():
       </div>
     </div>
   </div>
+
   <div class="app-shell">
     <header class="app-header">
       <div class="app-header-title">
@@ -114,6 +111,7 @@ def create_server():
         <a class="app-link" href="/">Back to Portal</a>
       </nav>
     </header>
+
     <main class="app-content">
       <div class="app-main-centered">
         <form class="app-card app-card--narrow login-card" method="post" autocomplete="off">
@@ -137,35 +135,43 @@ def create_server():
   </div>
 
   <script>
-    const policyModal = document.getElementById('policy-modal');
-    const acceptPolicy = document.getElementById('policy-accept');
-    const submitButton = document.querySelector('.login-card button[type="submit"]');
-    const usernameInput = document.getElementById('username');
-    const urlParams = new URLSearchParams(window.location.search);
+    (function(){
+      const policyModal = document.getElementById('policy-modal');
+      const acceptPolicy = document.getElementById('policy-accept');
+      const submitButton = document.querySelector('.login-card button[type="submit"]');
+      const usernameInput = document.getElementById('username');
+      const urlParams = new URLSearchParams(window.location.search);
+      const LS_KEY = 'accsafetyPolicyAccepted';
 
-    if (urlParams.get('reset_policy') === '1') {
-      window.localStorage.removeItem('accsafetyPolicyAccepted');
-    }
+      if (urlParams.get('reset_policy') === '1') {
+        try { localStorage.removeItem(LS_KEY); } catch(e){}
+      }
 
-    function enableForm() {
-      policyModal.hidden = true;
-      submitButton.disabled = false;
-      usernameInput.focus();
-    }
+      function enableForm() {
+        policyModal.hidden = true;
+        submitButton.disabled = false;
+        usernameInput && usernameInput.focus();
+      }
 
-    acceptPolicy.addEventListener('click', function () {
-      window.localStorage.setItem('accsafetyPolicyAccepted', 'true');
-      enableForm();
-    });
+      acceptPolicy.addEventListener('click', function () {
+        try { localStorage.setItem(LS_KEY, 'true'); } catch(e){}
+        enableForm();
+      });
 
-    if (window.localStorage.getItem('accsafetyPolicyAccepted') === 'true') {
-      enableForm();
-    }
+      try {
+        if (localStorage.getItem(LS_KEY) === 'true') {
+          enableForm();
+        }
+      } catch(e) {
+        // If localStorage blocked, enable form anyway
+        enableForm();
+      }
 
-    document.getElementById('toggle').addEventListener('change', function(){
-      const pw = document.getElementById('password');
-      pw.type = this.checked ? 'text' : 'password';
-    });
+      document.getElementById('toggle').addEventListener('change', function(){
+        const pw = document.getElementById('password');
+        pw.type = this.checked ? 'text' : 'password';
+      });
+    })();
   </script>
 </body>
 </html>
@@ -174,9 +180,10 @@ def create_server():
     @server.route("/logout")
     def logout():
         session.clear()
+        # optional: reset policy gate so next login shows it again
         return redirect("/login?reset_policy=1", code=302)
 
-    # ---- Gateway home (with your ArcGIS map) --------------------------------
+    # ---- Subapps ----
     create_trail_dash(server, prefix="/trail/")
     create_eco_dash(server, prefix="/eco/")
     create_vivacity_dash(server, prefix="/vivacity/")
@@ -185,9 +192,9 @@ def create_server():
     create_se_wi_trails_app(server, prefix="/se-wi-trails/")
     create_unified_explore(server, prefix="/explore/")
 
+    # ---- Portal Home ----
     @server.route("/")
     def home():
-        wisdot_link = "/wisdot/"
         return render_template_string("""
 <!doctype html>
 <html lang="en">
@@ -200,21 +207,54 @@ def create_server():
   <script type="module" src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"></script>
   <script nomodule src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.js"></script>
   <style>
-  .cta-explore {
-    display: inline-block;
-    padding: 10px 16px;
-    border-radius: 999px;
-    background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary));
-    color: #fff !important;
-    font-weight: 700;
-    text-decoration: none;
-    box-shadow: 0 12px 26px rgba(11, 102, 195, 0.28);
-    position: relative;
-    z-index: 2; /* keep above any overlapping map layers */
-  }
-  .cta-wrap { margin: 8px 0 16px; position: relative; z-index: 2; }
-</style>
+    .cta-explore {
+      display:inline-flex;align-items:center;gap:10px;
+      padding:10px 16px;border-radius:999px;
+      background:linear-gradient(130deg,var(--brand-primary),var(--brand-secondary));
+      color:#fff!important;font-weight:700;text-decoration:none;
+      box-shadow:0 12px 26px rgba(11,102,195,0.28);
+      position:relative;z-index:2;
+    }
+    .cta-wrap {margin:8px 0 16px;position:relative;z-index:2;display:flex;align-items:center;gap:10px;}
+    .desc {color:#0b1736;margin:10px 0 20px;line-height:1.55;font-size:1rem;max-width:820px;}
 
+    /* Info tooltip beside the CTA */
+    .info-button {
+      display:inline-flex;align-items:center;justify-content:center;
+      width:32px;height:32px;border-radius:999px;border:1px solid rgba(15,23,42,.18);
+      background:#fff;color:#0b1736;font-weight:800;cursor:pointer;
+      box-shadow:0 8px 18px rgba(11,23,54,.10);
+    }
+    .info-button:focus { outline: 3px solid rgba(11,102,195,.35); outline-offset: 2px; }
+
+    .tooltip {
+      position:relative;display:inline-block;
+    }
+    .tooltip .tooltip-panel {
+      position:absolute;left:50%;transform:translateX(-50%);
+      bottom:120%; /* above the icon */
+      background:#111827;color:#fff;padding:8px 10px;border-radius:8px;
+      font-size:.9rem;line-height:1.2;white-space:nowrap;
+      box-shadow:0 12px 24px rgba(0,0,0,.25);
+      opacity:0;pointer-events:none;transition:opacity .12s ease, transform .12s ease;
+    }
+    .tooltip .tooltip-panel::after {
+      content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);
+      border-width:6px;border-style:solid;border-color:#111827 transparent transparent transparent;
+    }
+    .tooltip:focus-within .tooltip-panel,
+    .tooltip:hover .tooltip-panel {
+      opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(-2px);
+    }
+
+    /* Modal */
+    .modal-backdrop {position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:2000;}
+    .modal {background:white;border-radius:14px;max-width:600px;padding:24px 30px;box-shadow:0 24px 60px rgba(0,0,0,0.25);}
+    .modal h2 {margin-top:0;}
+    .modal button {margin-top:18px;padding:10px 20px;border:none;border-radius:999px;background:linear-gradient(130deg,var(--brand-primary),var(--brand-secondary));color:white;font-weight:600;cursor:pointer;}
+    .modal .secondary {background:#e5e7eb;color:#111827;}
+    .modal-backdrop[hidden]{display:none;}
+  </style>
 </head>
 <body>
   <div class="app-shell">
@@ -225,7 +265,6 @@ def create_server():
       </div>
       <nav class="app-nav portal-nav" aria-label="Main navigation">
         <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
-        <!-- Removed Explore link from top nav -->
       </nav>
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
     </header>
@@ -233,13 +272,21 @@ def create_server():
     <main class="app-content">
       <section class="app-card">
         <h1>Explore Wisconsin Pedestrian and Bicyclist Mobility Data</h1>
+        <p class="desc">
+          The AccSafety Dashboard visualizes statewide pedestrian and bicycle count data from real-time and historical sources to support data-driven safety and planning decisions.
+          It bridges research and implementation by integrating current and legacy datasets across Wisconsin.
+        </p>
 
-        <!-- Added Explore link BELOW the title -->
         <div class="cta-wrap">
           <a class="cta-explore" href="/explore/">Explore Available Datasets</a>
+
+          <!-- Tooltip + info icon -->
+          <span class="tooltip">
+            <button id="info-button" class="info-button" aria-label="Show instructions" title="Show instructions">i</button>
+            <span class="tooltip-panel" role="tooltip">Click for quick instructions</span>
+          </span>
         </div>
 
-        <!-- >>> REPLACED MAP STARTS HERE <<< -->
         <arcgis-embedded-map
           class="portal-map"
           item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
@@ -253,28 +300,77 @@ def create_server():
           layer-list-enabled
           search-enabled>
         </arcgis-embedded-map>
-        <!-- >>> REPLACED MAP ENDS HERE <<< -->
-
       </section>
     </main>
   </div>
+
+  <!-- Getting Started Modal -->
+  <div class="modal-backdrop" id="instructions-modal" hidden role="dialog" aria-modal="true" aria-labelledby="intro-title">
+    <div class="modal">
+      <h2 id="intro-title">Getting Started</h2>
+      <p>Use the <strong>Explore Available Datasets</strong> button to open the unified data explorer.</p>
+      <p>Hover charts and map layers for details; use top filters to refine by <em>Mode</em>, <em>Facility</em>, and <em>Data source</em>. Look for “Open” links near sites to jump to analytics or related project pages.</p>
+      <div style="display:flex;gap:10px;justify-content:flex-end;">
+        <button id="close-modal" class="primary">Got it</button>
+        <button id="close-once" class="secondary">Dismiss (don’t remember)</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function(){
+      const LS_KEY = 'accsafetyIntroShown';
+      const modal = document.getElementById('instructions-modal');
+      const btnClose = document.getElementById('close-modal');
+      const btnCloseOnce = document.getElementById('close-once');
+      const infoBtn = document.getElementById('info-button');
+      const params = new URLSearchParams(window.location.search);
+
+      function safeGetLS(key){ try { return localStorage.getItem(key); } catch(e){ return null; } }
+      function safeSetLS(key,val){ try { localStorage.setItem(key,val); } catch(e){} }
+      function safeRemoveLS(key){ try { localStorage.removeItem(key); } catch(e){} }
+
+      function openIntro(){ modal.removeAttribute('hidden'); }
+      function closeIntro(remember){
+        if (remember) safeSetLS(LS_KEY, '1');
+        modal.setAttribute('hidden','');
+      }
+
+      // Flags
+      if (params.get('reset_intro') === '1') safeRemoveLS(LS_KEY);
+      const forceIntro = params.get('intro') === '1';
+
+      // First visit or forced
+      if (forceIntro || !safeGetLS(LS_KEY)) openIntro();
+
+      // Open via info icon
+      infoBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        openIntro();
+      });
+
+      // Close actions
+      btnClose.addEventListener('click', () => closeIntro(true));
+      btnCloseOnce.addEventListener('click', () => closeIntro(false));
+
+      // Click outside modal to close (remember)
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeIntro(true);
+      });
+
+      // ESC to close (remember)
+      document.addEventListener('keydown', (e) => {
+        if (!modal.hasAttribute('hidden') && e.key === 'Escape') closeIntro(true);
+      });
+    })();
+  </script>
 </body>
 </html>
-        """, wisdot_link=wisdot_link, user=session.get("user", "user"))
+        """, user=session.get("user", "user"))
 
     # Convenience redirects
-    @server.route("/trail")
-    def trail_no_slash(): return redirect("/trail/", code=302)
-    @server.route("/eco")
-    def eco_no_slash(): return redirect("/eco/", code=302)
-    @server.route("/vivacity")
-    def vivacity_no_slash(): return redirect("/vivacity/", code=302)
-    @server.route("/live")
-    def live_no_slash(): return redirect("/live/", code=302)
-    @server.route("/wisdot")
-    def wisdot_no_slash(): return redirect("/wisdot/", code=302)
-    @server.route("/se-wi-trails")
-    def se_wi_trails_no_slash(): return redirect("/se-wi-trails/", code=302)
+    for p in ["trail","eco","vivacity","live","wisdot","se-wi-trails"]:
+        server.add_url_rule(f"/{p}", f"{p}_no_slash", lambda p=p: redirect(f"/{p}/", code=302))
 
     return server
 

@@ -320,14 +320,14 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         assets_folder="assets",
         assets_url_path=f"{prefix.rstrip('/')}/assets",
     )
-    app.title = "Explore"
+    app.title = "Explore Available Datasets"
 
     base_df = _fetch_all()
 
     # Left: Filters
     filter_block = card(
         [
-            html.H2("Explore Counts"),
+            html.H2("Explore Available Datasets"),
             html.P("Pick Mode, then Facility, then Source.", className="app-muted"),
 
             html.Div(
@@ -399,7 +399,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
     # Layout: Left (Filters + Description) | Right (Map + Table)
     app.layout = dash_page(
-        "Explore",
+        "Explore Available Datasets",
         [
             dbc.Row(
                 [
