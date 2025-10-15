@@ -100,6 +100,15 @@ ARCGIS_LEGEND           = True
 ARCGIS_INFO             = True
 ARCGIS_MIN_HEIGHT       = "420px"
 
+# ---- NEW: Pedestrian + Intersection + AAEC (Wisconsin Statewide) ----
+PED_INT_AAEC_STATEWIDE = "Annual Average Estimated Counts (Wisconsin Statewide)"
+PED_INT_AAEC_EMBED_URL = (
+    "https://www.arcgis.com/apps/Embed/index.html"
+    "?webmap=1c16b969156844dfb493597bbab5da75"
+    "&extent=-87.9534,43.0184,-87.8522,43.0583"
+    "&zoom=true&scale=true&legendlayers=true&disable_scroll=true&theme=light"
+)
+
 # ---- Table display columns ----
 DISPLAY_COLUMNS = [
     {"name": "Location", "id": "Location"},
@@ -463,6 +472,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if (str(mode).strip().casefold() in {"pedestrian", "bicyclist"} and
             str(facility).strip().casefold() == SP_FACILITY.casefold()):
             sources = list(set(sources) | {SP_SOURCE})
+        # NEW: Add AAEC (Wisconsin Statewide) for Pedestrian + Intersection
+        if (str(mode).strip().casefold() == "pedestrian"
+            and str(facility).strip().casefold() == SP_FACILITY.casefold()):
+            sources = list(set(sources) | {PED_INT_AAEC_STATEWIDE})
         return _opts(sources), {"display": "block"}, None
 
     # ---------- Apply filters & toggle visibility ----------
@@ -525,7 +538,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             }
             df = pd.concat([df, pd.DataFrame([sp2_row])], ignore_index=True)
 
-        # --- Map selection (Pilot OR Statewide OR SEWRPC Trails OR Milwaukee AAEC) ---
+        # --- Map selection (Pilot OR Statewide OR SEWRPC Trails OR Milwaukee AAEC OR NEW AAEC Statewide embed) ---
         source_val = str(source or "").strip().casefold()
         map_children = []
         map_style = {"display": "none"}
@@ -582,55 +595,77 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             )
             map_style = {"display": "block"}
 
+        elif source_val == PED_INT_AAEC_STATEWIDE.strip().casefold():
+            # Directly embed the provided ArcGIS “apps/Embed” URL
+            map_children = html.Iframe(
+                id="ped-int-aaec-statewide-map",
+                src=PED_INT_AAEC_EMBED_URL,
+                style={
+                    "width": "100%",
+                    "height": "600px",
+                    "border": "0",
+                    "borderRadius": "10px",
+                    "boxShadow": "0 1px 4px rgba(0,0,0,0.1)",
+                    "background": "transparent",
+                },
+                sandbox="allow-same-origin allow-scripts allow-popups allow-forms",
+            )
+            map_style = {"display": "block"}
+
         # --- Descriptions by source selection ---
         mode_val = (mode or "").strip().lower()
         fac_val  = (facility or "").strip().lower()
 
-        bicyclist_combo = (
-            mode_val == "bicyclist"
-            and fac_val == "intersection" and source_val == "wisconsin pilot counting counts"
-        ) or (
-            mode_val == "bicyclist"
-            and fac_val == "on-street (sidewalk/bike lane)"
-            and source_val == "wisconsin ped/bike database (statewide)"
-        )
+        # NEW: Pedestrian + Intersection + AAEC (Wisconsin Statewide)
+        if (mode_val == "pedestrian"
+            and fac_val == "intersection"
+            and source_val == PED_INT_AAEC_STATEWIDE.strip().casefold()):
+            description = _ped_int_statewide_aaec_desc()
 
-        if bicyclist_combo:
-            # If it's the statewide on-street combo we show statewide_onstreet;
-            # if it's Pilot Intersection, we'll fall through to pilot description below.
-            description = _statewide_onstreet_desc() if fac_val != "intersection" else _pilot_counts_desc()
-
-        # Statewide + Intersection (Bicyclist)
-        elif (mode_val == "bicyclist"
-              and fac_val == "intersection"
-              and source_val == "wisconsin ped/bike database (statewide)"):
-            description = _statewide_onstreet_desc()
-
-        # Statewide + Intersection (Pedestrian)
-        elif (mode_val == "pedestrian"
-              and fac_val == "intersection"
-              and source_val == "wisconsin ped/bike database (statewide)"):
-            description = _ped_statewide_desc()
-
-        elif (mode_val == "pedestrian"
-              and fac_val == "on-street (sidewalk)"
-              and source_val == "wisconsin ped/bike database (statewide)"):
-            description = _ped_statewide_desc()
-        elif (mode_val == "pedestrian"
-              and fac_val == "intersection"
-              and source_val == "wisconsin pilot counting counts"):
-            description = _pilot_counts_desc()
-        elif source_val == "wisconsin pilot counting counts":
-            description = _pilot_counts_desc()
-        elif source_val in {
-            "sewrpc trail user counts",
-            "off-street trail (sewrpc trail user counts)",
-        }:
-            description = _sewrpc_trails_desc()
-        elif source_val == NEW_SOURCE_NAME.strip().casefold():
-            description = _custom_mke_estimated_desc()
         else:
-            description = []
+            bicyclist_combo = (
+                mode_val == "bicyclist"
+                and fac_val == "intersection" and source_val == "wisconsin pilot counting counts"
+            ) or (
+                mode_val == "bicyclist"
+                and fac_val == "on-street (sidewalk/bike lane)"
+                and source_val == "wisconsin ped/bike database (statewide)"
+            )
+
+            if bicyclist_combo:
+                description = _statewide_onstreet_desc() if fac_val != "intersection" else _pilot_counts_desc()
+
+            # Statewide + Intersection (Bicyclist)
+            elif (mode_val == "bicyclist"
+                  and fac_val == "intersection"
+                  and source_val == "wisconsin ped/bike database (statewide)"):
+                description = _statewide_onstreet_desc()
+
+            # Statewide + Intersection (Pedestrian)
+            elif (mode_val == "pedestrian"
+                  and fac_val == "intersection"
+                  and source_val == "wisconsin ped/bike database (statewide)"):
+                description = _ped_statewide_desc()
+
+            elif (mode_val == "pedestrian"
+                  and fac_val == "on-street (sidewalk)"
+                  and source_val == "wisconsin ped/bike database (statewide)"):
+                description = _ped_statewide_desc()
+            elif (mode_val == "pedestrian"
+                  and fac_val == "intersection"
+                  and source_val == "wisconsin pilot counting counts"):
+                description = _pilot_counts_desc()
+            elif source_val == "wisconsin pilot counting counts":
+                description = _pilot_counts_desc()
+            elif source_val in {
+                "sewrpc trail user counts",
+                "off-street trail (sewrpc trail user counts)",
+            }:
+                description = _sewrpc_trails_desc()
+            elif source_val == NEW_SOURCE_NAME.strip().casefold():
+                description = _custom_mke_estimated_desc()
+            else:
+                description = []
 
         desc_style = {"display": "block"} if description else {"display": "none"}
 
@@ -642,6 +677,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         rows = df[[c["id"] for c in DISPLAY_COLUMNS]].to_dict("records")
         return map_children, map_style, rows, {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
 
+    # ---------- Description builders ----------
     def _custom_mke_estimated_desc():
         return html.Div(
             [
@@ -670,7 +706,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             ]
         )
 
-    # Description for Bicyclist + On-Street (sidewalk/bike lane) + Statewide source
     def _statewide_onstreet_desc():
         return html.Div(
             [
@@ -734,7 +769,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             ]
         )
 
-    # Description for Wisconsin Pilot Counting Counts
     def _pilot_counts_desc():
         return html.Div(
             [
@@ -771,6 +805,34 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                             rel="noopener noreferrer",
                         ),
                         ". For more information, please refer to the program page listed above.",
+                    ],
+                    className="app-muted",
+                    style={"margin": "0"},
+                )
+            ]
+        )
+
+    def _ped_int_statewide_aaec_desc():
+        return html.Div(
+            [
+                html.P(
+                    [
+                        "The estimated counts have been developed by utilizing statewide short-term intersectional pedestrian and long-term trail counts. ",
+                        "For information regarding the source of the data, please refer to the project pages ",
+                        html.A(
+                            "“Pedestrian Exposure Data for the Wisconsin State Highway System: WisDOT Southeast Region Pilot Study”",
+                            href="https://uwm.edu/ipit/projects/pedestrian-exposure-data-for-the-wisconsin-state-highway-system-wisdot-southeast-region-pilot-study/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        " and ",
+                        html.A(
+                            "“Practical Application of Pedestrian Exposure Tools: Expanding Southeast Region Results Statewide”",
+                            href="https://uwm.edu/ipit/projects/practical-application-of-pedestrian-exposure-tools-expanding-southeast-region-results-statewide/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        ".",
                     ],
                     className="app-muted",
                     style={"margin": "0"},
