@@ -17,13 +17,12 @@ from theme import card, dash_page
 API_BASE = "https://api.vivacitylabs.com"
 API_KEY = os.getenv("VIVACITY_API_KEY", "e8893g6wfj7muf89s93n6xfu.rltm9dd6bei47gwbibjog20k")
 
-# Keep UI-friendly values but map to Vivacity API classes via CLASS_ALIAS
 DEFAULT_CLASSES = ["pedestrian", "cyclist"]
 DEFAULT_TIME_BUCKET = "1h"
 REQUEST_TIMEOUT = 30
 MAX_RETRIES = 3
 
-# UI values -> API class names used by Vivacity
+# UI values -> API class names (keep as-is if your API expects these exact strings)
 CLASS_ALIAS = {
     "cyclist": "cyclist",
     "pedestrian": "pedestrian",
@@ -90,20 +89,32 @@ def _align_range_to_bucket(dt_from_utc: datetime, dt_to_utc: datetime, bucket: s
     bsecs = _bucket_seconds(bucket)
     return _floor_to_bucket(dt_from_utc, bsecs), _ceil_to_bucket(dt_to_utc, bsecs)
 
+# --- Helpers to clean/rename "countline" names into concise "Direction" labels ---
+def _clean_direction_name(raw: str) -> str:
+    """
+    Turn names like 'S1_N68St_NorthCrossing_usuomw001' into 'N68St_NorthCrossing'.
+    Heuristic: drop the first and last underscore-delimited tokens when there are >=3 tokens.
+    """
+    s = str(raw or "").strip()
+    parts = s.split("_")
+    if len(parts) >= 3:
+        mid = parts[1:-1]
+        if mid:
+            return "_".join(mid)
+    return s  # fallback: unchanged
+
 def get_countline_metadata() -> pd.DataFrame:
     data = http_get("/countline/metadata").json()
     rows: List[Dict[str, str]] = []
+    # Accept both dict and list payload styles
     if isinstance(data, dict):
         for cid, o in data.items():
             if not isinstance(o, dict):
                 continue
-            name = o.get("name") or str(cid)
-            site = o.get("site") if isinstance(o.get("site"), dict) else {}
-            site_name = (site or {}).get("name") or (site or {}).get("short_name")
-            label = f"{site_name} — {name}" if site_name else name
+            nm = o.get("name") or str(cid)
             if o.get("is_speed") or o.get("is_anpr"):
                 continue
-            rows.append({"countline_id": str(cid), "label": label})
+            rows.append({"countline_id": str(cid), "raw_name": nm})
     elif isinstance(data, list):
         for o in data:
             if not isinstance(o, dict):
@@ -111,11 +122,16 @@ def get_countline_metadata() -> pd.DataFrame:
             cid = str(o.get("id") or o.get("countline_id") or o.get("uuid") or "")
             if not cid:
                 continue
-            name = o.get("name") or cid
-            rows.append({"countline_id": cid, "label": name})
+            nm = o.get("name") or cid
+            rows.append({"countline_id": cid, "raw_name": nm})
+
     df = pd.DataFrame(rows)
-    if not df.empty:
-        df = df.sort_values("label", kind="stable").reset_index(drop=True)
+    if df.empty:
+        return df
+
+    # Build cleaned label column used as "Direction"
+    df["direction_label"] = df["raw_name"].map(_clean_direction_name)
+    df = df.sort_values("direction_label", kind="stable").reset_index(drop=True)
     return df
 
 def _iso_z(dt: datetime) -> str:
@@ -183,6 +199,12 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
     except Exception:
         PRELOADED_META = pd.DataFrame()
 
+    # Build mapping: id -> cleaned "Direction" label
+    ID_TO_DIRECTION = (
+        dict(zip(PRELOADED_META["countline_id"], PRELOADED_META["direction_label"]))
+        if not PRELOADED_META.empty else {}
+    )
+
     # Default IDs: ENV wins, otherwise first 2 from metadata (if available)
     ENV_DEFAULT_IDS = os.environ.get("VIVACITY_DEFAULT_IDS", "").strip()
     if ENV_DEFAULT_IDS:
@@ -195,7 +217,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
     DEFAULT_TO_LOCAL = now_local
     DEFAULT_FROM_LOCAL = now_local - timedelta(days=6)
 
-    # ── Layout: Left column = Filters (narrow). Right column = Graph + Table (wide).
+    # ── Layout: Left (filters) / Right (graph + table)
     app.layout = dash_page(
         "Long Term Counts · Vivacity API",
         [
@@ -203,20 +225,20 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
 
             dbc.Row(
                 [
-                    # LEFT: Filters
+                    # LEFT: Filters (renamed to "Direction")
                     dbc.Col(
                         card(
                             [
                                 html.H3("Filters", className="mb-3"),
-                                html.Label("Countlines"),
+                                html.Label("Direction"),
                                 dcc.Dropdown(
                                     id="viv-countline-dd",
                                     options=[
-                                        {"label": row["label"], "value": row["countline_id"]}
+                                        {"label": row["direction_label"], "value": row["countline_id"]}
                                         for _, row in PRELOADED_META.iterrows()
                                     ],
                                     multi=True,
-                                    placeholder=("Select countlines from metadata"),
+                                    placeholder=("Select direction(s)"),
                                     value=DEFAULT_IDS,
                                 ),
                                 dcc.Input(
@@ -282,7 +304,6 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                             ]
                         ),
                         width=12, lg=3, xl=3, className="mb-3",
-                        # Optional sticky sidebar behavior on wide screens
                     ),
 
                     # RIGHT: Graph + Table
@@ -309,7 +330,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                                         id="viv-data-table",
                                         columns=[
                                             {"name": "Timestamp (Local)", "id": "timestamp"},
-                                            {"name": "Countline ID", "id": "countline_id"},
+                                            {"name": "Direction", "id": "direction"},  # renamed column
                                             {"name": "Class", "id": "cls"},
                                             {"name": "Count", "id": "count"},
                                         ],
@@ -379,7 +400,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         if not API_KEY:
             return dash.no_update, dash.no_update, "Missing API key. Set VIVACITY_API_KEY.", None
         if not ids:
-            return dash.no_update, dash.no_update, "Please select at least one countline ID.", None
+            return dash.no_update, dash.no_update, "Please select at least one Direction.", None
 
         # Align to bucket and possibly optimize
         dt_from_utc, dt_to_utc = _align_range_to_bucket(dt_from_utc, dt_to_utc, bucket)
@@ -418,12 +439,18 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
             }
             return fig, [], "", None
 
+        # Label map for directions (fallback to id if unknown/manual)
+        id_to_dir = ID_TO_DIRECTION
+
         # Keep only requested/available classes
         available = set(probe_df["cls"].unique())
         keep = list(available & set(mapped_classes)) or list(available)
         df = probe_df[probe_df["cls"].isin(keep)].copy()
 
-        # Plotly figure (sum directions by class)
+        # Add a human-friendly "direction" column for display
+        df["direction"] = df["countline_id"].map(id_to_dir).fillna(df["countline_id"])
+
+        # Plotly figure (sum directions by class) — grouping unchanged
         plot_df = df.groupby(["timestamp", "cls"], as_index=False)["count"].sum()
         plot_df["timestamp"] = plot_df["timestamp"].dt.tz_convert(LOCAL_TZ)
         fig = px.line(
@@ -436,12 +463,12 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         )
         fig.update_layout(legend_title_text="Class", xaxis_title="Time (local)", yaxis_title="Count")
 
-        # Table rows
-        tbl = df.copy()
+        # Table rows (now uses 'direction' instead of raw id)
+        tbl = df[["timestamp", "direction", "cls", "count"]].copy()
         tbl["timestamp"] = tbl["timestamp"].dt.tz_convert(LOCAL_TZ).dt.strftime("%Y-%m-%d %H:%M:%S")
-        tbl = tbl.sort_values(["timestamp", "countline_id", "cls"]).to_dict("records")
+        tbl = tbl.sort_values(["timestamp", "direction", "cls"]).to_dict("records")
 
-        # Store raw df for download
+        # Store raw df for download (keep both direction + id for CSV users)
         store_json = df.to_json(date_format="iso", orient="split")
         return fig, tbl, "", store_json
 
@@ -455,7 +482,8 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         if not n_clicks or not store_json:
             raise PreventUpdate
         df = pd.read_json(store_json, orient="split")
-        cols = ["timestamp", "countline_id", "cls", "count"]
+        # Provide both ID and Direction in the CSV
+        cols = ["timestamp", "countline_id", "direction", "cls", "count"]
         for c in cols:
             if c not in df.columns:
                 df[c] = None

@@ -21,7 +21,7 @@ ENGINE = create_engine(DB_URL)
 
 # ---- Custom UI source (Milwaukee StoryMap image card path) ----
 NEW_SOURCE_NAME = "Annual Average Estimated Counts (Milwaukee County)"
-NEW_FACILITY    = "On-Street (Sidewalk/Bike Lane)"
+NEW_FACILITY    = "Segment"
 NEW_MODE        = "Both"
 STORYMAP_URL    = "https://storymaps.arcgis.com/stories/281bfdde23a7411ca63f84d1fafa2098"
 
