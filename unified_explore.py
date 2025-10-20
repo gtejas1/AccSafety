@@ -21,7 +21,7 @@ ENGINE = create_engine(DB_URL)
 
 # ---- Custom UI source (Milwaukee StoryMap image card path) ----
 NEW_SOURCE_NAME = "Annual Average Estimated Counts (Milwaukee County)"
-NEW_FACILITY    = "Segment"
+NEW_FACILITY    = "On-Street (Sidewalk/Bike Lane)"
 NEW_MODE        = "Both"
 STORYMAP_URL    = "https://storymaps.arcgis.com/stories/281bfdde23a7411ca63f84d1fafa2098"
 
@@ -57,6 +57,20 @@ MKE_AAEC_SCALE   = "288895.277144"
 MKE_AAEC_THEME   = "light"
 MKE_AAEC_FLAGS   = [
     "bookmarks-enabled",
+    "legend-enabled",
+    "information-enabled",
+    "share-enabled",
+]
+
+# ---- NEW: Mid-Block crossing (Pedestrian) - Milwaukee County map ----
+MIDBLOCK_MODE       = "Pedestrian"
+MIDBLOCK_FACILITY   = "Mid-Block crossing"
+MIDBLOCK_SOURCE     = "Mid-Block pedestrian counts (Milwaukee County)"
+MIDBLOCK_ITEM_ID    = "4fb509de628b44ffba4ef5d26c5145d9"
+MIDBLOCK_CENTER     = "-87.95344553737603,43.065172443412855"
+MIDBLOCK_SCALE      = "288895.277144"
+MIDBLOCK_THEME      = "light"
+MIDBLOCK_FLAGS      = [
     "legend-enabled",
     "information-enabled",
     "share-enabled",
@@ -320,14 +334,14 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         assets_folder="assets",
         assets_url_path=f"{prefix.rstrip('/')}/assets",
     )
-    app.title = "Explore Available Datasets"
+    app.title = "Explore"
 
     base_df = _fetch_all()
 
     # Left: Filters
     filter_block = card(
         [
-            html.H2("Explore Available Datasets"),
+            html.H2("Explore Counts"),
             html.P("Pick Mode, then Facility, then Source.", className="app-muted"),
 
             html.Div(
@@ -399,7 +413,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
     # Layout: Left (Filters + Description) | Right (Map + Table)
     app.layout = dash_page(
-        "Explore Available Datasets",
+        "Explore",
         [
             dbc.Row(
                 [
@@ -442,11 +456,19 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             return [], {"display": "none"}, None
         df = base_df[base_df["Mode"].str.casefold() == str(mode).strip().casefold()]
         facilities = df["Facility type"].unique().tolist()
+
+        # Keep existing "Both / On-Street" option
         if str(mode).strip().casefold() == NEW_MODE.casefold():
             facilities = list(set(facilities) | {NEW_FACILITY})
+
         # Add Intersection option for Pilot special rows when mode is Pedestrian or Bicyclist
         if str(mode).strip().casefold() in {"pedestrian", "bicyclist"}:
             facilities = list(set(facilities) | {SP_FACILITY})
+
+        # NEW: Add Mid-Block crossing for Pedestrian
+        if str(mode).strip().casefold() == MIDBLOCK_MODE.casefold():
+            facilities = list(set(facilities) | {MIDBLOCK_FACILITY})
+
         return _opts(facilities), {"display": "block"}, None
 
     @app.callback(
@@ -465,17 +487,27 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             (base_df["Facility type"].str.casefold() == str(facility).strip().casefold())
         ]
         sources = df["Source"].unique().tolist()
+
+        # Existing custom Milwaukee AAEC for "Both / On-Street"
         if (str(mode).strip().casefold() == NEW_MODE.casefold()
             and str(facility).strip().casefold() == NEW_FACILITY.casefold()):
             sources = list(set(sources) | {NEW_SOURCE_NAME})
+
         # Add Pilot source for Intersection when mode is Pedestrian or Bicyclist
         if (str(mode).strip().casefold() in {"pedestrian", "bicyclist"} and
             str(facility).strip().casefold() == SP_FACILITY.casefold()):
             sources = list(set(sources) | {SP_SOURCE})
+
         # NEW: Add AAEC (Wisconsin Statewide) for Pedestrian + Intersection
         if (str(mode).strip().casefold() == "pedestrian"
             and str(facility).strip().casefold() == SP_FACILITY.casefold()):
             sources = list(set(sources) | {PED_INT_AAEC_STATEWIDE})
+
+        # NEW: Add Mid-Block pedestrian counts (Milwaukee County) for Pedestrian + Mid-Block crossing
+        if (str(mode).strip().casefold() == MIDBLOCK_MODE.casefold()
+            and str(facility).strip().casefold() == MIDBLOCK_FACILITY.casefold()):
+            sources = list(set(sources) | {MIDBLOCK_SOURCE})
+
         return _opts(sources), {"display": "block"}, None
 
     # ---------- Apply filters & toggle visibility ----------
@@ -538,7 +570,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             }
             df = pd.concat([df, pd.DataFrame([sp2_row])], ignore_index=True)
 
-        # --- Map selection (Pilot OR Statewide OR SEWRPC Trails OR Milwaukee AAEC OR NEW AAEC Statewide embed) ---
+        # --- Map selection (Pilot OR Statewide OR SEWRPC Trails OR Milwaukee AAEC OR NEW AAEC Statewide embed OR Mid-Block) ---
         source_val = str(source or "").strip().casefold()
         map_children = []
         map_style = {"display": "none"}
@@ -612,6 +644,18 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             )
             map_style = {"display": "block"}
 
+        # NEW: Mid-Block pedestrian counts (Milwaukee County)
+        elif source_val == MIDBLOCK_SOURCE.strip().casefold():
+            map_children = _arcgis_embedded_map_component(
+                container_id="midblock-map",
+                item_id=MIDBLOCK_ITEM_ID,
+                center=MIDBLOCK_CENTER,
+                scale=MIDBLOCK_SCALE,
+                theme=MIDBLOCK_THEME,
+                flags=MIDBLOCK_FLAGS,
+            )
+            map_style = {"display": "block"}
+
         # --- Descriptions by source selection ---
         mode_val = (mode or "").strip().lower()
         fac_val  = (facility or "").strip().lower()
@@ -665,6 +709,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             elif source_val == NEW_SOURCE_NAME.strip().casefold():
                 description = _custom_mke_estimated_desc()
             else:
+                # No specific description requested for the Mid-Block dataset
                 description = []
 
         desc_style = {"display": "block"} if description else {"display": "none"}
