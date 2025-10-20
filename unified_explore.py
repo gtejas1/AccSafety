@@ -7,6 +7,7 @@ import random
 from datetime import datetime, timedelta, timezone
 import urllib.parse
 import pandas as pd
+import plotly.express as px
 from sqlalchemy import create_engine
 
 import requests
@@ -322,6 +323,86 @@ def _arcgis_embedded_map_component(
         },
     )
 
+
+# ---------- Plotly map helper ----------
+def _build_dynamic_map(df: pd.DataFrame) -> dcc.Graph | None:
+    if df is None or df.empty:
+        return None
+    if not {"Latitude", "Longitude"}.issubset(df.columns):
+        return None
+
+    map_df = df.copy()
+    map_df["Latitude"] = pd.to_numeric(map_df["Latitude"], errors="coerce")
+    map_df["Longitude"] = pd.to_numeric(map_df["Longitude"], errors="coerce")
+    map_df = map_df.dropna(subset=["Latitude", "Longitude"])
+    if map_df.empty:
+        return None
+
+    lat_center = float(map_df["Latitude"].mean())
+    lon_center = float(map_df["Longitude"].mean())
+    lat_range = float(map_df["Latitude"].max() - map_df["Latitude"].min())
+    lon_range = float(map_df["Longitude"].max() - map_df["Longitude"].min())
+    max_range = max(lat_range, lon_range)
+    if max_range <= 0.01:
+        zoom = 13
+    elif max_range <= 0.05:
+        zoom = 11
+    elif max_range <= 0.5:
+        zoom = 9
+    elif max_range <= 1:
+        zoom = 7
+    elif max_range <= 5:
+        zoom = 6
+    else:
+        zoom = 4
+
+    custom_data = map_df[["Duration", "Total counts", "Source type"]].copy()
+    custom_data["Duration"] = custom_data["Duration"].fillna("Not available").astype(str)
+
+    def _format_total(value):
+        if value is None or (isinstance(value, float) and pd.isna(value)):
+            return "Not available"
+        if isinstance(value, (int, float)) and not pd.isna(value):
+            return f"{int(value):,}"
+        value_str = str(value).strip()
+        return value_str or "Not available"
+
+    custom_data["Total counts"] = custom_data["Total counts"].apply(_format_total)
+    custom_data["Source type"] = custom_data["Source type"].fillna("Not available").astype(str)
+
+    fig = px.scatter_mapbox(
+        map_df,
+        lat="Latitude",
+        lon="Longitude",
+        hover_name="Location",
+        custom_data=custom_data[["Duration", "Total counts", "Source type"]],
+        color_discrete_sequence=["#2563eb"],
+        zoom=zoom,
+    )
+    fig.update_traces(
+        marker={"size": 12},
+        hovertemplate=(
+            "<b>%{hovertext}</b><br>"
+            "Duration: %{customdata[0]}<br>"
+            "Total counts: %{customdata[1]}<br>"
+            "Source type: %{customdata[2]}<extra></extra>"
+        ),
+    )
+    fig.update_layout(
+        margin={"l": 0, "r": 0, "t": 0, "b": 0},
+        mapbox_style="open-street-map",
+        mapbox_center={"lat": lat_center, "lon": lon_center},
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+    )
+
+    return dcc.Graph(
+        figure=fig,
+        style={"height": "600px"},
+        config={"displayModeBar": False},
+    )
+
+
 # ---------- App ----------
 def create_unified_explore(server, prefix: str = "/explore/"):
     app = dash.Dash(
@@ -575,86 +656,94 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         map_children = []
         map_style = {"display": "none"}
 
-        if source_val == "wisconsin pilot counting counts":
-            pilot_flags = []
-            if ARCGIS_BOOKMARKS: pilot_flags.append("bookmarks-enabled")
-            if ARCGIS_LEGEND:    pilot_flags.append("legend-enabled")
-            if ARCGIS_INFO:      pilot_flags.append("information-enabled")
-            map_children = _arcgis_embedded_map_component(
-                container_id="pilot-map-container",
-                item_id=ARCGIS_ITEM_ID,
-                center=ARCGIS_CENTER,
-                scale=ARCGIS_SCALE,
-                theme=ARCGIS_THEME,
-                flags=pilot_flags,
-            )
+        dynamic_map = _build_dynamic_map(df)
+        if dynamic_map is not None:
+            map_children = dynamic_map
             map_style = {"display": "block"}
+        else:
+            if source_val == "wisconsin pilot counting counts":
+                pilot_flags = []
+                if ARCGIS_BOOKMARKS:
+                    pilot_flags.append("bookmarks-enabled")
+                if ARCGIS_LEGEND:
+                    pilot_flags.append("legend-enabled")
+                if ARCGIS_INFO:
+                    pilot_flags.append("information-enabled")
+                map_children = _arcgis_embedded_map_component(
+                    container_id="pilot-map-container",
+                    item_id=ARCGIS_ITEM_ID,
+                    center=ARCGIS_CENTER,
+                    scale=ARCGIS_SCALE,
+                    theme=ARCGIS_THEME,
+                    flags=pilot_flags,
+                )
+                map_style = {"display": "block"}
 
-        elif source_val == "wisconsin ped/bike database (statewide)":
-            map_children = _arcgis_embedded_map_component(
-                container_id="statewide-map-container",
-                item_id=SW_ITEM_ID,
-                center=SW_CENTER,
-                scale=SW_SCALE,
-                theme=SW_THEME,
-                flags=SW_FLAGS,
-            )
-            map_style = {"display": "block"}
+            elif source_val == "wisconsin ped/bike database (statewide)":
+                map_children = _arcgis_embedded_map_component(
+                    container_id="statewide-map-container",
+                    item_id=SW_ITEM_ID,
+                    center=SW_CENTER,
+                    scale=SW_SCALE,
+                    theme=SW_THEME,
+                    flags=SW_FLAGS,
+                )
+                map_style = {"display": "block"}
 
-        elif source_val in {
-            "sewrpc trail user counts",
-            "off-street trail (sewrpc trail user counts)",
-        }:
-            map_children = _arcgis_embedded_map_component(
-                container_id="sewrpc-trails-map",
-                item_id=SEWRPC_ITEM_ID,
-                center=SEWRPC_CENTER,
-                scale=SEWRPC_SCALE,
-                theme=SEWRPC_THEME,
-                flags=SEWRPC_FLAGS,
-            )
-            map_style = {"display": "block"}
+            elif source_val in {
+                "sewrpc trail user counts",
+                "off-street trail (sewrpc trail user counts)",
+            }:
+                map_children = _arcgis_embedded_map_component(
+                    container_id="sewrpc-trails-map",
+                    item_id=SEWRPC_ITEM_ID,
+                    center=SEWRPC_CENTER,
+                    scale=SEWRPC_SCALE,
+                    theme=SEWRPC_THEME,
+                    flags=SEWRPC_FLAGS,
+                )
+                map_style = {"display": "block"}
 
-        elif source_val == NEW_SOURCE_NAME.strip().casefold():
-            # Embedded ArcGIS map for Milwaukee AAEC (replaces old static image)
-            map_children = _arcgis_embedded_map_component(
-                container_id="mke-aaec-map",
-                item_id=MKE_AAEC_ITEM_ID,
-                center=MKE_AAEC_CENTER,
-                scale=MKE_AAEC_SCALE,
-                theme=MKE_AAEC_THEME,
-                flags=MKE_AAEC_FLAGS,
-            )
-            map_style = {"display": "block"}
+            elif source_val == NEW_SOURCE_NAME.strip().casefold():
+                # Embedded ArcGIS map for Milwaukee AAEC (replaces old static image)
+                map_children = _arcgis_embedded_map_component(
+                    container_id="mke-aaec-map",
+                    item_id=MKE_AAEC_ITEM_ID,
+                    center=MKE_AAEC_CENTER,
+                    scale=MKE_AAEC_SCALE,
+                    theme=MKE_AAEC_THEME,
+                    flags=MKE_AAEC_FLAGS,
+                )
+                map_style = {"display": "block"}
 
-        elif source_val == PED_INT_AAEC_STATEWIDE.strip().casefold():
-            # Directly embed the provided ArcGIS “apps/Embed” URL
-            map_children = html.Iframe(
-                id="ped-int-aaec-statewide-map",
-                src=PED_INT_AAEC_EMBED_URL,
-                style={
-                    "width": "100%",
-                    "height": "600px",
-                    "border": "0",
-                    "borderRadius": "10px",
-                    "boxShadow": "0 1px 4px rgba(0,0,0,0.1)",
-                    "background": "transparent",
-                },
-                sandbox="allow-same-origin allow-scripts allow-popups allow-forms",
-            )
-            map_style = {"display": "block"}
+            elif source_val == PED_INT_AAEC_STATEWIDE.strip().casefold():
+                # Directly embed the provided ArcGIS “apps/Embed” URL
+                map_children = html.Iframe(
+                    id="ped-int-aaec-statewide-map",
+                    src=PED_INT_AAEC_EMBED_URL,
+                    style={
+                        "width": "100%",
+                        "height": "600px",
+                        "border": "0",
+                        "borderRadius": "10px",
+                        "boxShadow": "0 1px 4px rgba(0,0,0,0.1)",
+                        "background": "transparent",
+                    },
+                    sandbox="allow-same-origin allow-scripts allow-popups allow-forms",
+                )
+                map_style = {"display": "block"}
 
-        # NEW: Mid-Block pedestrian counts (Milwaukee County)
-        elif source_val == MIDBLOCK_SOURCE.strip().casefold():
-            map_children = _arcgis_embedded_map_component(
-                container_id="midblock-map",
-                item_id=MIDBLOCK_ITEM_ID,
-                center=MIDBLOCK_CENTER,
-                scale=MIDBLOCK_SCALE,
-                theme=MIDBLOCK_THEME,
-                flags=MIDBLOCK_FLAGS,
-            )
-            map_style = {"display": "block"}
+            # NEW: Mid-Block pedestrian counts (Milwaukee County)
+            elif source_val == MIDBLOCK_SOURCE.strip().casefold():
+                map_children = _arcgis_embedded_map_component(
+                    container_id="midblock-map",
+                    item_id=MIDBLOCK_ITEM_ID,
+                    center=MIDBLOCK_CENTER,
+                    scale=MIDBLOCK_SCALE,
+                    theme=MIDBLOCK_THEME,
+                    flags=MIDBLOCK_FLAGS,
+                )
+                map_style = {"display": "block"}
 
         # --- Descriptions by source selection ---
         mode_val = (mode or "").strip().lower()
