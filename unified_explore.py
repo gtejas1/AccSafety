@@ -13,6 +13,7 @@ import requests
 import dash
 from dash import dcc, html, Input, Output, State, dash_table
 import dash_bootstrap_components as dbc
+import plotly.express as px
 
 from theme import card, dash_page
 
@@ -138,6 +139,8 @@ UNIFIED_SQL = """
     "Duration",
     "Total counts",
     "Source type",
+    "Longitude",
+    "Latitude",
     "Source",
     "Facility type",
     "Mode"
@@ -148,11 +151,31 @@ def _fetch_all() -> pd.DataFrame:
     try:
         df = pd.read_sql(UNIFIED_SQL, ENGINE)
     except Exception:
-        df = pd.DataFrame(columns=[c["id"] for c in DISPLAY_COLUMNS] + ["Source", "Facility type", "Mode"])
-    for col in ["Mode", "Facility type", "Source", "Duration", "Location", "Source type"]:
+        df = pd.DataFrame(
+            columns=[
+                c["id"] for c in DISPLAY_COLUMNS
+            ]
+            + ["Source", "Facility type", "Mode", "Longitude", "Latitude"]
+        )
+
+    df = df.copy()
+    required_cols = [
+        c["id"] for c in DISPLAY_COLUMNS
+    ] + ["Source", "Facility type", "Mode", "Longitude", "Latitude"]
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = pd.NA
+
+    text_cols = ["Mode", "Facility type", "Source", "Duration", "Location", "Source type"]
+    for col in text_cols:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
-    return df.fillna("")
+            df[col] = df[col].fillna("").astype(str).str.strip()
+
+    for coord_col in ("Longitude", "Latitude"):
+        if coord_col in df.columns:
+            df[coord_col] = pd.to_numeric(df[coord_col], errors="coerce")
+
+    return df
 
 def _encode_location_for_href(text: str) -> str:
     if not isinstance(text, str):
@@ -269,6 +292,50 @@ def _build_view_link(row: pd.Series) -> str:
 def _opts(vals) -> list[dict]:
     uniq = sorted({v for v in vals if isinstance(v, str) and v.strip()})
     return [{"label": v, "value": v} for v in uniq]
+
+# ---------- Dynamic map helper (Plotly Mapbox) ----------
+def _build_dynamic_map(df: pd.DataFrame):
+    if df is None or df.empty:
+        return None
+    if not {"Latitude", "Longitude"}.issubset(df.columns):
+        return None
+
+    map_df = df.copy()
+    map_df["Latitude"] = pd.to_numeric(map_df["Latitude"], errors="coerce")
+    map_df["Longitude"] = pd.to_numeric(map_df["Longitude"], errors="coerce")
+    map_df = map_df.dropna(subset=["Latitude", "Longitude"])
+
+    if map_df.empty:
+        return None
+
+    map_df = map_df.drop_duplicates(subset=["Location", "Latitude", "Longitude"], keep="first")
+
+    hover_data = {
+        "Duration": True,
+        "Total counts": True,
+        "Source type": True,
+        "Facility type": True,
+        "Mode": True,
+        "Latitude": False,
+        "Longitude": False,
+    }
+
+    fig = px.scatter_mapbox(
+        map_df,
+        lat="Latitude",
+        lon="Longitude",
+        hover_name="Location",
+        hover_data=hover_data,
+        zoom=5,
+        height=600,
+    )
+    fig.update_layout(
+        mapbox_style="open-street-map",
+        margin=dict(l=0, r=0, t=0, b=0),
+    )
+    fig.update_traces(marker=dict(size=12, color="#2563eb", opacity=0.85))
+
+    return dcc.Graph(id="pf-dynamic-map", figure=fig, style={"height": "600px"})
 
 # ---------- ArcGIS iframe helper (reusable for multiple sources) ----------
 def _arcgis_embedded_map_component(
@@ -575,7 +642,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         map_children = []
         map_style = {"display": "none"}
 
-        if source_val == "wisconsin pilot counting counts":
+        dynamic_map = _build_dynamic_map(df)
+        if dynamic_map is not None:
+            map_children = dynamic_map
+            map_style = {"display": "block"}
+
+        elif source_val == "wisconsin pilot counting counts":
             pilot_flags = []
             if ARCGIS_BOOKMARKS: pilot_flags.append("bookmarks-enabled")
             if ARCGIS_LEGEND:    pilot_flags.append("legend-enabled")
