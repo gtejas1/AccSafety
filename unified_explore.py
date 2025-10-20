@@ -666,6 +666,13 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             and source_val == PED_INT_AAEC_STATEWIDE.strip().casefold()):
             description = _ped_int_statewide_aaec_desc()
 
+        elif (
+            mode_val == "pedestrian"
+            and fac_val == "mid-block crossing"
+            and source_val == MIDBLOCK_SOURCE.strip().casefold()
+        ):
+            description = _midblock_ped_desc()
+
         else:
             bicyclist_combo = (
                 mode_val == "bicyclist"
@@ -874,6 +881,27 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         html.A(
                             "“Practical Application of Pedestrian Exposure Tools: Expanding Southeast Region Results Statewide”",
                             href="https://uwm.edu/ipit/projects/practical-application-of-pedestrian-exposure-tools-expanding-southeast-region-results-statewide/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        ".",
+                    ],
+                    className="app-muted",
+                    style={"margin": "0"},
+                )
+            ]
+        )
+
+    def _midblock_ped_desc():
+        return html.Div(
+            [
+                html.P(
+                    [
+                        "The Mid-Block pedestrian counts dataset includes exposure counts collected at mid-block crossings in Milwaukee County. ",
+                        "For information about the protocol and database that support these counts, please visit ",
+                        html.A(
+                            "Mid-Block Pedestrian Crossing Exposure Count Protocol and Database",
+                            href="https://uwm.edu/ipit/projects/mid-block-pedestrian-crossing-exposure-count-protocol-and-database/",
                             target="_blank",
                             rel="noopener noreferrer",
                         ),
