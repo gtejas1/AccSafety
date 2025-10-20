@@ -1,6 +1,7 @@
 # unified_explore.py
 from __future__ import annotations
 
+import copy
 import io
 import time
 import random
@@ -296,9 +297,9 @@ def _opts(vals) -> list[dict]:
 # ---------- Dynamic map helper (Plotly Mapbox) ----------
 def _build_dynamic_map(df: pd.DataFrame):
     if df is None or df.empty:
-        return None
+        return None, pd.DataFrame()
     if not {"Latitude", "Longitude"}.issubset(df.columns):
-        return None
+        return None, pd.DataFrame()
 
     map_df = df.copy()
     map_df["Latitude"] = pd.to_numeric(map_df["Latitude"], errors="coerce")
@@ -306,7 +307,7 @@ def _build_dynamic_map(df: pd.DataFrame):
     map_df = map_df.dropna(subset=["Latitude", "Longitude"])
 
     if map_df.empty:
-        return None
+        return None, pd.DataFrame()
 
     map_df = map_df.drop_duplicates(subset=["Location", "Latitude", "Longitude"], keep="first")
 
@@ -335,7 +336,7 @@ def _build_dynamic_map(df: pd.DataFrame):
     )
     fig.update_traces(marker=dict(size=12, color="#2563eb", opacity=0.85))
 
-    return dcc.Graph(id="pf-dynamic-map", figure=fig, style={"height": "600px"})
+    return fig, map_df
 
 # ---------- ArcGIS iframe helper (reusable for multiple sources) ----------
 def _arcgis_embedded_map_component(
@@ -507,6 +508,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             ),
             # sentinel to keep older show/hide logic happy (no children needed)
             html.Div(id="wrap-results", style={"display": "none"}),
+            dcc.Store(id="pf-map-data"),
         ],
     )
 
@@ -581,6 +583,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     @app.callback(
         Output("pf-map", "children"),     # 0 map content
         Output("wrap-map", "style"),      # 1 map card visibility
+        Output("pf-map-data", "data"),    # 2 dynamic map coordinate store
         Output("pf-table", "data"),       # 2 table rows
         Output("wrap-table", "style"),    # 3 table card visibility
         Output("wrap-results", "style"),  # 4 (sentinel) keep as block once ready
@@ -596,7 +599,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         # wait until all filters selected (Duration removed)
         has_all = all([mode, facility, source])
         if not has_all:
-            return [], {"display": "none"}, [], {"display": "none"}, {"display": "none"}, {"display": "none"}, [], {"display": "none"}
+            return [], {"display": "none"}, [], [], {"display": "none"}, {"display": "none"}, {"display": "none"}, [], {"display": "none"}
 
         df = base_df.copy()
         cf = str.casefold
@@ -641,11 +644,29 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         source_val = str(source or "").strip().casefold()
         map_children = []
         map_style = {"display": "none"}
+        map_store_data = []
 
-        dynamic_map = _build_dynamic_map(df)
-        if dynamic_map is not None:
-            map_children = dynamic_map
+        dynamic_fig, dynamic_map_df = _build_dynamic_map(df)
+        if dynamic_fig is not None:
+            map_children = dcc.Graph(
+                id="pf-dynamic-map",
+                figure=dynamic_fig,
+                style={"height": "600px"},
+                config={"displayModeBar": False},
+            )
             map_style = {"display": "block"}
+            if not dynamic_map_df.empty and {"Location", "Latitude", "Longitude"}.issubset(dynamic_map_df.columns):
+                subset = dynamic_map_df[["Location", "Latitude", "Longitude"]].copy()
+                subset["Latitude"] = pd.to_numeric(subset["Latitude"], errors="coerce")
+                subset["Longitude"] = pd.to_numeric(subset["Longitude"], errors="coerce")
+                map_store_data = [
+                    {
+                        "Location": str(row.get("Location") or ""),
+                        "Latitude": row.get("Latitude"),
+                        "Longitude": row.get("Longitude"),
+                    }
+                    for row in subset.to_dict("records")
+                ]
 
         elif source_val == "wisconsin pilot counting counts":
             pilot_flags = []
@@ -794,12 +815,75 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         desc_style = {"display": "block"} if description else {"display": "none"}
 
         if df.empty:
-            return map_children, map_style, [], {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
+            return map_children, map_style, map_store_data, [], {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
 
         df = df.copy()
         df["View"] = df.apply(_build_view_link, axis=1)
         rows = df[[c["id"] for c in DISPLAY_COLUMNS]].to_dict("records")
-        return map_children, map_style, rows, {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
+        return map_children, map_style, map_store_data, rows, {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
+
+    @app.callback(
+        Output("pf-dynamic-map", "figure"),
+        Input("pf-table", "active_cell"),
+        State("pf-table", "data"),
+        State("pf-map-data", "data"),
+        State("pf-dynamic-map", "figure"),
+        prevent_initial_call=True,
+    )
+    def _focus_map_on_row(active_cell, table_rows, map_records, figure):
+        if not active_cell or figure is None:
+            return dash.no_update
+        if not isinstance(active_cell, dict) or "row" not in active_cell:
+            return dash.no_update
+        row_index = active_cell.get("row")
+        if row_index is None:
+            return dash.no_update
+        try:
+            row_index = int(row_index)
+        except (TypeError, ValueError):
+            return dash.no_update
+        if row_index < 0:
+            return dash.no_update
+        if not table_rows or row_index >= len(table_rows):
+            return dash.no_update
+        if not map_records:
+            return dash.no_update
+
+        row_data = table_rows[row_index] or {}
+        location = str(row_data.get("Location") or "").strip()
+        if not location:
+            return dash.no_update
+
+        match = next(
+            (
+                entry
+                for entry in map_records
+                if (entry.get("Location") or "").strip() == location
+            ),
+            None,
+        )
+        if not match:
+            return dash.no_update
+
+        lat = match.get("Latitude")
+        lon = match.get("Longitude")
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except (TypeError, ValueError):
+            return dash.no_update
+
+        if not (pd.notna(lat) and pd.notna(lon)):
+            return dash.no_update
+
+        new_fig = copy.deepcopy(figure)
+        new_fig.setdefault("layout", {})
+        new_fig["layout"].setdefault("mapbox", {})
+        new_fig["layout"]["mapbox"].setdefault("center", {})
+        new_fig["layout"]["mapbox"]["center"]["lat"] = lat
+        new_fig["layout"]["mapbox"]["center"]["lon"] = lon
+        new_fig["layout"]["mapbox"]["zoom"] = 13
+        return new_fig
 
     # ---------- Description builders ----------
     def _custom_mke_estimated_desc():
