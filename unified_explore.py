@@ -470,44 +470,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     desc_block = card([html.Div(id="pf-desc", children=[])], class_name="mb-3")
 
     # Map (right, top)
-    map_card = card(
-        [
-            html.Div(
-                [
-                    html.Div(id="pf-map", children=[]),
-                    html.Div(
-                        [
-                            dbc.ButtonGroup(
-                                [
-                                    dbc.Button(
-                                        "Zoom in",
-                                        id="pf-map-zoom-in",
-                                        color="primary",
-                                        outline=True,
-                                        size="sm",
-                                    ),
-                                    dbc.Button(
-                                        "Zoom out",
-                                        id="pf-map-zoom-out",
-                                        color="primary",
-                                        outline=True,
-                                        size="sm",
-                                    ),
-                                ],
-                                size="sm",
-                                className="gap-2",
-                            )
-                        ],
-                        id="pf-map-controls",
-                        style={"display": "none"},
-                        className="d-flex justify-content-end mt-3",
-                    ),
-                    dcc.Store(id="pf-map-selection"),
-                ]
-            )
-        ],
-        class_name="mb-3",
-    )
+    map_card = card([html.Div(id="pf-map", children=[])], class_name="mb-3")
 
     # Table (right, bottom)
     table_block = card(
@@ -640,13 +603,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         Output("pf-map", "children"),     # 0 map content
         Output("wrap-map", "style"),      # 1 map card visibility
         Output("pf-map-data", "data"),    # 2 dynamic map coordinate store
-        Output("pf-map-controls", "style"),  # 3 zoom button visibility
-        Output("pf-table", "data"),       # 4 table rows
-        Output("wrap-table", "style"),    # 5 table card visibility
-        Output("wrap-results", "style"),  # 6 (sentinel) keep as block once ready
-        Output("wrap-download", "style"), # 7 download
-        Output("pf-desc", "children"),    # 8 description content
-        Output("wrap-desc", "style"),     # 9 description visibility
+        Output("pf-table", "data"),       # 2 table rows
+        Output("wrap-table", "style"),    # 3 table card visibility
+        Output("wrap-results", "style"),  # 4 (sentinel) keep as block once ready
+        Output("wrap-download", "style"), # 5 download
+        Output("pf-desc", "children"),    # 6 description content
+        Output("wrap-desc", "style"),     # 7 description visibility
         Input("pf-mode", "value"),
         Input("pf-facility", "value"),
         Input("pf-source", "value"),
@@ -656,7 +618,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         # wait until all filters selected (Duration removed)
         has_all = all([mode, facility, source])
         if not has_all:
-            return [], {"display": "none"}, [], {"display": "none"}, [], {"display": "none"}, {"display": "none"}, {"display": "none"}, [], {"display": "none"}
+            return [], {"display": "none"}, [], [], {"display": "none"}, {"display": "none"}, {"display": "none"}, [], {"display": "none"}
 
         df = base_df.copy()
         cf = str.casefold
@@ -702,7 +664,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         map_children = []
         map_style = {"display": "none"}
         map_store_data = []
-        map_controls_style = {"display": "none"}
 
         dynamic_fig, dynamic_map_df = _build_dynamic_map(df)
         if dynamic_fig is not None:
@@ -713,7 +674,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 config={"displayModeBar": False},
             )
             map_style = {"display": "block"}
-            map_controls_style = {"display": "none"}
             required_map_cols = [
                 "Location",
                 "Latitude",
@@ -758,7 +718,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 flags=pilot_flags,
             )
             map_style = {"display": "block"}
-            map_controls_style = {"display": "none"}
 
         elif source_val == "wisconsin ped/bike database (statewide)":
             map_children = _arcgis_embedded_map_component(
@@ -770,7 +729,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 flags=SW_FLAGS,
             )
             map_style = {"display": "block"}
-            map_controls_style = {"display": "none"}
 
         elif source_val in {
             "sewrpc trail user counts",
@@ -785,7 +743,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 flags=SEWRPC_FLAGS,
             )
             map_style = {"display": "block"}
-            map_controls_style = {"display": "none"}
 
         elif source_val == NEW_SOURCE_NAME.strip().casefold():
             # Embedded ArcGIS map for Milwaukee AAEC (replaces old static image)
@@ -798,7 +755,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 flags=MKE_AAEC_FLAGS,
             )
             map_style = {"display": "block"}
-            map_controls_style = {"display": "none"}
 
         elif source_val == PED_INT_AAEC_STATEWIDE.strip().casefold():
             # Directly embed the provided ArcGIS “apps/Embed” URL
@@ -816,7 +772,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 sandbox="allow-same-origin allow-scripts allow-popups allow-forms",
             )
             map_style = {"display": "block"}
-            map_controls_style = {"display": "none"}
 
         # NEW: Mid-Block pedestrian counts (Milwaukee County)
         elif source_val == MIDBLOCK_SOURCE.strip().casefold():
@@ -829,7 +784,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 flags=MIDBLOCK_FLAGS,
             )
             map_style = {"display": "block"}
-            map_controls_style = {"display": "none"}
 
         # --- Descriptions by source selection ---
         mode_val = (mode or "").strip().lower()
@@ -897,60 +851,146 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         desc_style = {"display": "block"} if description else {"display": "none"}
 
         if df.empty:
-            return (
-                map_children,
-                map_style,
-                map_store_data,
-                map_controls_style,
-                [],
-                {"display": "block"},
-                {"display": "block"},
-                {"display": "flex"},
-                description,
-                desc_style,
-            )
+            return map_children, map_style, map_store_data, [], {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
 
         df = df.copy()
         df["View"] = df.apply(_build_view_link, axis=1)
         rows = df[[c["id"] for c in DISPLAY_COLUMNS]].to_dict("records")
-        return (
-            map_children,
-            map_style,
-            map_store_data,
-            map_controls_style,
-            rows,
-            {"display": "block"},
-            {"display": "block"},
-            {"display": "flex"},
-            description,
-            desc_style,
+        return map_children, map_style, map_store_data, rows, {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
+
+    @app.callback(
+        Output("pf-dynamic-map", "figure"),
+        Input("pf-table", "active_cell"),
+        State("pf-table", "data"),
+        State("pf-map-data", "data"),
+        State("pf-dynamic-map", "figure"),
+        prevent_initial_call=True,
+    )
+    def _focus_map_on_row(active_cell, table_rows, map_records, figure):
+        if not active_cell or figure is None:
+            return dash.no_update
+        if not isinstance(active_cell, dict) or "row" not in active_cell:
+            return dash.no_update
+        row_index = active_cell.get("row")
+        if row_index is None:
+            return dash.no_update
+        try:
+            row_index = int(row_index)
+        except (TypeError, ValueError):
+            return dash.no_update
+        if row_index < 0:
+            return dash.no_update
+        if not table_rows or row_index >= len(table_rows):
+            return dash.no_update
+        if not map_records:
+            return dash.no_update
+
+        row_data = table_rows[row_index] or {}
+        location = str(row_data.get("Location") or "").strip()
+        if not location:
+            return dash.no_update
+
+        match = next(
+            (
+                entry
+                for entry in map_records
+                if (entry.get("Location") or "").strip() == location
+            ),
+            None,
         )
+        if not match:
+            return dash.no_update
 
-    def _format_popup_text(location, duration, total_counts, source_type, facility, mode):
-        lines = [
-            location,
-            f"Duration: {duration}",
-            f"Total counts: {total_counts}",
-            f"Source type: {source_type}",
-            f"Facility: {facility}",
-            f"Mode: {mode}",
-        ]
-        return "\n".join([line for line in lines if line])
+        lat = match.get("Latitude")
+        lon = match.get("Longitude")
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except (TypeError, ValueError):
+            return dash.no_update
 
-    def _apply_map_focus(figure, lat, lon, zoom, popup_text, point_index):
-        if figure is None:
-            return figure
+        if not (pd.notna(lat) and pd.notna(lon)):
+            return dash.no_update
+
+        point_index = match.get("point_index")
+        try:
+            point_index = int(point_index)
+        except (TypeError, ValueError):
+            point_index = None
+
+        if point_index is None and figure.get("data"):
+            for trace in figure.get("data", []):
+                custom = trace.get("customdata")
+                if not custom:
+                    continue
+                names = trace.get("hovertext") or trace.get("text") or []
+                for idx, payload in enumerate(custom):
+                    loc_match = ""
+                    if isinstance(names, (list, tuple)) and idx < len(names):
+                        loc_match = str(names[idx] or "").strip()
+                    if loc_match != location:
+                        continue
+                    try:
+                        payload_index = (
+                            int(payload[0])
+                            if isinstance(payload, (list, tuple)) and payload
+                            else int(payload)
+                        )
+                    except (TypeError, ValueError):
+                        continue
+                    point_index = payload_index
+                    break
+                if point_index is not None:
+                    break
+
+        def _fmt_val(value):
+            if value is None:
+                return "N/A"
+            try:
+                if pd.isna(value):
+                    return "N/A"
+            except Exception:
+                pass
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                if float(value).is_integer():
+                    return f"{int(value):,}"
+                return f"{float(value):,.2f}"
+            text = str(value).strip()
+            return text or "N/A"
+
+        def _safe_text(value):
+            text = str(value) if value is not None else ""
+            return (
+                text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+            )
+
+        duration = _safe_text(_fmt_val(match.get("Duration") or row_data.get("Duration")))
+        total_counts = _safe_text(_fmt_val(match.get("Total counts") or row_data.get("Total counts")))
+        source_type = _safe_text(_fmt_val(match.get("Source type") or row_data.get("Source type")))
+        facility = _safe_text(_fmt_val(match.get("Facility type") or row_data.get("Facility type")))
+        mode = _safe_text(_fmt_val(match.get("Mode") or row_data.get("Mode")))
+        safe_location = _safe_text(location)
+
+        info_text = (
+            f"<b>{safe_location}</b><br>"
+            f"Duration: {duration}<br>"
+            f"Total counts: {total_counts}<br>"
+            f"Source type: {source_type}<br>"
+            f"Facility: {facility}<br>"
+            f"Mode: {mode}"
+        )
 
         new_fig = copy.deepcopy(figure)
         new_fig.setdefault("layout", {})
-        mapbox_layout = new_fig["layout"].setdefault("mapbox", {})
-        center = mapbox_layout.setdefault("center", {})
-        center["lat"] = lat
-        center["lon"] = lon
-        if zoom is not None:
-            mapbox_layout["zoom"] = zoom
-        mapbox_layout.setdefault("style", "open-street-map")
-        mapbox_layout.setdefault("pitch", 0)
+        new_fig["layout"].setdefault("mapbox", {})
+        new_fig["layout"]["mapbox"].setdefault("center", {})
+        new_fig["layout"]["mapbox"]["center"]["lat"] = lat
+        new_fig["layout"]["mapbox"]["center"]["lon"] = lon
+        new_fig["layout"]["mapbox"]["zoom"] = 13
+        new_fig["layout"]["mapbox"].setdefault("style", "open-street-map")
+        new_fig["layout"]["mapbox"].setdefault("pitch", 0)
 
         data = new_fig.get("data") or []
         base_traces = [trace for trace in data if trace.get("name") != "__selected_point"]
@@ -964,14 +1004,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 base_size = size_value[0] if size_value else 12
             else:
                 base_size = size_value
-            marker["size"] = base_size
-            marker.setdefault("color", "#2563eb")
             marker.setdefault("opacity", 0.85)
+            marker.setdefault("color", "#2563eb")
+            marker.setdefault("size", base_size)
             base_trace["marker"] = marker
             base_trace["selectedpoints"] = [point_index]
-            base_trace["selected"] = {
-                "marker": {"size": base_size + 4, "color": "#f97316", "opacity": 1},
-            }
+            base_trace["selected"] = {"marker": {"size": base_size + 4, "color": "#f97316"}}
             base_trace["unselected"] = {"marker": {"opacity": 0.35}}
 
         highlight_trace = {
@@ -979,175 +1017,21 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             "lat": [lat],
             "lon": [lon],
             "mode": "markers+text",
-            "marker": {"size": 20, "color": "#f97316", "opacity": 0.95},
-            "text": [popup_text],
+            "marker": {
+                "size": 18,
+                "color": "#f97316",
+                "opacity": 0.95,
+            },
+            "text": [info_text],
             "textposition": "top center",
-            "textfont": {"color": "#0f172a", "size": 13, "family": "Open Sans, sans-serif"},
-            "hoverinfo": "skip",
+            "hoverinfo": "text",
+            "hovertemplate": info_text + "<extra></extra>",
             "showlegend": False,
             "name": "__selected_point",
         }
 
         new_fig["data"].append(highlight_trace)
         return new_fig
-
-    @app.callback(
-        Output("pf-dynamic-map", "figure"),
-        Output("pf-map-controls", "style"),
-        Output("pf-map-selection", "data"),
-        Input("pf-table", "active_cell"),
-        Input("pf-map-zoom-in", "n_clicks"),
-        Input("pf-map-zoom-out", "n_clicks"),
-        Input("pf-map-data", "data"),
-        State("pf-table", "data"),
-        State("pf-dynamic-map", "figure"),
-        State("pf-map-selection", "data"),
-        prevent_initial_call=True,
-    )
-    def _update_map_interactions(active_cell, zoom_in_clicks, zoom_out_clicks, map_records, table_rows, figure, selection_state):
-        ctx = dash.callback_context
-        if not ctx.triggered:
-            return dash.no_update, dash.no_update, dash.no_update
-
-        trigger = ctx.triggered[0]["prop_id"].split(".")[0]
-
-        if trigger == "pf-map-data":
-            return dash.no_update, {"display": "none"}, None
-
-        if trigger in {"pf-map-zoom-in", "pf-map-zoom-out"}:
-            if not selection_state or figure is None:
-                return dash.no_update, dash.no_update, dash.no_update
-            lat = selection_state.get("lat")
-            lon = selection_state.get("lon")
-            point_index = selection_state.get("point_index")
-            popup_text = selection_state.get("popup_text")
-            zoom = selection_state.get("zoom", 14)
-            if lat is None or lon is None:
-                return dash.no_update, dash.no_update, dash.no_update
-            zoom_delta = 1 if trigger == "pf-map-zoom-in" else -1
-            new_zoom = max(4, min(18, zoom + zoom_delta))
-            updated_selection = {**selection_state, "zoom": new_zoom}
-            new_fig = _apply_map_focus(figure, lat, lon, new_zoom, popup_text, point_index)
-            return new_fig, dash.no_update, updated_selection
-
-        if trigger == "pf-table":
-            if not active_cell or figure is None:
-                return dash.no_update, dash.no_update, dash.no_update
-            if not isinstance(active_cell, dict) or "row" not in active_cell:
-                return dash.no_update, dash.no_update, dash.no_update
-            row_index = active_cell.get("row")
-            if row_index is None:
-                return dash.no_update, dash.no_update, dash.no_update
-            try:
-                row_index = int(row_index)
-            except (TypeError, ValueError):
-                return dash.no_update, dash.no_update, dash.no_update
-            if row_index < 0:
-                return dash.no_update, dash.no_update, dash.no_update
-            if not table_rows or row_index >= len(table_rows):
-                return dash.no_update, dash.no_update, dash.no_update
-            if not map_records:
-                return dash.no_update, dash.no_update, dash.no_update
-
-            row_data = table_rows[row_index] or {}
-            location = str(row_data.get("Location") or "").strip()
-            if not location:
-                return dash.no_update, dash.no_update, dash.no_update
-
-            match = next(
-                (
-                    entry
-                    for entry in (map_records or [])
-                    if (entry.get("Location") or "").strip() == location
-                ),
-                None,
-            )
-            if not match:
-                return dash.no_update, dash.no_update, dash.no_update
-
-            lat = match.get("Latitude")
-            lon = match.get("Longitude")
-            try:
-                lat = float(lat)
-                lon = float(lon)
-            except (TypeError, ValueError):
-                return dash.no_update, dash.no_update, dash.no_update
-
-            if not (pd.notna(lat) and pd.notna(lon)):
-                return dash.no_update, dash.no_update, dash.no_update
-
-            point_index = match.get("point_index")
-            try:
-                point_index = int(point_index)
-            except (TypeError, ValueError):
-                point_index = None
-
-            if point_index is None and figure.get("data"):
-                for trace in figure.get("data", []):
-                    custom = trace.get("customdata")
-                    if not custom:
-                        continue
-                    names = trace.get("hovertext") or trace.get("text") or []
-                    for idx, payload in enumerate(custom):
-                        loc_match = ""
-                        if isinstance(names, (list, tuple)) and idx < len(names):
-                            loc_match = str(names[idx] or "").strip()
-                        if loc_match != location:
-                            continue
-                        try:
-                            payload_index = (
-                                int(payload[0])
-                                if isinstance(payload, (list, tuple)) and payload
-                                else int(payload)
-                            )
-                        except (TypeError, ValueError):
-                            continue
-                        point_index = payload_index
-                        break
-                    if point_index is not None:
-                        break
-
-            def _fmt_val(value):
-                if value is None:
-                    return "N/A"
-                try:
-                    if pd.isna(value):
-                        return "N/A"
-                except Exception:
-                    pass
-                if isinstance(value, (int, float)) and not isinstance(value, bool):
-                    if float(value).is_integer():
-                        return f"{int(value):,}"
-                    return f"{float(value):,.2f}"
-                text = str(value).strip()
-                return text or "N/A"
-
-            duration = _fmt_val(match.get("Duration") or row_data.get("Duration"))
-            total_counts = _fmt_val(match.get("Total counts") or row_data.get("Total counts"))
-            source_type = _fmt_val(match.get("Source type") or row_data.get("Source type"))
-            facility = _fmt_val(match.get("Facility type") or row_data.get("Facility type"))
-            mode = _fmt_val(match.get("Mode") or row_data.get("Mode"))
-
-            popup_text = _format_popup_text(location, duration, total_counts, source_type, facility, mode)
-            target_zoom = 14
-            new_fig = _apply_map_focus(figure, lat, lon, target_zoom, popup_text, point_index)
-            selection_payload = {
-                "location": location,
-                "lat": lat,
-                "lon": lon,
-                "point_index": point_index,
-                "popup_text": popup_text,
-                "zoom": target_zoom,
-            }
-            controls_style = {
-                "display": "flex",
-                "justifyContent": "flex-end",
-                "gap": "0.5rem",
-                "marginTop": "0.75rem",
-            }
-            return new_fig, controls_style, selection_payload
-
-        return dash.no_update, dash.no_update, dash.no_update
 
     # ---------- Description builders ----------
     def _custom_mke_estimated_desc():
