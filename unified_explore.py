@@ -1,6 +1,7 @@
 # unified_explore.py
 from __future__ import annotations
 
+import copy
 import io
 import time
 import random
@@ -13,6 +14,7 @@ import requests
 import dash
 from dash import dcc, html, Input, Output, State, dash_table
 import dash_bootstrap_components as dbc
+import plotly.express as px
 
 from theme import card, dash_page
 
@@ -138,6 +140,8 @@ UNIFIED_SQL = """
     "Duration",
     "Total counts",
     "Source type",
+    "Longitude",
+    "Latitude",
     "Source",
     "Facility type",
     "Mode"
@@ -148,11 +152,31 @@ def _fetch_all() -> pd.DataFrame:
     try:
         df = pd.read_sql(UNIFIED_SQL, ENGINE)
     except Exception:
-        df = pd.DataFrame(columns=[c["id"] for c in DISPLAY_COLUMNS] + ["Source", "Facility type", "Mode"])
-    for col in ["Mode", "Facility type", "Source", "Duration", "Location", "Source type"]:
+        df = pd.DataFrame(
+            columns=[
+                c["id"] for c in DISPLAY_COLUMNS
+            ]
+            + ["Source", "Facility type", "Mode", "Longitude", "Latitude"]
+        )
+
+    df = df.copy()
+    required_cols = [
+        c["id"] for c in DISPLAY_COLUMNS
+    ] + ["Source", "Facility type", "Mode", "Longitude", "Latitude"]
+    for col in required_cols:
+        if col not in df.columns:
+            df[col] = pd.NA
+
+    text_cols = ["Mode", "Facility type", "Source", "Duration", "Location", "Source type"]
+    for col in text_cols:
         if col in df.columns:
-            df[col] = df[col].astype(str).str.strip()
-    return df.fillna("")
+            df[col] = df[col].fillna("").astype(str).str.strip()
+
+    for coord_col in ("Longitude", "Latitude"):
+        if coord_col in df.columns:
+            df[coord_col] = pd.to_numeric(df[coord_col], errors="coerce")
+
+    return df
 
 def _encode_location_for_href(text: str) -> str:
     if not isinstance(text, str):
@@ -269,6 +293,69 @@ def _build_view_link(row: pd.Series) -> str:
 def _opts(vals) -> list[dict]:
     uniq = sorted({v for v in vals if isinstance(v, str) and v.strip()})
     return [{"label": v, "value": v} for v in uniq]
+
+# ---------- Dynamic map helper (Plotly Mapbox) ----------
+def _build_dynamic_map(df: pd.DataFrame):
+    if df is None or df.empty:
+        return None, pd.DataFrame()
+    if not {"Latitude", "Longitude"}.issubset(df.columns):
+        return None, pd.DataFrame()
+
+    map_df = df.copy()
+    map_df["Latitude"] = pd.to_numeric(map_df["Latitude"], errors="coerce")
+    map_df["Longitude"] = pd.to_numeric(map_df["Longitude"], errors="coerce")
+    map_df = map_df.dropna(subset=["Latitude", "Longitude"])
+
+    if map_df.empty:
+        return None, pd.DataFrame()
+
+    map_df = map_df.drop_duplicates(subset=["Location", "Latitude", "Longitude"], keep="first")
+    map_df = map_df.reset_index(drop=True)
+    map_df["__point_index"] = map_df.index
+
+    hover_data = {
+        "Duration": True,
+        "Total counts": True,
+        "Source type": True,
+        "Facility type": True,
+        "Mode": True,
+        "Latitude": False,
+        "Longitude": False,
+    }
+
+    fig = px.scatter_mapbox(
+        map_df,
+        lat="Latitude",
+        lon="Longitude",
+        hover_name="Location",
+        hover_data=hover_data,
+        custom_data=[
+            "__point_index",
+            "Duration",
+            "Total counts",
+            "Source type",
+            "Facility type",
+            "Mode",
+        ],
+        zoom=5,
+        height=600,
+    )
+    fig.update_layout(
+        mapbox_style="open-street-map",
+        margin=dict(l=0, r=0, t=0, b=0),
+        uirevision="pf-dynamic-map",
+    )
+    fig.update_traces(
+        marker=dict(size=12, color="#2563eb", opacity=0.85),
+        hovertemplate=(
+            "<b>%{hovertext}</b><br>"
+            "Duration: %{customdata[1]}<br>"
+            "Total counts: %{customdata[2]}<br>"
+            "Source type: %{customdata[3]}<extra></extra>"
+        ),
+    )
+
+    return fig, map_df
 
 # ---------- ArcGIS iframe helper (reusable for multiple sources) ----------
 def _arcgis_embedded_map_component(
@@ -440,6 +527,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             ),
             # sentinel to keep older show/hide logic happy (no children needed)
             html.Div(id="wrap-results", style={"display": "none"}),
+            dcc.Store(id="pf-map-data"),
         ],
     )
 
@@ -514,6 +602,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     @app.callback(
         Output("pf-map", "children"),     # 0 map content
         Output("wrap-map", "style"),      # 1 map card visibility
+        Output("pf-map-data", "data"),    # 2 dynamic map coordinate store
         Output("pf-table", "data"),       # 2 table rows
         Output("wrap-table", "style"),    # 3 table card visibility
         Output("wrap-results", "style"),  # 4 (sentinel) keep as block once ready
@@ -529,7 +618,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         # wait until all filters selected (Duration removed)
         has_all = all([mode, facility, source])
         if not has_all:
-            return [], {"display": "none"}, [], {"display": "none"}, {"display": "none"}, {"display": "none"}, [], {"display": "none"}
+            return [], {"display": "none"}, [], [], {"display": "none"}, {"display": "none"}, {"display": "none"}, [], {"display": "none"}
 
         df = base_df.copy()
         cf = str.casefold
@@ -574,8 +663,48 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         source_val = str(source or "").strip().casefold()
         map_children = []
         map_style = {"display": "none"}
+        map_store_data = []
 
-        if source_val == "wisconsin pilot counting counts":
+        dynamic_fig, dynamic_map_df = _build_dynamic_map(df)
+        if dynamic_fig is not None:
+            map_children = dcc.Graph(
+                id="pf-dynamic-map",
+                figure=dynamic_fig,
+                style={"height": "600px"},
+                config={"displayModeBar": False},
+            )
+            map_style = {"display": "block"}
+            required_map_cols = [
+                "Location",
+                "Latitude",
+                "Longitude",
+                "Duration",
+                "Total counts",
+                "Source type",
+                "Facility type",
+                "Mode",
+                "__point_index",
+            ]
+            if not dynamic_map_df.empty and set(required_map_cols).issubset(dynamic_map_df.columns):
+                subset = dynamic_map_df[required_map_cols].copy()
+                subset["Latitude"] = pd.to_numeric(subset["Latitude"], errors="coerce")
+                subset["Longitude"] = pd.to_numeric(subset["Longitude"], errors="coerce")
+                map_store_data = [
+                    {
+                        "Location": str(row.get("Location") or ""),
+                        "Latitude": row.get("Latitude"),
+                        "Longitude": row.get("Longitude"),
+                        "Duration": row.get("Duration"),
+                        "Total counts": row.get("Total counts"),
+                        "Source type": row.get("Source type"),
+                        "Facility type": row.get("Facility type"),
+                        "Mode": row.get("Mode"),
+                        "point_index": row.get("__point_index"),
+                    }
+                    for row in subset.to_dict("records")
+                ]
+
+        elif source_val == "wisconsin pilot counting counts":
             pilot_flags = []
             if ARCGIS_BOOKMARKS: pilot_flags.append("bookmarks-enabled")
             if ARCGIS_LEGEND:    pilot_flags.append("legend-enabled")
@@ -722,12 +851,187 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         desc_style = {"display": "block"} if description else {"display": "none"}
 
         if df.empty:
-            return map_children, map_style, [], {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
+            return map_children, map_style, map_store_data, [], {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
 
         df = df.copy()
         df["View"] = df.apply(_build_view_link, axis=1)
         rows = df[[c["id"] for c in DISPLAY_COLUMNS]].to_dict("records")
-        return map_children, map_style, rows, {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
+        return map_children, map_style, map_store_data, rows, {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
+
+    @app.callback(
+        Output("pf-dynamic-map", "figure"),
+        Input("pf-table", "active_cell"),
+        State("pf-table", "data"),
+        State("pf-map-data", "data"),
+        State("pf-dynamic-map", "figure"),
+        prevent_initial_call=True,
+    )
+    def _focus_map_on_row(active_cell, table_rows, map_records, figure):
+        if not active_cell or figure is None:
+            return dash.no_update
+        if not isinstance(active_cell, dict) or "row" not in active_cell:
+            return dash.no_update
+        row_index = active_cell.get("row")
+        if row_index is None:
+            return dash.no_update
+        try:
+            row_index = int(row_index)
+        except (TypeError, ValueError):
+            return dash.no_update
+        if row_index < 0:
+            return dash.no_update
+        if not table_rows or row_index >= len(table_rows):
+            return dash.no_update
+        if not map_records:
+            return dash.no_update
+
+        row_data = table_rows[row_index] or {}
+        location = str(row_data.get("Location") or "").strip()
+        if not location:
+            return dash.no_update
+
+        match = next(
+            (
+                entry
+                for entry in map_records
+                if (entry.get("Location") or "").strip() == location
+            ),
+            None,
+        )
+        if not match:
+            return dash.no_update
+
+        lat = match.get("Latitude")
+        lon = match.get("Longitude")
+        try:
+            lat = float(lat)
+            lon = float(lon)
+        except (TypeError, ValueError):
+            return dash.no_update
+
+        if not (pd.notna(lat) and pd.notna(lon)):
+            return dash.no_update
+
+        point_index = match.get("point_index")
+        try:
+            point_index = int(point_index)
+        except (TypeError, ValueError):
+            point_index = None
+
+        if point_index is None and figure.get("data"):
+            for trace in figure.get("data", []):
+                custom = trace.get("customdata")
+                if not custom:
+                    continue
+                names = trace.get("hovertext") or trace.get("text") or []
+                for idx, payload in enumerate(custom):
+                    loc_match = ""
+                    if isinstance(names, (list, tuple)) and idx < len(names):
+                        loc_match = str(names[idx] or "").strip()
+                    if loc_match != location:
+                        continue
+                    try:
+                        payload_index = (
+                            int(payload[0])
+                            if isinstance(payload, (list, tuple)) and payload
+                            else int(payload)
+                        )
+                    except (TypeError, ValueError):
+                        continue
+                    point_index = payload_index
+                    break
+                if point_index is not None:
+                    break
+
+        def _fmt_val(value):
+            if value is None:
+                return "N/A"
+            try:
+                if pd.isna(value):
+                    return "N/A"
+            except Exception:
+                pass
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                if float(value).is_integer():
+                    return f"{int(value):,}"
+                return f"{float(value):,.2f}"
+            text = str(value).strip()
+            return text or "N/A"
+
+        def _safe_text(value):
+            text = str(value) if value is not None else ""
+            return (
+                text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+            )
+
+        duration = _safe_text(_fmt_val(match.get("Duration") or row_data.get("Duration")))
+        total_counts = _safe_text(_fmt_val(match.get("Total counts") or row_data.get("Total counts")))
+        source_type = _safe_text(_fmt_val(match.get("Source type") or row_data.get("Source type")))
+        facility = _safe_text(_fmt_val(match.get("Facility type") or row_data.get("Facility type")))
+        mode = _safe_text(_fmt_val(match.get("Mode") or row_data.get("Mode")))
+        safe_location = _safe_text(location)
+
+        info_text = (
+            f"<b>{safe_location}</b><br>"
+            f"Duration: {duration}<br>"
+            f"Total counts: {total_counts}<br>"
+            f"Source type: {source_type}<br>"
+            f"Facility: {facility}<br>"
+            f"Mode: {mode}"
+        )
+
+        new_fig = copy.deepcopy(figure)
+        new_fig.setdefault("layout", {})
+        new_fig["layout"].setdefault("mapbox", {})
+        new_fig["layout"]["mapbox"].setdefault("center", {})
+        new_fig["layout"]["mapbox"]["center"]["lat"] = lat
+        new_fig["layout"]["mapbox"]["center"]["lon"] = lon
+        new_fig["layout"]["mapbox"]["zoom"] = 13
+        new_fig["layout"]["mapbox"].setdefault("style", "open-street-map")
+        new_fig["layout"]["mapbox"].setdefault("pitch", 0)
+
+        data = new_fig.get("data") or []
+        base_traces = [trace for trace in data if trace.get("name") != "__selected_point"]
+        new_fig["data"] = base_traces
+
+        if base_traces and point_index is not None:
+            base_trace = base_traces[0]
+            marker = base_trace.get("marker") or {}
+            size_value = marker.get("size", 12)
+            if isinstance(size_value, (list, tuple)):
+                base_size = size_value[0] if size_value else 12
+            else:
+                base_size = size_value
+            marker.setdefault("opacity", 0.85)
+            marker.setdefault("color", "#2563eb")
+            marker.setdefault("size", base_size)
+            base_trace["marker"] = marker
+            base_trace["selectedpoints"] = [point_index]
+            base_trace["selected"] = {"marker": {"size": base_size + 4, "color": "#f97316"}}
+            base_trace["unselected"] = {"marker": {"opacity": 0.35}}
+
+        highlight_trace = {
+            "type": "scattermapbox",
+            "lat": [lat],
+            "lon": [lon],
+            "mode": "markers+text",
+            "marker": {
+                "size": 18,
+                "color": "#f97316",
+                "opacity": 0.95,
+            },
+            "text": [info_text],
+            "textposition": "top center",
+            "hoverinfo": "text",
+            "hovertemplate": info_text + "<extra></extra>",
+            "showlegend": False,
+            "name": "__selected_point",
+        }
+
+        new_fig["data"].append(highlight_trace)
+        return new_fig
 
     # ---------- Description builders ----------
     def _custom_mke_estimated_desc():
