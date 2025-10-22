@@ -310,6 +310,8 @@ def _build_dynamic_map(df: pd.DataFrame):
         return None, pd.DataFrame()
 
     map_df = map_df.drop_duplicates(subset=["Location", "Latitude", "Longitude"], keep="first")
+    map_df = map_df.reset_index(drop=True)
+    map_df["__point_index"] = map_df.index
 
     hover_data = {
         "Duration": True,
@@ -327,14 +329,31 @@ def _build_dynamic_map(df: pd.DataFrame):
         lon="Longitude",
         hover_name="Location",
         hover_data=hover_data,
+        custom_data=[
+            "__point_index",
+            "Duration",
+            "Total counts",
+            "Source type",
+            "Facility type",
+            "Mode",
+        ],
         zoom=5,
         height=600,
     )
     fig.update_layout(
         mapbox_style="open-street-map",
         margin=dict(l=0, r=0, t=0, b=0),
+        uirevision="pf-dynamic-map",
     )
-    fig.update_traces(marker=dict(size=12, color="#2563eb", opacity=0.85))
+    fig.update_traces(
+        marker=dict(size=12, color="#2563eb", opacity=0.85),
+        hovertemplate=(
+            "<b>%{hovertext}</b><br>"
+            "Duration: %{customdata[1]}<br>"
+            "Total counts: %{customdata[2]}<br>"
+            "Source type: %{customdata[3]}<extra></extra>"
+        ),
+    )
 
     return fig, map_df
 
@@ -655,8 +674,19 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 config={"displayModeBar": False},
             )
             map_style = {"display": "block"}
-            if not dynamic_map_df.empty and {"Location", "Latitude", "Longitude"}.issubset(dynamic_map_df.columns):
-                subset = dynamic_map_df[["Location", "Latitude", "Longitude"]].copy()
+            required_map_cols = [
+                "Location",
+                "Latitude",
+                "Longitude",
+                "Duration",
+                "Total counts",
+                "Source type",
+                "Facility type",
+                "Mode",
+                "__point_index",
+            ]
+            if not dynamic_map_df.empty and set(required_map_cols).issubset(dynamic_map_df.columns):
+                subset = dynamic_map_df[required_map_cols].copy()
                 subset["Latitude"] = pd.to_numeric(subset["Latitude"], errors="coerce")
                 subset["Longitude"] = pd.to_numeric(subset["Longitude"], errors="coerce")
                 map_store_data = [
@@ -664,6 +694,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         "Location": str(row.get("Location") or ""),
                         "Latitude": row.get("Latitude"),
                         "Longitude": row.get("Longitude"),
+                        "Duration": row.get("Duration"),
+                        "Total counts": row.get("Total counts"),
+                        "Source type": row.get("Source type"),
+                        "Facility type": row.get("Facility type"),
+                        "Mode": row.get("Mode"),
+                        "point_index": row.get("__point_index"),
                     }
                     for row in subset.to_dict("records")
                 ]
@@ -876,6 +912,76 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if not (pd.notna(lat) and pd.notna(lon)):
             return dash.no_update
 
+        point_index = match.get("point_index")
+        try:
+            point_index = int(point_index)
+        except (TypeError, ValueError):
+            point_index = None
+
+        if point_index is None and figure.get("data"):
+            for trace in figure.get("data", []):
+                custom = trace.get("customdata")
+                if not custom:
+                    continue
+                names = trace.get("hovertext") or trace.get("text") or []
+                for idx, payload in enumerate(custom):
+                    loc_match = ""
+                    if isinstance(names, (list, tuple)) and idx < len(names):
+                        loc_match = str(names[idx] or "").strip()
+                    if loc_match != location:
+                        continue
+                    try:
+                        payload_index = (
+                            int(payload[0])
+                            if isinstance(payload, (list, tuple)) and payload
+                            else int(payload)
+                        )
+                    except (TypeError, ValueError):
+                        continue
+                    point_index = payload_index
+                    break
+                if point_index is not None:
+                    break
+
+        def _fmt_val(value):
+            if value is None:
+                return "N/A"
+            try:
+                if pd.isna(value):
+                    return "N/A"
+            except Exception:
+                pass
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                if float(value).is_integer():
+                    return f"{int(value):,}"
+                return f"{float(value):,.2f}"
+            text = str(value).strip()
+            return text or "N/A"
+
+        def _safe_text(value):
+            text = str(value) if value is not None else ""
+            return (
+                text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+            )
+
+        duration = _safe_text(_fmt_val(match.get("Duration") or row_data.get("Duration")))
+        total_counts = _safe_text(_fmt_val(match.get("Total counts") or row_data.get("Total counts")))
+        source_type = _safe_text(_fmt_val(match.get("Source type") or row_data.get("Source type")))
+        facility = _safe_text(_fmt_val(match.get("Facility type") or row_data.get("Facility type")))
+        mode = _safe_text(_fmt_val(match.get("Mode") or row_data.get("Mode")))
+        safe_location = _safe_text(location)
+
+        info_text = (
+            f"<b>{safe_location}</b><br>"
+            f"Duration: {duration}<br>"
+            f"Total counts: {total_counts}<br>"
+            f"Source type: {source_type}<br>"
+            f"Facility: {facility}<br>"
+            f"Mode: {mode}"
+        )
+
         new_fig = copy.deepcopy(figure)
         new_fig.setdefault("layout", {})
         new_fig["layout"].setdefault("mapbox", {})
@@ -883,6 +989,48 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         new_fig["layout"]["mapbox"]["center"]["lat"] = lat
         new_fig["layout"]["mapbox"]["center"]["lon"] = lon
         new_fig["layout"]["mapbox"]["zoom"] = 13
+        new_fig["layout"]["mapbox"].setdefault("style", "open-street-map")
+        new_fig["layout"]["mapbox"].setdefault("pitch", 0)
+
+        data = new_fig.get("data") or []
+        base_traces = [trace for trace in data if trace.get("name") != "__selected_point"]
+        new_fig["data"] = base_traces
+
+        if base_traces and point_index is not None:
+            base_trace = base_traces[0]
+            marker = base_trace.get("marker") or {}
+            size_value = marker.get("size", 12)
+            if isinstance(size_value, (list, tuple)):
+                base_size = size_value[0] if size_value else 12
+            else:
+                base_size = size_value
+            marker.setdefault("opacity", 0.85)
+            marker.setdefault("color", "#2563eb")
+            marker.setdefault("size", base_size)
+            base_trace["marker"] = marker
+            base_trace["selectedpoints"] = [point_index]
+            base_trace["selected"] = {"marker": {"size": base_size + 4, "color": "#f97316"}}
+            base_trace["unselected"] = {"marker": {"opacity": 0.35}}
+
+        highlight_trace = {
+            "type": "scattermapbox",
+            "lat": [lat],
+            "lon": [lon],
+            "mode": "markers+text",
+            "marker": {
+                "size": 18,
+                "color": "#f97316",
+                "opacity": 0.95,
+            },
+            "text": [info_text],
+            "textposition": "top center",
+            "hoverinfo": "text",
+            "hovertemplate": info_text + "<extra></extra>",
+            "showlegend": False,
+            "name": "__selected_point",
+        }
+
+        new_fig["data"].append(highlight_trace)
         return new_fig
 
     # ---------- Description builders ----------
