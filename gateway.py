@@ -1,7 +1,7 @@
 # gateway.py
 import os
 from urllib.parse import quote
-from flask import Flask, render_template_string, redirect, request, session
+from flask import Flask, render_template, render_template_string, redirect, request, session
 
 from pbc_trail_app import create_trail_dash
 from pbc_eco_app import create_eco_dash
@@ -215,6 +215,18 @@ def create_server():
       box-shadow:0 12px 26px rgba(11,102,195,0.28);
       position:relative;z-index:2;
     }
+    .cta-secondary {
+      display:inline-flex;align-items:center;gap:8px;
+      padding:10px 16px;border-radius:999px;
+      border:1px solid rgba(11,102,195,0.35);
+      background:white;color:var(--brand-primary);font-weight:600;text-decoration:none;
+      box-shadow:0 10px 24px rgba(15,23,42,0.08);
+    }
+    .cta-secondary:hover,
+    .cta-secondary:focus {
+      background:rgba(14,165,233,0.12);
+      text-decoration:none;
+    }
     .cta-wrap {margin:8px 0 16px;position:relative;z-index:2;display:flex;align-items:center;gap:10px;}
     .desc {color:#0b1736;margin:10px 0 20px;line-height:1.55;font-size:1rem;max-width:820px;}
 
@@ -264,6 +276,7 @@ def create_server():
         <span class="app-subtitle">Unified Mobility Analytics Portal</span>
       </div>
       <nav class="app-nav portal-nav" aria-label="Main navigation">
+        <a class="app-link" href="/guide">User Guide</a>
         <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
       </nav>
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
@@ -279,6 +292,7 @@ def create_server():
 
         <div class="cta-wrap">
           <a class="cta-explore" href="/explore/">Explore Available Datasets</a>
+          <a class="cta-secondary" href="/guide">Read the User Guide</a>
 
           <!-- Tooltip + info icon -->
           <span class="tooltip">
@@ -371,6 +385,10 @@ def create_server():
     # Convenience redirects
     for p in ["trail","eco","vivacity","live","wisdot","se-wi-trails"]:
         server.add_url_rule(f"/{p}", f"{p}_no_slash", lambda p=p: redirect(f"/{p}/", code=302))
+
+    @server.route("/guide")
+    def user_guide():
+        return render_template("user_guide.html", user=session.get("user", "user"))
 
     return server
 

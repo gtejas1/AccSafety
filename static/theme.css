@@ -318,3 +318,153 @@ body {
     right: 0;
   }
 }
+
+/* Guide template */
+.guide-shell {
+  background: var(--bg-page);
+}
+
+.guide-content {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.guide-card {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.guide-hero h1 {
+  margin-bottom: 8px;
+  font-size: clamp(2rem, 3vw, 2.4rem);
+}
+
+.guide-hero p {
+  margin: 0;
+  color: var(--brand-muted);
+  font-size: 1.05rem;
+}
+
+.guide-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 260px) 1fr;
+  gap: 28px;
+}
+
+.guide-toc {
+  position: sticky;
+  top: 24px;
+  align-self: start;
+  background: rgba(14, 165, 233, 0.08);
+  border-radius: 16px;
+  padding: 20px 22px;
+  border: 1px solid rgba(14, 165, 233, 0.18);
+}
+
+.guide-toc__title {
+  margin-top: 0;
+  margin-bottom: 12px;
+  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--brand-dark);
+}
+
+.guide-toc ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.guide-toc a {
+  color: var(--brand-primary);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.guide-toc a:hover,
+.guide-toc a:focus {
+  text-decoration: underline;
+}
+
+.guide-body {
+  display: grid;
+  gap: 32px;
+}
+
+.guide-section h2 {
+  margin-top: 0;
+  font-size: 1.6rem;
+}
+
+.guide-section ul,
+.guide-section p {
+  margin-top: 10px;
+}
+
+.guide-section ul {
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
+
+.guide-filters {
+  display: grid;
+  gap: 16px;
+  margin: 18px 0;
+  padding: 18px 20px;
+  background: rgba(11, 102, 195, 0.08);
+  border-radius: 14px;
+  border: 1px solid rgba(11, 102, 195, 0.18);
+}
+
+.guide-filters dt {
+  font-weight: 700;
+  color: var(--brand-dark);
+}
+
+.guide-filters dd {
+  margin: 4px 0 0;
+  color: var(--brand-muted);
+}
+
+.guide-app-list {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0 0;
+  padding-left: 20px;
+}
+
+.guide-app-list a {
+  font-weight: 600;
+  color: var(--brand-primary);
+  text-decoration: none;
+}
+
+.guide-app-list a:hover,
+.guide-app-list a:focus {
+  text-decoration: underline;
+}
+
+@media (max-width: 1024px) {
+  .guide-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-toc {
+    position: static;
+  }
+}
+
+@media (max-width: 640px) {
+  .guide-card {
+    padding: 20px 18px;
+  }
+
+  .guide-section h2 {
+    font-size: 1.4rem;
+  }
+}
