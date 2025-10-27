@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AccSafety User Guide</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/theme.css">
+</head>
+<body>
+  <div class="app-shell guide-shell">
+    <header class="app-header">
+      <div class="app-header-title">
+        <span class="app-brand">AccSafety</span>
+        <span class="app-subtitle">Portal User Guide</span>
+      </div>
+      <nav class="app-nav portal-nav" aria-label="Main navigation">
+        <a class="app-link" href="/">Portal Home</a>
+        <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
+      </nav>
+      <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
+    </header>
+
+    <main class="app-content guide-content">
+      <section class="app-card guide-card">
+        <header class="guide-hero">
+          <h1>Welcome to the AccSafety Portal</h1>
+          <p>Use this guide to quickly understand how to explore statewide datasets, and jump between specialized safety analytics applications.</p>
+        </header>
+
+        <div class="guide-layout">
+          <nav class="guide-toc" aria-label="Guide table of contents">
+            <h2 class="guide-toc__title">On this page</h2>
+            <ul>
+              <li><a href="#logging-in">Logging In &amp; Session Management</a></li>
+              <li><a href="#dataset-explorer">Using the Dataset Explorer</a></li>
+              <li><a href="#sub-apps">Exploring Specialized Applications</a></li>
+              <li><a href="#support">Need Help?</a></li>
+            </ul>
+          </nav>
+
+          <article class="guide-body">
+            <section id="logging-in" class="guide-section">
+              <h2>Logging In &amp; Session Management</h2>
+              <p>Visit the <a href="/login">secure login page</a> and enter your assigned AccSafety credentials. The portal displays a mandatory data use acknowledgement before you can proceed.</p>
+              <ul>
+                <li><strong>Remembered access:</strong> After accepting the policy notice once per browser, you can sign in directly until the consent is reset.</li>
+                <li><strong>Session timeout:</strong> Select <em>Log out</em> in the header when you are finished or need to switch accounts.</li>
+                <li><strong>Forgot credentials?</strong> Contact the program administrator to reset your password—self-service reset is not yet available.</li>
+              </ul>
+            </section>
+
+            <section id="dataset-explorer" class="guide-section">
+              <h2>Using the Dataset Explorer</h2>
+              <p>Select <a href="/explore/">Explore Available Datasets</a> from the portal home to launch the unified explorer. Use the toolbar at the top of the explorer to refine data:</p>
+              <dl class="guide-filters">
+                <div>
+                  <dt>Mode</dt>
+                  <dd>Filter to pedestrian, bicycle, or combined multimodal counts.</dd>
+                </div>
+                <div>
+                  <dt>Facility</dt>
+                  <dd>Highlight on-street lanes, trails, bridges, or other facility types to tailor results.</dd>
+                </div>
+                <div>
+                  <dt>Data Source</dt>
+                  <dd>Toggle between automated counters, short-duration studies, legacy sources, and live feeds.</dd>
+                </div>
+              </dl>
+              <p>Hover map features and charts for contextual insights. Each dataset card includes key metrics, download links, and shortcuts to related applications.</p>
+            </section>
+
+            <section id="sub-apps" class="guide-section">
+              <h2>Exploring Specialized Applications</h2>
+              <p>Use the quick links below to jump into focused workflows. Each application opens in a protected route—bookmarking is safe once you are signed in.</p>
+              <ul class="guide-app-list">
+                <li><a href="/trail/">Trail Counters Dashboard</a> – Analyze permanent and seasonal trail counts, compare corridors, and export chart data.</li>
+                <li><a href="/eco/">Eco-Counter Explorer</a> – Review Eco-Counter device performance, health alerts, and supporting maintenance logs.</li>
+                <li><a href="/vivacity/">Vivacity Analytics</a> – Monitor computer-vision detections and safety insights around high-priority intersections.</li>
+                <li><a href="/live/">Live Detection Monitor</a> – Watch real-time multimodal activity and verify sensor uptime.</li>
+              </ul>
+            </section>
+
+            <section id="support" class="guide-section">
+              <h2>Need Help?</h2>
+              <p>Email <a href="mailto:accsafety-support@example.com">accsafety-support@example.com</a> with questions about data updates, account provisioning, or to request onboarding materials for new team members.</p>
+              <p>For urgent system outages, contact the program lead by phone using the escalation tree shared in onboarding materials.</p>
+            </section>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
