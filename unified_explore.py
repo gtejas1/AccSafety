@@ -1146,14 +1146,14 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             [
                 html.P(
                     [
-                        "The counts have been collected via the hyperlink ",
+                        "The counts have been collected via the ",
                         html.A(
                             "SEWRPC’s Regional Non-Motorized Count Program",
                             href="https://www.sewrpc.org/Info-and-Data/Non-Motorized-Count-Program",
                             target="_blank",
                             rel="noopener noreferrer",
                         ),
-                        ", and this list only contains portion of the counts before 2018, for the use in the project of hyperlink ",
+                        ", and this list only contains portion of the counts before 2018, for the use in the project of ",
                         html.A(
                             "“Wisconsin Pedestrian and Bicycle Count Database and Expansion Factor Development”",
                             href="https://uwm.edu/ipit/projects/wisconsin-pedestrian-and-bicycle-count-database-and-expansion-factor-development/",
