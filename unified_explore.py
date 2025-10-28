@@ -78,6 +78,20 @@ MIDBLOCK_FLAGS      = [
     "share-enabled",
 ]
 
+# ---- Trail Crossing Crash Models (Mode = Both) ----
+TRAIL_CROSSING_MODE          = "Both"
+TRAIL_CROSSING_FACILITY      = "Trail Crossings"
+TRAIL_CROSSING_SOURCE        = "Trail Crossing Crash Models"
+TRAIL_CROSSING_ITEM_ID       = "08541fe9b8e044c2b864f224285087ee"
+TRAIL_CROSSING_CENTER        = "-88.09723807958986,43.058800525669064"
+TRAIL_CROSSING_SCALE         = "1155581.1085775"
+TRAIL_CROSSING_THEME         = "light"
+TRAIL_CROSSING_FLAGS         = [
+    "legend-enabled",
+    "information-enabled",
+]
+TRAIL_CROSSING_EMBED_SCRIPT_SRC = "https://js.arcgis.com/embeddable-components/4.34/arcgis-embeddable-components.esm.js"
+
 # ---- Special rows (Intersection) ----
 SP_LOCATION     = "W Wells St & N 68th St Intersection"
 SP_FACILITY     = "Intersection"
@@ -366,15 +380,17 @@ def _arcgis_embedded_map_component(
     scale: str,
     theme: str = "light",
     flags: list[str] | None = None,
+    embed_script_src: str | None = None,
 ) -> html.Iframe:
     flags = (flags or [])
     flags_html = " ".join(flags)
+    script_src = embed_script_src or ARCGIS_EMBED_SCRIPT_SRC
     srcdoc = f"""<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <script type="module" src="{ARCGIS_EMBED_SCRIPT_SRC}"></script>
+    <script type="module" src="{script_src}"></script>
     <style>
       html,body{{margin:0;padding:0;height:100%;width:100%;background:transparent}}
       #holder{{height:100%;width:100%;display:flex;align-items:stretch;justify-content:stretch}}
@@ -549,6 +565,9 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if str(mode).strip().casefold() == NEW_MODE.casefold():
             facilities = list(set(facilities) | {NEW_FACILITY})
 
+        if str(mode).strip().casefold() == TRAIL_CROSSING_MODE.casefold():
+            facilities = list(set(facilities) | {TRAIL_CROSSING_FACILITY})
+
         # Add Intersection option for Pilot special rows when mode is Pedestrian or Bicyclist
         if str(mode).strip().casefold() in {"pedestrian", "bicyclist"}:
             facilities = list(set(facilities) | {SP_FACILITY})
@@ -595,6 +614,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if (str(mode).strip().casefold() == MIDBLOCK_MODE.casefold()
             and str(facility).strip().casefold() == MIDBLOCK_FACILITY.casefold()):
             sources = list(set(sources) | {MIDBLOCK_SOURCE})
+
+        if (
+            str(mode).strip().casefold() == TRAIL_CROSSING_MODE.casefold()
+            and str(facility).strip().casefold() == TRAIL_CROSSING_FACILITY.casefold()
+        ):
+            sources = list(set(sources) | {TRAIL_CROSSING_SOURCE})
 
         return _opts(sources), {"display": "block"}, None
 
@@ -785,12 +810,31 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             )
             map_style = {"display": "block"}
 
+        elif source_val == TRAIL_CROSSING_SOURCE.strip().casefold():
+            map_children = _arcgis_embedded_map_component(
+                container_id="trail-crossing-crash-models-map",
+                item_id=TRAIL_CROSSING_ITEM_ID,
+                center=TRAIL_CROSSING_CENTER,
+                scale=TRAIL_CROSSING_SCALE,
+                theme=TRAIL_CROSSING_THEME,
+                flags=TRAIL_CROSSING_FLAGS,
+                embed_script_src=TRAIL_CROSSING_EMBED_SCRIPT_SRC,
+            )
+            map_style = {"display": "block"}
+
         # --- Descriptions by source selection ---
         mode_val = (mode or "").strip().lower()
         fac_val  = (facility or "").strip().lower()
 
+        if (
+            mode_val == TRAIL_CROSSING_MODE.casefold()
+            and fac_val == TRAIL_CROSSING_FACILITY.casefold()
+            and source_val == TRAIL_CROSSING_SOURCE.strip().casefold()
+        ):
+            description = _trail_crossing_crash_models_desc()
+
         # NEW: Pedestrian + Intersection + AAEC (Wisconsin Statewide)
-        if (mode_val == "pedestrian"
+        elif (mode_val == "pedestrian"
             and fac_val == "intersection"
             and source_val == PED_INT_AAEC_STATEWIDE.strip().casefold()):
             description = _ped_int_statewide_aaec_desc()
@@ -1185,6 +1229,30 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         html.A(
                             "“Practical Application of Pedestrian Exposure Tools: Expanding Southeast Region Results Statewide”",
                             href="https://uwm.edu/ipit/projects/practical-application-of-pedestrian-exposure-tools-expanding-southeast-region-results-statewide/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        ".",
+                    ],
+                    className="app-muted",
+                    style={"margin": "0"},
+                )
+            ]
+        )
+
+    def _trail_crossing_crash_models_desc():
+        return html.Div(
+            [
+                html.P(
+                    [
+                        "The Trail Crossing Crash Models dataset visualizes modeled safety conditions at multi-use trail crossings to support project prioritization across Wisconsin. ",
+                        "Explore the map in ArcGIS Online via ",
+                        html.A(
+                            "Trail Crossing Crash Models",
+                            href=(
+                                "https://uwm.maps.arcgis.com/apps/instant/basic/index.html?appid="
+                                "08541fe9b8e044c2b864f224285087ee"
+                            ),
                             target="_blank",
                             rel="noopener noreferrer",
                         ),
