@@ -93,7 +93,7 @@ TRAIL_CROSS_FLAGS           = [
     "share-enabled",
 ]
 TRAIL_CROSS_PORTAL_URL      = "https://uwm.maps.arcgis.com"
-TRAIL_CROSS_SCRIPT_SRC      = "https://js.arcgis.com/4.34/embeddable-components/"
+TRAIL_CROSS_SCRIPT_SRC      = "https://js.arcgis.com/embeddable-components/4.34/arcgis-embeddable-components.esm.js"
 
 # ---- Special rows (Intersection) ----
 SP_LOCATION     = "W Wells St & N 68th St Intersection"
