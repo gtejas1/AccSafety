@@ -78,6 +78,22 @@ MIDBLOCK_FLAGS      = [
     "share-enabled",
 ]
 
+# ---- NEW: Trail Crossing Crash Models (Exposure-Based Study) ----
+TRAIL_CROSS_MODE            = "Both"
+TRAIL_CROSS_FACILITY        = "Trail Crossings"
+TRAIL_CROSS_SOURCE          = "Trail Crossing Crash Models (Exposure-Based Study)"
+TRAIL_CROSS_ITEM_ID         = "08541fe9b8e044c2b864f224285087ee"
+TRAIL_CROSS_CENTER          = "-88.09723807958986,43.058800525669064"
+TRAIL_CROSS_SCALE           = "1155581.1085775"
+TRAIL_CROSS_THEME           = "light"
+TRAIL_CROSS_FLAGS           = [
+    "bookmarks-enabled",
+    "legend-enabled",
+    "information-enabled",
+]
+TRAIL_CROSS_PORTAL_URL      = "https://uwm.maps.arcgis.com"
+TRAIL_CROSS_SCRIPT_SRC      = "https://js.arcgis.com/4.34/embeddable-components/"
+
 # ---- Special rows (Intersection) ----
 SP_LOCATION     = "W Wells St & N 68th St Intersection"
 SP_FACILITY     = "Intersection"
@@ -409,6 +425,60 @@ def _arcgis_embedded_map_component(
         },
     )
 
+
+def _trail_crossing_embedded_map(container_id: str = "trail-crossing-map") -> html.Iframe:
+    def _attrs_html() -> str:
+        base_attrs = [
+            ("item-id", TRAIL_CROSS_ITEM_ID),
+            ("portal-url", TRAIL_CROSS_PORTAL_URL),
+            ("theme", TRAIL_CROSS_THEME),
+            ("center", TRAIL_CROSS_CENTER),
+            ("scale", TRAIL_CROSS_SCALE),
+        ]
+        return "".join(
+            f"\n        {name}=\"{value}\""
+            for name, value in base_attrs
+            if value
+        )
+
+    def _flags_html() -> str:
+        return "".join(f"\n        {flag}" for flag in (TRAIL_CROSS_FLAGS or []))
+
+    srcdoc = f"""<!doctype html>
+<html lang=\"en\">
+  <head>
+    <meta charset=\"utf-8\"/>
+    <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>
+    <script type=\"module\" src=\"{TRAIL_CROSS_SCRIPT_SRC}\"></script>
+    <style>
+      html,body{{margin:0;padding:0;height:100%;width:100%;background:transparent}}
+      #holder{{height:100%;width:100%;display:flex;align-items:stretch;justify-content:stretch}}
+      arcgis-embedded-map{{height:100%;width:100%}}
+    </style>
+  </head>
+  <body>
+    <div id=\"holder\">
+      <arcgis-embedded-map{_attrs_html()}{_flags_html()}>
+      </arcgis-embedded-map>
+    </div>
+  </body>
+</html>"""
+
+    return html.Iframe(
+        id=container_id,
+        srcDoc=srcdoc,
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms",
+        style={
+            "width": "100%",
+            "height": "600px",
+            "minHeight": ARCGIS_MIN_HEIGHT,
+            "border": "0",
+            "borderRadius": "10px",
+            "boxShadow": "0 1px 4px rgba(0,0,0,0.1)",
+            "background": "transparent",
+        },
+    )
+
 # ---------- App ----------
 def create_unified_explore(server, prefix: str = "/explore/"):
     app = dash.Dash(
@@ -549,6 +619,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if str(mode).strip().casefold() == NEW_MODE.casefold():
             facilities = list(set(facilities) | {NEW_FACILITY})
 
+        # Inject Trail Crossings facility for Both mode
+        if str(mode).strip().casefold() == TRAIL_CROSS_MODE.casefold():
+            facilities = list(set(facilities) | {TRAIL_CROSS_FACILITY})
+
         # Add Intersection option for Pilot special rows when mode is Pedestrian or Bicyclist
         if str(mode).strip().casefold() in {"pedestrian", "bicyclist"}:
             facilities = list(set(facilities) | {SP_FACILITY})
@@ -576,24 +650,32 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         ]
         sources = df["Source"].unique().tolist()
 
+        mode_cf = str(mode).strip().casefold()
+        facility_cf = str(facility).strip().casefold()
+
         # Existing custom Milwaukee AAEC for "Both / On-Street"
-        if (str(mode).strip().casefold() == NEW_MODE.casefold()
-            and str(facility).strip().casefold() == NEW_FACILITY.casefold()):
+        if (mode_cf == NEW_MODE.casefold()
+            and facility_cf == NEW_FACILITY.casefold()):
             sources = list(set(sources) | {NEW_SOURCE_NAME})
 
+        # Trail Crossing Crash Models (Exposure-Based Study)
+        if (mode_cf == TRAIL_CROSS_MODE.casefold()
+            and facility_cf == TRAIL_CROSS_FACILITY.casefold()):
+            sources = list(set(sources) | {TRAIL_CROSS_SOURCE})
+
         # Add Pilot source for Intersection when mode is Pedestrian or Bicyclist
-        if (str(mode).strip().casefold() in {"pedestrian", "bicyclist"} and
-            str(facility).strip().casefold() == SP_FACILITY.casefold()):
+        if (mode_cf in {"pedestrian", "bicyclist"} and
+            facility_cf == SP_FACILITY.casefold()):
             sources = list(set(sources) | {SP_SOURCE})
 
         # NEW: Add AAEC (Wisconsin Statewide) for Pedestrian + Intersection
-        if (str(mode).strip().casefold() == "pedestrian"
-            and str(facility).strip().casefold() == SP_FACILITY.casefold()):
+        if (mode_cf == "pedestrian"
+            and facility_cf == SP_FACILITY.casefold()):
             sources = list(set(sources) | {PED_INT_AAEC_STATEWIDE})
 
         # NEW: Add Mid-Block pedestrian counts (Milwaukee County) for Pedestrian + Mid-Block crossing
-        if (str(mode).strip().casefold() == MIDBLOCK_MODE.casefold()
-            and str(facility).strip().casefold() == MIDBLOCK_FACILITY.casefold()):
+        if (mode_cf == MIDBLOCK_MODE.casefold()
+            and facility_cf == MIDBLOCK_FACILITY.casefold()):
             sources = list(set(sources) | {MIDBLOCK_SOURCE})
 
         return _opts(sources), {"display": "block"}, None
@@ -756,6 +838,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             )
             map_style = {"display": "block"}
 
+        elif source_val == TRAIL_CROSS_SOURCE.strip().casefold():
+            map_children = _trail_crossing_embedded_map()
+            map_style = {"display": "block"}
+
         elif source_val == PED_INT_AAEC_STATEWIDE.strip().casefold():
             # Directly embed the provided ArcGIS “apps/Embed” URL
             map_children = html.Iframe(
@@ -789,8 +875,16 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         mode_val = (mode or "").strip().lower()
         fac_val  = (facility or "").strip().lower()
 
+        # Trail Crossing Crash Models (Exposure-Based Study)
+        if (
+            mode_val == TRAIL_CROSS_MODE.strip().lower()
+            and fac_val == TRAIL_CROSS_FACILITY.strip().lower()
+            and source_val == TRAIL_CROSS_SOURCE.strip().casefold()
+        ):
+            description = _trail_crossing_desc()
+
         # NEW: Pedestrian + Intersection + AAEC (Wisconsin Statewide)
-        if (mode_val == "pedestrian"
+        elif (mode_val == "pedestrian"
             and fac_val == "intersection"
             and source_val == PED_INT_AAEC_STATEWIDE.strip().casefold()):
             description = _ped_int_statewide_aaec_desc()
@@ -1034,6 +1128,30 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         return new_fig
 
     # ---------- Description builders ----------
+    def _trail_crossing_desc():
+        return html.Div(
+            [
+                html.P(
+                    "This dataset supports analysis of crash risk at trail–roadway intersections. It includes modeled relationships between trail user crashes (2011–2018) and factors such as trail and roadway volumes, intersection type, and crossing length. Developed using data from 197 crossings in Minneapolis, MN, and Milwaukee, WI, the Poisson-lognormal model highlights how exposure and design characteristics influence trail crossing safety.",
+                    className="app-muted",
+                    style={"margin": "0 0 0.75rem 0"},
+                ),
+                html.P(
+                    [
+                        "Learn more: ",
+                        html.A(
+                            "https://trid.trb.org/View/1842179",
+                            href="https://trid.trb.org/View/1842179",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                    ],
+                    className="app-muted",
+                    style={"margin": "0"},
+                ),
+            ]
+        )
+
     def _custom_mke_estimated_desc():
         return html.Div(
             [
