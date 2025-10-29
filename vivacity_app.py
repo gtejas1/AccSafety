@@ -450,25 +450,34 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         # Add a human-friendly "direction" column for display
         df["direction"] = df["countline_id"].map(id_to_dir).fillna(df["countline_id"])
 
-        # Plotly figure — regroup so each trace is a single direction (optionally per class)
+        # Plotly figure — regroup so each trace is a single sensor direction (optionally per class)
         classes_in_df = sorted(df["cls"].unique())
         multi_class = len(classes_in_df) > 1
-        group_cols = ["timestamp", "direction"] + (["cls"] if multi_class else [])
+        group_cols = ["timestamp", "countline_id"] + (["cls"] if multi_class else [])
         plot_df = df.groupby(group_cols, as_index=False)["count"].sum()
         plot_df["timestamp"] = plot_df["timestamp"].dt.tz_convert(LOCAL_TZ)
+        plot_df["direction"] = plot_df["countline_id"].map(id_to_dir).fillna(
+            plot_df["countline_id"]
+        )
 
         if multi_class:
             plot_df["series_label"] = plot_df.apply(
                 lambda r: f"{r['direction']} – {r['cls']}", axis=1
             )
-            color_field = "series_label"
             legend_title = "Direction & class"
         else:
             plot_df["series_label"] = plot_df["direction"]
-            color_field = "direction"
             legend_title = "Direction"
 
+        # Ensure legend labels remain unique even if cleaned directions collide
+        duplicate_labels = plot_df.duplicated("series_label", keep=False)
+        plot_df.loc[duplicate_labels, "series_label"] = plot_df.loc[duplicate_labels].apply(
+            lambda r: f"{r['series_label']} ({r['countline_id']})", axis=1
+        )
+        color_field = "series_label"
+
         hover_data = {"direction": True}
+        hover_data["countline_id"] = True
         if multi_class:
             hover_data["cls"] = True
 
