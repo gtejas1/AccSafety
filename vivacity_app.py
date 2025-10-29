@@ -227,12 +227,17 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         if not PRELOADED_META.empty else {}
     )
 
-    # Default IDs: ENV wins, otherwise first 2 from metadata (if available)
+    # Default IDs: ENV wins, otherwise include all IDs from preloaded metadata
     ENV_DEFAULT_IDS = os.environ.get("VIVACITY_DEFAULT_IDS", "").strip()
     if ENV_DEFAULT_IDS:
         DEFAULT_IDS = [s.strip() for s in ENV_DEFAULT_IDS.split(",") if s.strip()]
     else:
-        DEFAULT_IDS = PRELOADED_META["countline_id"].head(2).tolist() if not PRELOADED_META.empty else []
+        if not PRELOADED_META.empty:
+            DEFAULT_IDS = (
+                PRELOADED_META["countline_id"].dropna().astype(str).drop_duplicates().tolist()
+            )
+        else:
+            DEFAULT_IDS = []
 
     # Default time range: last 7 days including today
     now_local = datetime.now(LOCAL_TZ)
