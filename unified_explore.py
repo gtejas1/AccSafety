@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import copy
+import json
 import time
 import random
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 import urllib.parse
 import pandas as pd
 from sqlalchemy import create_engine
@@ -148,6 +150,33 @@ DISPLAY_COLUMNS = [
     {"name": "Source type", "id": "Source type"},
     {"name": "View", "id": "View", "presentation": "markdown"},
 ]
+
+MAP_ACCESSIBLE_COLUMNS = [
+    {"name": "Location", "id": "Location"},
+    {"name": "Mode", "id": "Mode"},
+    {"name": "Facility", "id": "Facility type"},
+    {"name": "Source type", "id": "Source type"},
+    {"name": "Duration", "id": "Duration"},
+    {"name": "Total counts", "id": "Total counts", "type": "numeric"},
+    {"name": "Latitude", "id": "Latitude", "type": "numeric"},
+    {"name": "Longitude", "id": "Longitude", "type": "numeric"},
+]
+
+MAP_COLOR_MAP = {
+    "Actual": "#2563eb",
+    "Estimated": "#16a34a",
+    "Modeled": "#f97316",
+    "Not available": "#6b7280",
+}
+
+_COUNTY_GEOJSON: dict | None = None
+try:
+    counties_path = Path(__file__).resolve().parent / "assets" / "wisconsin_counties.geojson"
+    if counties_path.exists():
+        with counties_path.open("r", encoding="utf-8") as county_file:
+            _COUNTY_GEOJSON = json.load(county_file)
+except Exception:
+    _COUNTY_GEOJSON = None
 
 UNIFIED_SQL = """
   SELECT
@@ -342,6 +371,14 @@ def _build_dynamic_map(df: pd.DataFrame):
         "Longitude": False,
     }
 
+    color_args = {}
+    if "Source type" in map_df.columns and map_df["Source type"].notna().any():
+        color_args = {
+            "color": "Source type",
+            "color_discrete_map": MAP_COLOR_MAP,
+            "category_orders": {"Source type": sorted(map_df["Source type"].dropna().unique())},
+        }
+
     fig = px.scatter_mapbox(
         map_df,
         lat="Latitude",
@@ -356,16 +393,66 @@ def _build_dynamic_map(df: pd.DataFrame):
             "Facility type",
             "Mode",
         ],
-        zoom=5,
         height=600,
+        **color_args,
     )
+
+    center_lat = map_df["Latitude"].mean()
+    center_lon = map_df["Longitude"].mean()
+    lat_range = map_df["Latitude"].max() - map_df["Latitude"].min()
+    lon_range = map_df["Longitude"].max() - map_df["Longitude"].min()
+    max_range = max(lat_range, lon_range)
+    if max_range < 0.05:
+        zoom = 12
+    elif max_range < 0.1:
+        zoom = 10
+    elif max_range < 0.5:
+        zoom = 8
+    elif max_range < 1.0:
+        zoom = 7
+    elif max_range < 2.0:
+        zoom = 6
+    else:
+        zoom = 5
+
+    map_layers = []
+    if _COUNTY_GEOJSON:
+        map_layers.append(
+            {
+                "sourcetype": "geojson",
+                "source": _COUNTY_GEOJSON,
+                "type": "line",
+                "line": {"width": 1.5},
+                "color": "rgba(37, 99, 235, 0.45)",
+                "below": "traces",
+            }
+        )
+
     fig.update_layout(
-        mapbox_style="open-street-map",
         margin=dict(l=0, r=0, t=0, b=0),
         uirevision="pf-dynamic-map",
+        legend=dict(
+            title="Source type" if color_args else None,
+            orientation="h",
+            yanchor="bottom",
+            y=0.01,
+            xanchor="left",
+            x=0.01,
+            bgcolor="rgba(255,255,255,0.85)",
+            bordercolor="rgba(148,163,184,0.6)",
+            borderwidth=1,
+            font=dict(size=12),
+        ),
+        mapbox=dict(
+            style="open-street-map",
+            center={"lat": center_lat, "lon": center_lon},
+            zoom=zoom,
+            layers=map_layers,
+        ),
     )
+
     fig.update_traces(
-        marker=dict(size=12, color="#2563eb", opacity=0.85),
+        marker=dict(size=12, opacity=0.85, line=dict(width=1, color="#ffffff")),
         hovertemplate=(
             "<b>%{hovertext}</b><br>"
             "Duration: %{customdata[1]}<br>"
@@ -537,7 +624,34 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     desc_block = card([html.Div(id="pf-desc", children=[])], class_name="mb-3")
 
     # Map (right, top)
-    map_card = card([html.Div(id="pf-map", children=[])], class_name="mb-3")
+    map_card = card(
+        [
+            html.Div(id="pf-map", children=[]),
+            html.Div(
+                [
+                    html.H4("Map Locations", className="mt-4"),
+                    dash_table.DataTable(
+                        id="pf-map-accessible-table",
+                        columns=MAP_ACCESSIBLE_COLUMNS,
+                        data=[],
+                        page_size=10,
+                        style_table={"overflowX": "auto"},
+                        style_as_list_view=True,
+                        style_header={
+                            "backgroundColor": "#f1f5f9",
+                            "fontWeight": "bold",
+                            "fontSize": "15px",
+                        },
+                        style_cell={"textAlign": "left", "padding": "8px"},
+                        sort_action="native",
+                    ),
+                ],
+                id="pf-map-accessible-wrapper",
+                style={"display": "none"},
+            ),
+        ],
+        class_name="mb-3",
+    )
 
     # Table (right, bottom)
     table_block = card(
@@ -679,14 +793,16 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
     # ---------- Apply filters & toggle visibility ----------
     @app.callback(
-        Output("pf-map", "children"),     # 0 map content
-        Output("wrap-map", "style"),      # 1 map card visibility
-        Output("pf-map-data", "data"),    # 2 dynamic map coordinate store
-        Output("pf-table", "data"),       # 3 table rows
-        Output("wrap-table", "style"),    # 4 table card visibility
-        Output("wrap-results", "style"),  # 5 (sentinel) keep as block once ready
-        Output("pf-desc", "children"),    # 6 description content
-        Output("wrap-desc", "style"),     # 7 description visibility
+        Output("pf-map", "children"),              # 0 map content
+        Output("wrap-map", "style"),               # 1 map card visibility
+        Output("pf-map-data", "data"),             # 2 dynamic map coordinate store
+        Output("pf-map-accessible-table", "data"), # 3 accessible table rows
+        Output("pf-map-accessible-wrapper", "style"),  # 4 accessible wrapper visibility
+        Output("pf-table", "data"),                # 5 table rows
+        Output("wrap-table", "style"),             # 6 table card visibility
+        Output("wrap-results", "style"),           # 7 (sentinel) keep as block once ready
+        Output("pf-desc", "children"),             # 8 description content
+        Output("wrap-desc", "style"),              # 9 description visibility
         Input("pf-mode", "value"),
         Input("pf-facility", "value"),
         Input("pf-source", "value"),
@@ -696,7 +812,18 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         # wait until all filters selected (Duration removed)
         has_all = all([mode, facility, source])
         if not has_all:
-            return [], {"display": "none"}, [], [], {"display": "none"}, {"display": "none"}, [], {"display": "none"}
+            return (
+                [],
+                {"display": "none"},
+                [],
+                [],
+                {"display": "none"},
+                [],
+                {"display": "none"},
+                {"display": "none"},
+                [],
+                {"display": "none"},
+            )
 
         df = base_df.copy()
         cf = str.casefold
@@ -742,6 +869,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         map_children = []
         map_style = {"display": "none"}
         map_store_data = []
+        accessible_table_data = []
+        accessible_style = {"display": "none"}
 
         dynamic_fig, dynamic_map_df = _build_dynamic_map(df)
         if dynamic_fig is not None:
@@ -749,7 +878,13 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 id="pf-dynamic-map",
                 figure=dynamic_fig,
                 style={"height": "600px"},
-                config={"displayModeBar": False},
+                config={
+                    "displayModeBar": True,
+                    "displaylogo": False,
+                    "modeBarButtonsToRemove": ["lasso2d", "select2d"],
+                    "modeBarButtonsToAdd": ["resetViewMapbox"],
+                    "scrollZoom": True,
+                },
             )
             map_style = {"display": "block"}
             required_map_cols = [
@@ -781,6 +916,21 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     }
                     for row in subset.to_dict("records")
                 ]
+                accessible_table_data = [
+                    {
+                        "Location": row["Location"],
+                        "Mode": row["Mode"],
+                        "Facility type": row["Facility type"],
+                        "Source type": row["Source type"],
+                        "Duration": row["Duration"],
+                        "Total counts": row["Total counts"],
+                        "Latitude": row["Latitude"],
+                        "Longitude": row["Longitude"],
+                    }
+                    for row in map_store_data
+                ]
+                if accessible_table_data:
+                    accessible_style = {"display": "block"}
 
         elif source_val == "wisconsin pilot counting counts":
             pilot_flags = []
@@ -941,12 +1091,34 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         desc_style = {"display": "block"} if description else {"display": "none"}
 
         if df.empty:
-            return map_children, map_style, map_store_data, [], {"display": "block"}, {"display": "block"}, description, desc_style
+            return (
+                map_children,
+                map_style,
+                map_store_data,
+                accessible_table_data,
+                accessible_style,
+                [],
+                {"display": "block"},
+                {"display": "block"},
+                description,
+                desc_style,
+            )
 
         df = df.copy()
         df["View"] = df.apply(_build_view_link, axis=1)
         rows = df[[c["id"] for c in DISPLAY_COLUMNS]].to_dict("records")
-        return map_children, map_style, map_store_data, rows, {"display": "block"}, {"display": "block"}, description, desc_style
+        return (
+            map_children,
+            map_style,
+            map_store_data,
+            accessible_table_data,
+            accessible_style,
+            rows,
+            {"display": "block"},
+            {"display": "block"},
+            description,
+            desc_style,
+        )
 
     @app.callback(
         Output("pf-dynamic-map", "figure"),
