@@ -297,6 +297,10 @@ def _build_view_link(row: pd.Series) -> str:
         return f"[Open]({SP2_VIEW_ROUTE})"
     if loc == SP_LOCATION and src == SP_SOURCE:
         loc_q = _encode_location_for_href(loc)
+        mode = (row.get("Mode") or "").strip()
+        if mode:
+            mode_q = _encode_location_for_href(mode)
+            return f"[Open](/vivacity/?location={loc_q}&mode={mode_q})"
         return f"[Open](/vivacity/?location={loc_q})"
     loc_q = _encode_location_for_href(loc)
     if src == "Wisconsin Pilot Counting Counts":

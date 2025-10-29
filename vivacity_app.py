@@ -5,6 +5,7 @@ from typing import Dict, List
 import time, random
 import pandas as pd
 import requests
+from urllib.parse import parse_qs
 
 import dash
 from dash import dcc, html, Input, Output, State, dash_table
@@ -181,6 +182,27 @@ def get_countline_counts(
     df = df.sort_values(["countline_id", "timestamp", "cls"]).reset_index(drop=True)
     return df
 
+def _classes_for_mode(mode_value: str | None) -> List[str] | None:
+    mode = str(mode_value or "").strip().lower()
+    if not mode:
+        return None
+    if mode in {"bicyclist", "bicyclists"}:
+        return ["cyclist"]
+    if mode in {"pedestrian", "pedestrians"}:
+        return ["pedestrian"]
+    return None
+
+def _classes_from_search(search: str | None) -> List[str] | None:
+    if not search:
+        return None
+    parsed = parse_qs(search.lstrip("?"), keep_blank_values=False)
+    modes = parsed.get("mode") or []
+    for raw_mode in reversed(modes):
+        classes = _classes_for_mode(raw_mode)
+        if classes:
+            return classes
+    return None
+
 def create_vivacity_dash(server, prefix="/vivacity/"):
     app = dash.Dash(
         name="vivacity_dash",
@@ -221,6 +243,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
     app.layout = dash_page(
         "Long Term Counts · Vivacity API",
         [
+            dcc.Location(id="viv-url", refresh=False),
             dcc.Interval(id="viv-init", interval=200, n_intervals=0, max_intervals=1),
 
             dbc.Row(
@@ -352,6 +375,19 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         ],
     )
 
+    @app.callback(
+        Output("viv-classes-check", "value"),
+        Input("viv-init", "n_intervals"),
+        State("viv-url", "search"),
+    )
+    def _apply_mode_from_url(n_intervals, search):
+        if not n_intervals:
+            raise PreventUpdate
+        override = _classes_from_search(search)
+        if not override:
+            raise PreventUpdate
+        return override
+
     # Main query callback
     @app.callback(
         Output("viv-timeseries-graph", "figure"),
@@ -368,8 +404,21 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         State("viv-to-time", "value"),
         State("viv-bucket-dd", "value"),
         State("viv-classes-check", "value"),
+        State("viv-url", "search"),
     )
-    def refresh(_init_tick, _n, dd_vals, manual_ids, start_date, end_date, from_time, to_time, bucket, classes):
+    def refresh(
+        _init_tick,
+        _n,
+        dd_vals,
+        manual_ids,
+        start_date,
+        end_date,
+        from_time,
+        to_time,
+        bucket,
+        classes,
+        url_search,
+    ):
         import plotly.express as px
 
         # Build ID list from dropdown and manual input
@@ -379,6 +428,21 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         if isinstance(manual_ids, str) and manual_ids.strip():
             ids.extend([s.strip() for s in manual_ids.split(",") if s.strip()])
         ids = sorted(set(ids))
+
+        ctx = getattr(dash, "callback_context", None)
+        triggered_id = None
+        if ctx and getattr(ctx, "triggered", None):
+            try:
+                triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+            except (IndexError, KeyError, AttributeError):
+                triggered_id = None
+        is_initial_trigger = bool(_init_tick) and (
+            triggered_id == "viv-init" or (triggered_id is None and not _n)
+        )
+        if is_initial_trigger:
+            override_classes = _classes_from_search(url_search)
+            if override_classes:
+                classes = override_classes
 
         # Parse times
         def parse_hm(s: str):
