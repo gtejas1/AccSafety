@@ -3,6 +3,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 import time, random
+from urllib.parse import parse_qs, urlparse
 import pandas as pd
 import requests
 
@@ -221,6 +222,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
     app.layout = dash_page(
         "Long Term Counts · Vivacity API",
         [
+            dcc.Location(id="viv-url", refresh=False),
             dcc.Interval(id="viv-init", interval=200, n_intervals=0, max_intervals=1),
 
             dbc.Row(
@@ -471,6 +473,35 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         # Store raw df for download (keep both direction + id for CSV users)
         store_json = df.to_json(date_format="iso", orient="split")
         return fig, tbl, "", store_json
+
+    @app.callback(
+        Output("viv-classes-check", "value"),
+        Input("viv-url", "href"),
+        State("viv-classes-check", "value"),
+    )
+    def sync_classes_from_url(href: str | None, current_value: List[str] | None):
+        if not href:
+            return dash.no_update
+
+        parsed = urlparse(href)
+        params = parse_qs(parsed.query)
+        mode_vals = params.get("mode") or []
+        derived: List[str] | None = None
+        if mode_vals:
+            mode = (mode_vals[-1] or "").strip().lower()
+            if mode == "bicyclist":
+                derived = ["cyclist"]
+            elif mode == "pedestrian":
+                derived = ["pedestrian"]
+
+        if derived is None:
+            derived = list(DEFAULT_CLASSES)
+
+        current_list = list(current_value or [])
+        if sorted(current_list) == sorted(derived):
+            return dash.no_update
+
+        return derived
 
     @app.callback(
         Output("viv-download-raw", "data"),

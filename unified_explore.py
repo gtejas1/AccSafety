@@ -297,7 +297,15 @@ def _build_view_link(row: pd.Series) -> str:
         return f"[Open]({SP2_VIEW_ROUTE})"
     if loc == SP_LOCATION and src == SP_SOURCE:
         loc_q = _encode_location_for_href(loc)
-        return f"[Open](/vivacity/?location={loc_q})"
+        base_url = f"/vivacity/?location={loc_q}"
+        url_parts = list(urllib.parse.urlparse(base_url))
+        query = dict(urllib.parse.parse_qsl(url_parts[4], keep_blank_values=True))
+        mode = (row.get("Mode") or "").strip().lower()
+        if mode in {"bicyclist", "pedestrian"}:
+            query["mode"] = mode
+        url_parts[4] = urllib.parse.urlencode(query, quote_via=urllib.parse.quote)
+        viv_url = urllib.parse.urlunparse(url_parts)
+        return f"[Open]({viv_url})"
     loc_q = _encode_location_for_href(loc)
     if src == "Wisconsin Pilot Counting Counts":
         return f"[Open](/eco/dashboard?location={loc_q})"
