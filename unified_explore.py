@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import copy
-import io
 import time
 import random
 from datetime import datetime, timedelta, timezone
@@ -526,12 +525,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 className="mb-3",
             ),
             # Duration filter REMOVED
-            html.Div(
-                [html.Button("Download CSV", id="pf-download-btn", className="btn btn-outline-primary"), dcc.Download(id="pf-download")],
-                id="wrap-download",
-                style={"display": "none"},
-                className="d-flex justify-content-end",
-            ),
         ],
         class_name="mb-3",
     )
@@ -685,10 +678,9 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         Output("pf-map", "children"),     # 0 map content
         Output("wrap-map", "style"),      # 1 map card visibility
         Output("pf-map-data", "data"),    # 2 dynamic map coordinate store
-        Output("pf-table", "data"),       # 2 table rows
-        Output("wrap-table", "style"),    # 3 table card visibility
-        Output("wrap-results", "style"),  # 4 (sentinel) keep as block once ready
-        Output("wrap-download", "style"), # 5 download
+        Output("pf-table", "data"),       # 3 table rows
+        Output("wrap-table", "style"),    # 4 table card visibility
+        Output("wrap-results", "style"),  # 5 (sentinel) keep as block once ready
         Output("pf-desc", "children"),    # 6 description content
         Output("wrap-desc", "style"),     # 7 description visibility
         Input("pf-mode", "value"),
@@ -700,7 +692,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         # wait until all filters selected (Duration removed)
         has_all = all([mode, facility, source])
         if not has_all:
-            return [], {"display": "none"}, [], [], {"display": "none"}, {"display": "none"}, {"display": "none"}, [], {"display": "none"}
+            return [], {"display": "none"}, [], [], {"display": "none"}, {"display": "none"}, [], {"display": "none"}
 
         df = base_df.copy()
         cf = str.casefold
@@ -945,12 +937,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         desc_style = {"display": "block"} if description else {"display": "none"}
 
         if df.empty:
-            return map_children, map_style, map_store_data, [], {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
+            return map_children, map_style, map_store_data, [], {"display": "block"}, {"display": "block"}, description, desc_style
 
         df = df.copy()
         df["View"] = df.apply(_build_view_link, axis=1)
         rows = df[[c["id"] for c in DISPLAY_COLUMNS]].to_dict("records")
-        return map_children, map_style, map_store_data, rows, {"display": "block"}, {"display": "block"}, {"display": "flex"}, description, desc_style
+        return map_children, map_style, map_store_data, rows, {"display": "block"}, {"display": "block"}, description, desc_style
 
     @app.callback(
         Output("pf-dynamic-map", "figure"),
@@ -1334,24 +1326,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 )
             ]
         )
-
-    # ---- Download filtered CSV ----
-    @app.callback(
-        Output("pf-download", "data"),
-        Input("pf-download-btn", "n_clicks"),
-        State("pf-table", "data"),
-        prevent_initial_call=True,
-    )
-    def _download(n_clicks, rows):
-        if not n_clicks:
-            return dash.no_update
-        df = pd.DataFrame(rows or [])
-        if df.empty:
-            df = pd.DataFrame(columns=[c["id"] for c in DISPLAY_COLUMNS])
-        buf = io.StringIO()
-        df.to_csv(buf, index=False)
-        buf.seek(0)
-        return dict(content=buf.read(), filename="unified_explore_filtered.csv", type="text/csv")
 
     return app
 
