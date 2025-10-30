@@ -33,7 +33,7 @@
           {% for entry in entries %}
           <article class="changelog-entry">
             <div class="changelog-entry__meta">
-              <span class="changelog-entry__version">{{ entry.version }}</span>
+              <span class="changelog-entry__version" title="{{ entry.version_full }}">{{ entry.version }}</span>
               <time class="changelog-entry__date" datetime="{{ entry.date }}">{{ entry.date }}</time>
             </div>
             <ul class="changelog-entry__highlights">

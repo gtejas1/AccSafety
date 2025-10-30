@@ -1,6 +1,8 @@
 # gateway.py
-import json
 import os
+import subprocess
+from datetime import datetime
+from typing import Dict, List, Optional
 from pathlib import Path
 from urllib.parse import quote
 from flask import Flask, render_template, render_template_string, redirect, request, session
@@ -15,24 +17,109 @@ from unified_explore import create_unified_explore
 
 
 BASE_DIR = Path(__file__).resolve().parent
-CHANGELOG_PATH = BASE_DIR / "assets" / "changelog.json"
 
 VALID_USERS = {"admin": "admin", "user1": "mypassword"}
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
 
+def _resolve_remote_base_url(base_dir: Path) -> Optional[str]:
+    """Return a browsable remote URL if the repository has one configured."""
 
-def load_changelog_entries():
     try:
-        with CHANGELOG_PATH.open("r", encoding="utf-8") as fh:
-            data = json.load(fh)
-    except FileNotFoundError:
-        return []
-    except json.JSONDecodeError:
+        result = subprocess.run(
+            ["git", "-C", str(base_dir), "config", "--get", "remote.origin.url"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return None
+
+    remote = result.stdout.strip()
+    if not remote:
+        return None
+
+    if remote.startswith("git@github.com:"):
+        remote = remote.replace("git@github.com:", "https://github.com/")
+    if remote.endswith(".git"):
+        remote = remote[:-4]
+
+    if remote.startswith("https://") or remote.startswith("http://"):
+        if "github.com" in remote:
+            return remote
+        return None
+    return None
+
+
+def load_changelog_entries(limit: int = 15):
+    """Load recent commit history as changelog entries."""
+
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(BASE_DIR),
+                "log",
+                f"-{limit}",
+                "--date=iso-strict",
+                "--pretty=format:%H%x1f%ad%x1f%s%x1f%b%x1e",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return []
 
-    if isinstance(data, list):
-        return data
-    return []
+    remote_base = _resolve_remote_base_url(BASE_DIR)
+    entries = []
+
+    for raw_entry in result.stdout.strip("\n\x1e").split("\x1e"):
+        if not raw_entry.strip():
+            continue
+        parts = raw_entry.split("\x1f")
+        if len(parts) < 3:
+            continue
+
+        commit_hash, raw_date, subject = parts[:3]
+        body = parts[3] if len(parts) > 3 else ""
+
+        try:
+            parsed_date = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+            display_date = parsed_date.strftime("%Y-%m-%d")
+        except ValueError:
+            display_date = raw_date
+
+        highlights: List[str] = []
+        for line in body.splitlines():
+            clean_line = line.strip().lstrip("-*•").strip()
+            if clean_line:
+                highlights.append(clean_line)
+
+        if not highlights:
+            subject = subject.strip()
+            if subject:
+                highlights.append(subject)
+
+        entry: Dict[str, object] = {
+            "version": commit_hash[:7],
+            "version_full": commit_hash,
+            "date": display_date,
+            "highlights": highlights,
+            "links": None,
+        }
+
+        if remote_base:
+            entry["links"] = [
+                {
+                    "label": "View commit",
+                    "url": f"{remote_base}/commit/{commit_hash}",
+                }
+            ]
+
+        entries.append(entry)
+
+    return entries
 
 
 def create_server():
