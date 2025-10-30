@@ -1,7 +1,6 @@
 # unified_explore.py
 from __future__ import annotations
 
-import copy
 import time
 import random
 from datetime import datetime, timedelta, timezone
@@ -11,9 +10,8 @@ from sqlalchemy import create_engine
 
 import requests
 import dash
-from dash import dcc, html, Input, Output, State, dash_table
+from dash import dcc, html, Input, Output, dash_table
 import dash_bootstrap_components as dbc
-import plotly.express as px
 
 from theme import card, dash_page
 
@@ -313,69 +311,6 @@ def _opts(vals) -> list[dict]:
     uniq = sorted({v for v in vals if isinstance(v, str) and v.strip()})
     return [{"label": v, "value": v} for v in uniq]
 
-# ---------- Dynamic map helper (Plotly Mapbox) ----------
-def _build_dynamic_map(df: pd.DataFrame):
-    if df is None or df.empty:
-        return None, pd.DataFrame()
-    if not {"Latitude", "Longitude"}.issubset(df.columns):
-        return None, pd.DataFrame()
-
-    map_df = df.copy()
-    map_df["Latitude"] = pd.to_numeric(map_df["Latitude"], errors="coerce")
-    map_df["Longitude"] = pd.to_numeric(map_df["Longitude"], errors="coerce")
-    map_df = map_df.dropna(subset=["Latitude", "Longitude"])
-
-    if map_df.empty:
-        return None, pd.DataFrame()
-
-    map_df = map_df.drop_duplicates(subset=["Location", "Latitude", "Longitude"], keep="first")
-    map_df = map_df.reset_index(drop=True)
-    map_df["__point_index"] = map_df.index
-
-    hover_data = {
-        "Duration": True,
-        "Total counts": True,
-        "Source type": True,
-        "Facility type": True,
-        "Mode": True,
-        "Latitude": False,
-        "Longitude": False,
-    }
-
-    fig = px.scatter_mapbox(
-        map_df,
-        lat="Latitude",
-        lon="Longitude",
-        hover_name="Location",
-        hover_data=hover_data,
-        custom_data=[
-            "__point_index",
-            "Duration",
-            "Total counts",
-            "Source type",
-            "Facility type",
-            "Mode",
-        ],
-        zoom=5,
-        height=600,
-    )
-    fig.update_layout(
-        mapbox_style="open-street-map",
-        margin=dict(l=0, r=0, t=0, b=0),
-        uirevision="pf-dynamic-map",
-    )
-    fig.update_traces(
-        marker=dict(size=12, color="#2563eb", opacity=0.85),
-        hovertemplate=(
-            "<b>%{hovertext}</b><br>"
-            "Duration: %{customdata[1]}<br>"
-            "Total counts: %{customdata[2]}<br>"
-            "Source type: %{customdata[3]}<extra></extra>"
-        ),
-    )
-
-    return fig, map_df
-
 # ---------- ArcGIS iframe helper (reusable for multiple sources) ----------
 def _arcgis_embedded_map_component(
     container_id: str,
@@ -481,6 +416,124 @@ def _trail_crossing_embedded_map(container_id: str = "trail-crossing-map") -> ht
             "background": "transparent",
         },
     )
+
+
+DEFAULT_IFRAME_STYLE = {
+    "width": "100%",
+    "height": "600px",
+    "minHeight": ARCGIS_MIN_HEIGHT,
+    "border": "0",
+    "borderRadius": "10px",
+    "boxShadow": "0 1px 4px rgba(0,0,0,0.1)",
+    "background": "transparent",
+}
+
+
+SOURCE_EMBEDS: dict[str, dict] = {
+    "wisconsin pilot counting counts": {
+        "kind": "arcgis",
+        "container_id": "pilot-map-container",
+        "item_id": ARCGIS_ITEM_ID,
+        "center": ARCGIS_CENTER,
+        "scale": ARCGIS_SCALE,
+        "theme": ARCGIS_THEME,
+        "flags": [
+            flag
+            for flag, enabled in (
+                ("bookmarks-enabled", ARCGIS_BOOKMARKS),
+                ("legend-enabled", ARCGIS_LEGEND),
+                ("information-enabled", ARCGIS_INFO),
+            )
+            if enabled
+        ],
+    },
+    "wisconsin ped/bike database (statewide)": {
+        "kind": "arcgis",
+        "container_id": "statewide-map-container",
+        "item_id": SW_ITEM_ID,
+        "center": SW_CENTER,
+        "scale": SW_SCALE,
+        "theme": SW_THEME,
+        "flags": SW_FLAGS,
+    },
+    "sewrpc trail user counts": {
+        "kind": "arcgis",
+        "container_id": "sewrpc-trails-map",
+        "item_id": SEWRPC_ITEM_ID,
+        "center": SEWRPC_CENTER,
+        "scale": SEWRPC_SCALE,
+        "theme": SEWRPC_THEME,
+        "flags": SEWRPC_FLAGS,
+    },
+    "off-street trail (sewrpc trail user counts)": {
+        "kind": "arcgis",
+        "container_id": "sewrpc-trails-map",
+        "item_id": SEWRPC_ITEM_ID,
+        "center": SEWRPC_CENTER,
+        "scale": SEWRPC_SCALE,
+        "theme": SEWRPC_THEME,
+        "flags": SEWRPC_FLAGS,
+    },
+    NEW_SOURCE_NAME.strip().casefold(): {
+        "kind": "arcgis",
+        "container_id": "mke-aaec-map",
+        "item_id": MKE_AAEC_ITEM_ID,
+        "center": MKE_AAEC_CENTER,
+        "scale": MKE_AAEC_SCALE,
+        "theme": MKE_AAEC_THEME,
+        "flags": MKE_AAEC_FLAGS,
+    },
+    TRAIL_CROSS_SOURCE.strip().casefold(): {
+        "kind": "builder",
+        "builder": _trail_crossing_embedded_map,
+    },
+    PED_INT_AAEC_STATEWIDE.strip().casefold(): {
+        "kind": "iframe",
+        "container_id": "ped-int-aaec-statewide-map",
+        "src": PED_INT_AAEC_EMBED_URL,
+    },
+    MIDBLOCK_SOURCE.strip().casefold(): {
+        "kind": "arcgis",
+        "container_id": "midblock-map",
+        "item_id": MIDBLOCK_ITEM_ID,
+        "center": MIDBLOCK_CENTER,
+        "scale": MIDBLOCK_SCALE,
+        "theme": MIDBLOCK_THEME,
+        "flags": MIDBLOCK_FLAGS,
+    },
+}
+
+
+def _source_embed_component(source_val: str | None):
+    if not source_val:
+        return None
+    key = source_val.strip().casefold()
+    config = SOURCE_EMBEDS.get(key)
+    if not config:
+        return None
+
+    kind = config.get("kind")
+    if kind == "arcgis":
+        return _arcgis_embedded_map_component(
+            container_id=config["container_id"],
+            item_id=config["item_id"],
+            center=config["center"],
+            scale=config["scale"],
+            theme=config.get("theme", "light"),
+            flags=config.get("flags") or [],
+        )
+    if kind == "iframe":
+        return html.Iframe(
+            id=config.get("container_id"),
+            src=config.get("src"),
+            style={**DEFAULT_IFRAME_STYLE, **(config.get("style") or {})},
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms",
+        )
+    if kind == "builder":
+        builder = config.get("builder")
+        if callable(builder):
+            return builder()
+    return None
 
 # ---------- App ----------
 def create_unified_explore(server, prefix: str = "/explore/"):
@@ -594,7 +647,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             ),
             # sentinel to keep older show/hide logic happy (no children needed)
             html.Div(id="wrap-results", style={"display": "none"}),
-            dcc.Store(id="pf-map-data"),
         ],
     )
 
@@ -681,12 +733,11 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     @app.callback(
         Output("pf-map", "children"),     # 0 map content
         Output("wrap-map", "style"),      # 1 map card visibility
-        Output("pf-map-data", "data"),    # 2 dynamic map coordinate store
-        Output("pf-table", "data"),       # 3 table rows
-        Output("wrap-table", "style"),    # 4 table card visibility
-        Output("wrap-results", "style"),  # 5 (sentinel) keep as block once ready
-        Output("pf-desc", "children"),    # 6 description content
-        Output("wrap-desc", "style"),     # 7 description visibility
+        Output("pf-table", "data"),       # 2 table rows
+        Output("wrap-table", "style"),    # 3 table card visibility
+        Output("wrap-results", "style"),  # 4 (sentinel) keep as block once ready
+        Output("pf-desc", "children"),    # 5 description content
+        Output("wrap-desc", "style"),     # 6 description visibility
         Input("pf-mode", "value"),
         Input("pf-facility", "value"),
         Input("pf-source", "value"),
@@ -696,7 +747,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         # wait until all filters selected (Duration removed)
         has_all = all([mode, facility, source])
         if not has_all:
-            return [], {"display": "none"}, [], [], {"display": "none"}, {"display": "none"}, [], {"display": "none"}
+            return [], {"display": "none"}, [], {"display": "none"}, {"display": "none"}, [], {"display": "none"}
 
         df = base_df.copy()
         cf = str.casefold
@@ -741,130 +792,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         source_val = str(source or "").strip().casefold()
         map_children = []
         map_style = {"display": "none"}
-        map_store_data = []
 
-        dynamic_fig, dynamic_map_df = _build_dynamic_map(df)
-        if dynamic_fig is not None:
-            map_children = dcc.Graph(
-                id="pf-dynamic-map",
-                figure=dynamic_fig,
-                style={"height": "600px"},
-                config={"displayModeBar": False},
-            )
-            map_style = {"display": "block"}
-            required_map_cols = [
-                "Location",
-                "Latitude",
-                "Longitude",
-                "Duration",
-                "Total counts",
-                "Source type",
-                "Facility type",
-                "Mode",
-                "__point_index",
-            ]
-            if not dynamic_map_df.empty and set(required_map_cols).issubset(dynamic_map_df.columns):
-                subset = dynamic_map_df[required_map_cols].copy()
-                subset["Latitude"] = pd.to_numeric(subset["Latitude"], errors="coerce")
-                subset["Longitude"] = pd.to_numeric(subset["Longitude"], errors="coerce")
-                map_store_data = [
-                    {
-                        "Location": str(row.get("Location") or ""),
-                        "Latitude": row.get("Latitude"),
-                        "Longitude": row.get("Longitude"),
-                        "Duration": row.get("Duration"),
-                        "Total counts": row.get("Total counts"),
-                        "Source type": row.get("Source type"),
-                        "Facility type": row.get("Facility type"),
-                        "Mode": row.get("Mode"),
-                        "point_index": row.get("__point_index"),
-                    }
-                    for row in subset.to_dict("records")
-                ]
-
-        elif source_val == "wisconsin pilot counting counts":
-            pilot_flags = []
-            if ARCGIS_BOOKMARKS: pilot_flags.append("bookmarks-enabled")
-            if ARCGIS_LEGEND:    pilot_flags.append("legend-enabled")
-            if ARCGIS_INFO:      pilot_flags.append("information-enabled")
-            map_children = _arcgis_embedded_map_component(
-                container_id="pilot-map-container",
-                item_id=ARCGIS_ITEM_ID,
-                center=ARCGIS_CENTER,
-                scale=ARCGIS_SCALE,
-                theme=ARCGIS_THEME,
-                flags=pilot_flags,
-            )
-            map_style = {"display": "block"}
-
-        elif source_val == "wisconsin ped/bike database (statewide)":
-            map_children = _arcgis_embedded_map_component(
-                container_id="statewide-map-container",
-                item_id=SW_ITEM_ID,
-                center=SW_CENTER,
-                scale=SW_SCALE,
-                theme=SW_THEME,
-                flags=SW_FLAGS,
-            )
-            map_style = {"display": "block"}
-
-        elif source_val in {
-            "sewrpc trail user counts",
-            "off-street trail (sewrpc trail user counts)",
-        }:
-            map_children = _arcgis_embedded_map_component(
-                container_id="sewrpc-trails-map",
-                item_id=SEWRPC_ITEM_ID,
-                center=SEWRPC_CENTER,
-                scale=SEWRPC_SCALE,
-                theme=SEWRPC_THEME,
-                flags=SEWRPC_FLAGS,
-            )
-            map_style = {"display": "block"}
-
-        elif source_val == NEW_SOURCE_NAME.strip().casefold():
-            # Embedded ArcGIS map for Milwaukee AAEC (replaces old static image)
-            map_children = _arcgis_embedded_map_component(
-                container_id="mke-aaec-map",
-                item_id=MKE_AAEC_ITEM_ID,
-                center=MKE_AAEC_CENTER,
-                scale=MKE_AAEC_SCALE,
-                theme=MKE_AAEC_THEME,
-                flags=MKE_AAEC_FLAGS,
-            )
-            map_style = {"display": "block"}
-
-        elif source_val == TRAIL_CROSS_SOURCE.strip().casefold():
-            map_children = _trail_crossing_embedded_map()
-            map_style = {"display": "block"}
-
-        elif source_val == PED_INT_AAEC_STATEWIDE.strip().casefold():
-            # Directly embed the provided ArcGIS “apps/Embed” URL
-            map_children = html.Iframe(
-                id="ped-int-aaec-statewide-map",
-                src=PED_INT_AAEC_EMBED_URL,
-                style={
-                    "width": "100%",
-                    "height": "600px",
-                    "border": "0",
-                    "borderRadius": "10px",
-                    "boxShadow": "0 1px 4px rgba(0,0,0,0.1)",
-                    "background": "transparent",
-                },
-                sandbox="allow-same-origin allow-scripts allow-popups allow-forms",
-            )
-            map_style = {"display": "block"}
-
-        # NEW: Mid-Block pedestrian counts (Milwaukee County)
-        elif source_val == MIDBLOCK_SOURCE.strip().casefold():
-            map_children = _arcgis_embedded_map_component(
-                container_id="midblock-map",
-                item_id=MIDBLOCK_ITEM_ID,
-                center=MIDBLOCK_CENTER,
-                scale=MIDBLOCK_SCALE,
-                theme=MIDBLOCK_THEME,
-                flags=MIDBLOCK_FLAGS,
-            )
+        embed_component = _source_embed_component(source_val)
+        if embed_component is not None:
+            map_children = embed_component
             map_style = {"display": "block"}
 
         # --- Descriptions by source selection ---
@@ -941,189 +872,13 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         desc_style = {"display": "block"} if description else {"display": "none"}
 
         if df.empty:
-            return map_children, map_style, map_store_data, [], {"display": "block"}, {"display": "block"}, description, desc_style
+            return map_children, map_style, [], {"display": "block"}, {"display": "block"}, description, desc_style
 
         df = df.copy()
         df["View"] = df.apply(_build_view_link, axis=1)
         rows = df[[c["id"] for c in DISPLAY_COLUMNS]].to_dict("records")
-        return map_children, map_style, map_store_data, rows, {"display": "block"}, {"display": "block"}, description, desc_style
+        return map_children, map_style, rows, {"display": "block"}, {"display": "block"}, description, desc_style
 
-    @app.callback(
-        Output("pf-dynamic-map", "figure"),
-        Input("pf-table", "active_cell"),
-        State("pf-table", "data"),
-        State("pf-map-data", "data"),
-        State("pf-dynamic-map", "figure"),
-        prevent_initial_call=True,
-    )
-    def _focus_map_on_row(active_cell, table_rows, map_records, figure):
-        if not active_cell or figure is None:
-            return dash.no_update
-        if not isinstance(active_cell, dict) or "row" not in active_cell:
-            return dash.no_update
-        row_index = active_cell.get("row")
-        if row_index is None:
-            return dash.no_update
-        try:
-            row_index = int(row_index)
-        except (TypeError, ValueError):
-            return dash.no_update
-        if row_index < 0:
-            return dash.no_update
-        if not table_rows or row_index >= len(table_rows):
-            return dash.no_update
-        if not map_records:
-            return dash.no_update
-
-        row_data = table_rows[row_index] or {}
-        location = str(row_data.get("Location") or "").strip()
-        if not location:
-            return dash.no_update
-
-        match = next(
-            (
-                entry
-                for entry in map_records
-                if (entry.get("Location") or "").strip() == location
-            ),
-            None,
-        )
-        if not match:
-            return dash.no_update
-
-        lat = match.get("Latitude")
-        lon = match.get("Longitude")
-        try:
-            lat = float(lat)
-            lon = float(lon)
-        except (TypeError, ValueError):
-            return dash.no_update
-
-        if not (pd.notna(lat) and pd.notna(lon)):
-            return dash.no_update
-
-        point_index = match.get("point_index")
-        try:
-            point_index = int(point_index)
-        except (TypeError, ValueError):
-            point_index = None
-
-        if point_index is None and figure.get("data"):
-            for trace in figure.get("data", []):
-                custom = trace.get("customdata")
-                if not custom:
-                    continue
-                names = trace.get("hovertext") or trace.get("text") or []
-                for idx, payload in enumerate(custom):
-                    loc_match = ""
-                    if isinstance(names, (list, tuple)) and idx < len(names):
-                        loc_match = str(names[idx] or "").strip()
-                    if loc_match != location:
-                        continue
-                    try:
-                        payload_index = (
-                            int(payload[0])
-                            if isinstance(payload, (list, tuple)) and payload
-                            else int(payload)
-                        )
-                    except (TypeError, ValueError):
-                        continue
-                    point_index = payload_index
-                    break
-                if point_index is not None:
-                    break
-
-        def _fmt_val(value):
-            if value is None:
-                return "N/A"
-            try:
-                if pd.isna(value):
-                    return "N/A"
-            except Exception:
-                pass
-            if isinstance(value, (int, float)) and not isinstance(value, bool):
-                if float(value).is_integer():
-                    return f"{int(value):,}"
-                return f"{float(value):,.2f}"
-            text = str(value).strip()
-            return text or "N/A"
-
-        def _safe_text(value):
-            text = str(value) if value is not None else ""
-            return (
-                text.replace("&", "&amp;")
-                .replace("<", "&lt;")
-                .replace(">", "&gt;")
-            )
-
-        duration = _safe_text(_fmt_val(match.get("Duration") or row_data.get("Duration")))
-        total_counts = _safe_text(_fmt_val(match.get("Total counts") or row_data.get("Total counts")))
-        source_type = _safe_text(_fmt_val(match.get("Source type") or row_data.get("Source type")))
-        facility = _safe_text(_fmt_val(match.get("Facility type") or row_data.get("Facility type")))
-        mode = _safe_text(_fmt_val(match.get("Mode") or row_data.get("Mode")))
-        safe_location = _safe_text(location)
-
-        info_text = (
-            f"<b>{safe_location}</b><br>"
-            f"Duration: {duration}<br>"
-            f"Total counts: {total_counts}<br>"
-            f"Source type: {source_type}<br>"
-            f"Facility: {facility}<br>"
-            f"Mode: {mode}"
-        )
-
-        new_fig = copy.deepcopy(figure)
-        new_fig.setdefault("layout", {})
-        new_fig["layout"].setdefault("mapbox", {})
-        new_fig["layout"]["mapbox"].setdefault("center", {})
-        new_fig["layout"]["mapbox"]["center"]["lat"] = lat
-        new_fig["layout"]["mapbox"]["center"]["lon"] = lon
-        new_fig["layout"]["mapbox"]["zoom"] = 13
-        new_fig["layout"]["mapbox"].setdefault("style", "open-street-map")
-        new_fig["layout"]["mapbox"].setdefault("pitch", 0)
-
-        data = new_fig.get("data") or []
-        base_traces = [trace for trace in data if trace.get("name") != "__selected_point"]
-        new_fig["data"] = base_traces
-
-        if base_traces and point_index is not None:
-            base_trace = base_traces[0]
-            marker = base_trace.get("marker") or {}
-            size_value = marker.get("size", 12)
-            if isinstance(size_value, (list, tuple)):
-                base_size = size_value[0] if size_value else 12
-            else:
-                base_size = size_value
-            marker.setdefault("opacity", 0.85)
-            marker.setdefault("color", "#2563eb")
-            marker.setdefault("size", base_size)
-            base_trace["marker"] = marker
-            base_trace["selectedpoints"] = [point_index]
-            base_trace["selected"] = {"marker": {"size": base_size + 4, "color": "#f97316"}}
-            base_trace["unselected"] = {"marker": {"opacity": 0.35}}
-
-        highlight_trace = {
-            "type": "scattermapbox",
-            "lat": [lat],
-            "lon": [lon],
-            "mode": "markers+text",
-            "marker": {
-                "size": 18,
-                "color": "#f97316",
-                "opacity": 0.95,
-            },
-            "text": [info_text],
-            "textposition": "top center",
-            "hoverinfo": "text",
-            "hovertemplate": info_text + "<extra></extra>",
-            "showlegend": False,
-            "name": "__selected_point",
-        }
-
-        new_fig["data"].append(highlight_trace)
-        return new_fig
-
-    # ---------- Description builders ----------
     def _trail_crossing_desc():
         return html.Div(
             [
