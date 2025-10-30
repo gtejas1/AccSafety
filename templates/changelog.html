@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AccSafety Changelog</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/theme.css">
+</head>
+<body>
+  <div class="app-shell changelog-shell">
+    <header class="app-header">
+      <div class="app-header-title">
+        <span class="app-brand">AccSafety</span>
+        <span class="app-subtitle">Release Highlights</span>
+      </div>
+      <nav class="app-nav portal-nav" aria-label="Main navigation">
+        <a class="app-link" href="/">Portal Home</a>
+        <a class="app-link" href="/guide">User Guide</a>
+        <a class="app-link" href="/changelog" aria-current="page">Changelog</a>
+        <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
+      </nav>
+      <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
+    </header>
+
+    <main class="app-content changelog-content">
+      <section class="app-card changelog-card">
+        <header class="changelog-hero">
+          <h1>AccSafety Release Notes</h1>
+          <p>Track recent improvements, bug fixes, and new capabilities delivered to the secure mobility analytics portal.</p>
+        </header>
+
+        <div class="changelog-list">
+          {% for entry in entries %}
+          <article class="changelog-entry">
+            <div class="changelog-entry__meta">
+              <span class="changelog-entry__version">{{ entry.version }}</span>
+              <time class="changelog-entry__date" datetime="{{ entry.date }}">{{ entry.date }}</time>
+            </div>
+            <ul class="changelog-entry__highlights">
+              {% for highlight in entry.highlights %}
+              <li>{{ highlight }}</li>
+              {% endfor %}
+            </ul>
+            {% if entry.links %}
+            <div class="changelog-entry__links" aria-label="Related resources">
+              {% for link in entry.links %}
+              <a class="changelog-link" href="{{ link.url }}">{{ link.label }}</a>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </article>
+          {% else %}
+          <p class="empty-state">Changelog entries are not available right now. Please check back soon.</p>
+          {% endfor %}
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

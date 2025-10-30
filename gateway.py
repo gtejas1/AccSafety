@@ -1,5 +1,7 @@
 # gateway.py
+import json
 import os
+from pathlib import Path
 from urllib.parse import quote
 from flask import Flask, render_template, render_template_string, redirect, request, session
 
@@ -12,8 +14,25 @@ from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore
 
 
+BASE_DIR = Path(__file__).resolve().parent
+CHANGELOG_PATH = BASE_DIR / "assets" / "changelog.json"
+
 VALID_USERS = {"admin": "admin", "user1": "mypassword"}
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
+
+
+def load_changelog_entries():
+    try:
+        with CHANGELOG_PATH.open("r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except FileNotFoundError:
+        return []
+    except json.JSONDecodeError:
+        return []
+
+    if isinstance(data, list):
+        return data
+    return []
 
 
 def create_server():
@@ -277,6 +296,7 @@ def create_server():
       </div>
       <nav class="app-nav portal-nav" aria-label="Main navigation">
         <a class="app-link" href="/guide">User Guide</a>
+        <a class="app-link" href="/changelog">Changelog</a>
         <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
       </nav>
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
@@ -389,6 +409,11 @@ def create_server():
     @server.route("/guide")
     def user_guide():
         return render_template("user_guide.html", user=session.get("user", "user"))
+
+    @server.route("/changelog")
+    def changelog():
+        entries = load_changelog_entries()
+        return render_template("changelog.html", entries=entries, user=session.get("user", "user"))
 
     return server
 
