@@ -477,22 +477,26 @@ body {
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  border: 1px solid rgba(15, 23, 42, 0.18);
-  background: #ffffff;
-  color: #0b1736;
-  font-weight: 800;
+  border: none;
+  background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary));
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  font-family: inherit;
+  line-height: 1;
   cursor: pointer;
-  box-shadow: 0 8px 18px rgba(11, 23, 54, 0.1);
-  transition: transform 0.15s ease;
+  box-shadow: 0 12px 26px rgba(11, 102, 195, 0.28);
+  transition: transform 0.15s ease, filter 0.15s ease;
 }
 
 .info-button:hover,
 .info-button:focus {
   transform: translateY(-1px);
+  filter: brightness(1.05);
 }
 
 .info-button:focus-visible {
-  outline: 3px solid rgba(11, 102, 195, 0.35);
+  outline: 3px solid rgba(255, 255, 255, 0.6);
   outline-offset: 2px;
 }
 
@@ -507,10 +511,10 @@ body {
   margin: 0;
 }
 
+
 .tooltip {
   position: relative;
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
 }
 
 .tooltip .tooltip-panel {
@@ -574,29 +578,26 @@ body {
 .modal {
   background: #ffffff;
   border-radius: 16px;
-  max-width: 520px;
-  width: min(520px, calc(100% - 48px));
-  padding: 20px 24px;
+  max-width: 600px;
+  width: min(600px, calc(100% - 48px));
+  padding: 24px 30px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
   color: #0b1736;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
   position: relative;
   z-index: 1;
 }
 
 .modal h2 {
-  margin: 0;
+  margin: 0 0 12px;
 }
 
 .modal p {
-  margin: 0;
-  line-height: 1.45;
+  margin: 0 0 12px;
+  line-height: 1.5;
 }
 
-.modal p + p {
-  margin-top: 8px;
+.modal p:last-of-type {
+  margin-bottom: 0;
 }
 
 .modal-actions {

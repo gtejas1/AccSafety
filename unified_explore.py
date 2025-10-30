@@ -653,10 +653,15 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                                 "Use the Explore Available Datasets button to open the unified data explorer.",
                             ),
                             html.P(
-                                "Hover charts and map layers for details; use top filters to refine by Mode, Facility, and Data source.",
-                            ),
-                            html.P(
-                                "Look for “Open” links near sites to jump to analytics or related project pages.",
+                                [
+                                    "Hover charts and map layers for details; use top filters to refine by ",
+                                    html.Em("Mode"),
+                                    ", ",
+                                    html.Em("Facility"),
+                                    ", and ",
+                                    html.Em("Data source"),
+                                    ". Look for “Open” links near sites to jump to analytics or related project pages.",
+                                ],
                             ),
                             html.Div(
                                 [
