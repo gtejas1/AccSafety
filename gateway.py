@@ -1,6 +1,11 @@
 # gateway.py
+import json
 import os
+from functools import lru_cache
+from pathlib import Path
 from urllib.parse import quote
+
+import pandas as pd
 from flask import Flask, render_template, render_template_string, redirect, request, session
 
 from pbc_trail_app import create_trail_dash
@@ -10,6 +15,190 @@ from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore
+
+
+ASSETS_DIR = Path(__file__).resolve().parent / "assets"
+
+
+def _format_int(value) -> str:
+    try:
+        return f"{int(round(float(value))):,}"
+    except (TypeError, ValueError):
+        return "0"
+
+
+def _format_percent(value: float) -> str:
+    try:
+        return f"{float(value):.1f}%"
+    except (TypeError, ValueError):
+        return "0.0%"
+
+
+def _format_date(timestamp) -> str:
+    if timestamp is None or pd.isna(timestamp):
+        return "—"
+    # Remove leading zeros from the day for nicer display (e.g., "March 05" → "March 5")
+    return timestamp.strftime("%A, %B %d, %Y").replace(" 0", " ")
+
+
+def _format_range(start, end) -> str:
+    if start is None or end is None or pd.isna(start) or pd.isna(end):
+        return "—"
+    same_year = start.year == end.year
+    if same_year:
+        left = start.strftime("%b %d").replace(" 0", " ")
+        right = end.strftime("%b %d, %Y").replace(" 0", " ")
+    else:
+        left = start.strftime("%b %d, %Y").replace(" 0", " ")
+        right = end.strftime("%b %d, %Y").replace(" 0", " ")
+    return f"{left} – {right}"
+
+
+def _load_mode_counts(filename: str, value_column: str, mode_label: str) -> pd.DataFrame:
+    path = ASSETS_DIR / filename
+    if not path.exists():
+        return pd.DataFrame(columns=["location", "date", "count", "mode"])
+
+    try:
+        df = pd.read_excel(path, usecols=["Location Name", "Date", value_column])
+    except ValueError:
+        # Fallback: read full sheet and filter columns after the fact
+        df = pd.read_excel(path)
+
+    if "Location Name" not in df.columns or "Date" not in df.columns or value_column not in df.columns:
+        return pd.DataFrame(columns=["location", "date", "count", "mode"])
+
+    df = df.rename(columns={"Location Name": "location", value_column: "count", "Date": "date"})
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df["count"] = pd.to_numeric(df["count"], errors="coerce").fillna(0)
+    df = df.dropna(subset=["date"])
+    df["mode"] = mode_label
+    return df[["location", "date", "count", "mode"]]
+
+
+@lru_cache(maxsize=1)
+def get_eco_dashboard_summary() -> dict:
+    frames = [
+        _load_mode_counts(
+            "WisconsinPedBikeCountDatabase_PedestrianCounts_032824.xlsx",
+            "Total ped count during count period",
+            "Pedestrian",
+        ),
+        _load_mode_counts(
+            "WisconsinPedBikeCountDatabase_BicyclistCounts_032824.xlsx",
+            "Total bike count during count period",
+            "Bicyclist",
+        ),
+    ]
+
+    frames = [f for f in frames if not f.empty]
+    if not frames:
+        return {
+            "total_count": 0,
+            "total_count_display": "0",
+            "average_daily": 0,
+            "average_daily_display": "0",
+            "total_days": 0,
+            "total_days_display": "0",
+            "peak_total": 0,
+            "peak_total_display": "0",
+            "peak_day_display": "—",
+            "site_count": 0,
+            "site_count_display": "0",
+            "date_range_display": "—",
+            "mode_totals": [],
+            "top_locations": [],
+            "leading_location": None,
+            "chart": {"labels": [], "values": [], "total": 0},
+        }
+
+    data = pd.concat(frames, ignore_index=True)
+    data["count"] = data["count"].astype(float)
+
+    total = float(data["count"].sum())
+    site_totals = data.groupby("location")["count"].sum().sort_values(ascending=False)
+    site_count = int(site_totals.size)
+
+    daily = data.groupby("date")["count"].sum().sort_index()
+    total_days = int(daily.size)
+    avg_daily = float(total / total_days) if total_days else 0.0
+
+    peak_day = daily.idxmax() if not daily.empty else None
+    peak_total = float(daily.max()) if not daily.empty else 0.0
+
+    min_date = data["date"].min()
+    max_date = data["date"].max()
+
+    chart_series = site_totals.head(8)
+    if site_totals.size > 8:
+        others = float(site_totals.iloc[8:].sum())
+        if others:
+            chart_series.loc["All other sites"] = others
+
+    chart_labels = list(chart_series.index)
+    chart_values = [int(round(float(v))) for v in chart_series.values]
+
+    mode_series = data.groupby("mode")["count"].sum().sort_values(ascending=False)
+    mode_totals = []
+    for mode, value in mode_series.items():
+        share = (float(value) / total * 100) if total else 0.0
+        mode_totals.append(
+            {
+                "mode": mode,
+                "count": int(round(float(value))),
+                "display": _format_int(value),
+                "share": share,
+                "share_display": _format_percent(share),
+            }
+        )
+
+    top_locations = []
+    for rank, (location, value) in enumerate(site_totals.head(6).items(), start=1):
+        share = (float(value) / total * 100) if total else 0.0
+        top_locations.append(
+            {
+                "rank": rank,
+                "location": location,
+                "count": int(round(float(value))),
+                "count_display": _format_int(value),
+                "share": share,
+                "share_display": _format_percent(share),
+            }
+        )
+
+    leading_location = None
+    if not site_totals.empty:
+        top_location_name = site_totals.index[0]
+        top_location_value = site_totals.iloc[0]
+        leading_location = {
+            "name": top_location_name,
+            "count": int(round(float(top_location_value))),
+            "count_display": _format_int(top_location_value),
+        }
+
+    summary = {
+        "total_count": int(round(total)),
+        "total_count_display": _format_int(total),
+        "average_daily": int(round(avg_daily)),
+        "average_daily_display": _format_int(avg_daily),
+        "total_days": total_days,
+        "total_days_display": _format_int(total_days),
+        "peak_total": int(round(peak_total)),
+        "peak_total_display": _format_int(peak_total),
+        "peak_day_display": _format_date(peak_day),
+        "site_count": site_count,
+        "site_count_display": _format_int(site_count),
+        "date_range_display": _format_range(min_date, max_date),
+        "mode_totals": mode_totals,
+        "top_locations": top_locations,
+        "leading_location": leading_location,
+        "chart": {
+            "labels": chart_labels,
+            "values": chart_values,
+            "total": int(round(total)),
+        },
+    }
+    return summary
 
 
 VALID_USERS = {"admin": "admin", "user1": "mypassword"}
@@ -195,6 +384,8 @@ def create_server():
     # ---- Portal Home ----
     @server.route("/")
     def home():
+        eco_summary = get_eco_dashboard_summary()
+        eco_chart_json = json.dumps(eco_summary.get("chart", {}))
         return render_template_string("""
 <!doctype html>
 <html lang="en">
@@ -266,6 +457,36 @@ def create_server():
     .modal button {margin-top:18px;padding:10px 20px;border:none;border-radius:999px;background:linear-gradient(130deg,var(--brand-primary),var(--brand-secondary));color:white;font-weight:600;cursor:pointer;}
     .modal .secondary {background:#e5e7eb;color:#111827;}
     .modal-backdrop[hidden]{display:none;}
+
+    .eco-card {margin-top:24px;display:grid;gap:24px;}
+    .eco-card h2 {margin:0;font-size:1.35rem;color:#0b1736;}
+    .eco-subtitle {margin:4px 0 0;color:#475569;font-size:0.95rem;max-width:640px;}
+    .eco-meta {margin:0;color:#64748b;font-size:0.85rem;}
+    .eco-card-header {display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:flex-start;}
+    .eco-pill {padding:6px 14px;border-radius:999px;background:rgba(14,165,233,0.14);color:#0f172a;font-size:0.8rem;font-weight:600;}
+    .eco-stat-tiles {display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));}
+    .eco-tile {padding:18px;border-radius:18px;border:1px solid rgba(15,23,42,0.12);background:linear-gradient(135deg,rgba(14,165,233,0.08),rgba(14,165,233,0.02));display:grid;gap:6px;}
+    .eco-tile-label {font-size:0.78rem;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:#0ea5e9;}
+    .eco-tile-value {font-size:1.9rem;font-weight:700;color:#0b1736;font-variant-numeric:tabular-nums;}
+    .eco-tile-footnote {font-size:0.85rem;color:#475569;}
+    .eco-mode-summary {display:flex;flex-wrap:wrap;gap:12px;}
+    .eco-mode-chip {padding:12px 16px;border-radius:12px;background:rgba(15,23,42,0.04);border:1px solid rgba(15,23,42,0.08);min-width:150px;display:grid;gap:4px;}
+    .eco-mode-name {font-size:0.75rem;text-transform:uppercase;color:#0f172a;letter-spacing:0.08em;opacity:0.7;}
+    .eco-mode-value {font-size:1.15rem;font-weight:600;color:#0f172a;font-variant-numeric:tabular-nums;}
+    .eco-mode-share {font-size:0.85rem;color:#334155;}
+    .eco-insights-grid {display:grid;gap:24px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));}
+    .eco-panel {padding:20px;border-radius:18px;border:1px solid rgba(15,23,42,0.12);background:#fff;box-shadow:0 16px 34px rgba(15,23,42,0.08);display:grid;gap:12px;}
+    .eco-panel h3 {margin:0;font-size:1rem;color:#0b1736;}
+    .eco-table {width:100%;border-collapse:collapse;}
+    .eco-table tbody tr + tr {border-top:1px solid rgba(148,163,184,0.2);}
+    .eco-table td {padding:8px 0;font-size:0.9rem;color:#0f172a;vertical-align:top;}
+    .eco-count {text-align:right;font-weight:600;font-variant-numeric:tabular-nums;}
+    .eco-rank {width:2.4rem;font-weight:600;color:#64748b;font-variant-numeric:tabular-nums;}
+    .eco-location {font-weight:600;color:#0b1736;}
+    .eco-share {font-size:0.78rem;color:#64748b;margin-top:2px;}
+    .eco-empty {margin:0;font-size:0.9rem;color:#64748b;}
+    .eco-footnote {font-size:0.78rem;color:#64748b;}
+    @media (max-width:768px){.eco-insights-grid{grid-template-columns:1fr;}.eco-card{gap:20px;}}
   </style>
 </head>
 <body>
@@ -315,6 +536,82 @@ def create_server():
           search-enabled>
         </arcgis-embedded-map>
       </section>
+
+      <section class="app-card eco-card" aria-labelledby="eco-card-title">
+        <div class="eco-card-header">
+          <div>
+            <h2 id="eco-card-title">Eco-Counter Summary Dashboard</h2>
+            <p class="eco-subtitle">Automatic pedestrian and bicyclist counts captured through statewide Eco-Counter deployments.</p>
+          </div>
+          {% if eco_summary.date_range_display and eco_summary.date_range_display != "—" %}
+          <div class="eco-pill">{{ eco_summary.date_range_display }}</div>
+          {% endif %}
+        </div>
+        <p class="eco-meta">Covering {{ eco_summary.site_count_display }} Eco-Counter locations across {{ eco_summary.total_days_display }} measurement days.</p>
+
+        <div class="eco-stat-tiles">
+          <article class="eco-tile" aria-label="Total recorded volume">
+            <span class="eco-tile-label">Total Recorded Volume</span>
+            <span class="eco-tile-value">{{ eco_summary.total_count_display }}</span>
+            <span class="eco-tile-footnote">Combined pedestrian &amp; bicyclist counts</span>
+          </article>
+          <article class="eco-tile" aria-label="Peak day volume">
+            <span class="eco-tile-label">Peak Day Volume</span>
+            <span class="eco-tile-value">{{ eco_summary.peak_total_display }}</span>
+            <span class="eco-tile-footnote">{{ eco_summary.peak_day_display }}</span>
+          </article>
+          <article class="eco-tile" aria-label="Average daily volume">
+            <span class="eco-tile-label">Average Daily Count</span>
+            <span class="eco-tile-value">{{ eco_summary.average_daily_display }}</span>
+            <span class="eco-tile-footnote">Across {{ eco_summary.total_days_display }} measurement days</span>
+          </article>
+        </div>
+
+        {% if eco_summary.mode_totals %}
+        <div class="eco-mode-summary" role="list" aria-label="Counts by mode">
+          {% for item in eco_summary.mode_totals %}
+          <div class="eco-mode-chip" role="listitem">
+            <span class="eco-mode-name">{{ item.mode }}</span>
+            <span class="eco-mode-value">{{ item.display }}</span>
+            <span class="eco-mode-share">{{ item.share_display }} of volume</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="eco-insights-grid">
+          <div class="eco-panel">
+            <h3>Distribution by Location</h3>
+            <canvas id="eco-distribution-chart" height="240" role="img" aria-label="Eco-Counter distribution by location"></canvas>
+          </div>
+          <div class="eco-panel">
+            <h3>Top Locations by Volume</h3>
+            {% if eco_summary.top_locations %}
+            <table class="eco-table">
+              <tbody>
+              {% for loc in eco_summary.top_locations %}
+                <tr>
+                  <td class="eco-rank">{{ loc.rank }}</td>
+                  <td>
+                    <div class="eco-location">{{ loc.location }}</div>
+                    <div class="eco-share">{{ loc.share_display }} of total</div>
+                  </td>
+                  <td class="eco-count">{{ loc.count_display }}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+            <p class="eco-empty">No Eco-Counter summaries available.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        {% if eco_summary.leading_location %}
+        <p class="eco-footnote">Highest volume site: {{ eco_summary.leading_location.name }} ({{ eco_summary.leading_location.count_display }} combined trips).</p>
+        {% endif %}
+        <p class="eco-footnote">Counts aggregated from Wisconsin Pedestrian and Bicyclist Database (March 2024 export).</p>
+      </section>
     </main>
   </div>
 
@@ -330,6 +627,51 @@ def create_server():
       </div>
     </div>
   </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script>
+    (function(){
+      const chartConfig = {{ eco_chart_json|safe }};
+      if (!chartConfig || !Array.isArray(chartConfig.labels) || !Array.isArray(chartConfig.values) || !chartConfig.labels.length) {
+        return;
+      }
+      const canvas = document.getElementById('eco-distribution-chart');
+      if (!canvas) { return; }
+      const total = chartConfig.total || chartConfig.values.reduce((sum, val) => sum + (Number(val) || 0), 0);
+      const palette = ['#0f172a', '#1d4ed8', '#0ea5e9', '#22d3ee', '#14b8a6', '#f97316', '#6366f1', '#ec4899', '#a855f7'];
+      const colors = chartConfig.labels.map((_, idx) => palette[idx % palette.length]);
+      new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels: chartConfig.labels,
+          datasets: [{
+            data: chartConfig.values,
+            backgroundColor: colors,
+            borderWidth: 0,
+            hoverOffset: 8,
+          }]
+        },
+        options: {
+          cutout: '55%',
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: { boxWidth: 14, color: '#0f172a' }
+            },
+            tooltip: {
+              callbacks: {
+                label: function(ctx) {
+                  const value = Number(ctx.parsed) || 0;
+                  const pct = total ? (value / total * 100) : 0;
+                  return `${ctx.label}: ${value.toLocaleString()} (${pct.toFixed(1)}%)`;
+                }
+              }
+            }
+          }
+        }
+      });
+    })();
+  </script>
 
   <script>
     (function(){
@@ -380,7 +722,7 @@ def create_server():
   </script>
 </body>
 </html>
-        """, user=session.get("user", "user"))
+        """, user=session.get("user", "user"), eco_summary=eco_summary, eco_chart_json=eco_chart_json)
 
     # Convenience redirects
     for p in ["trail","eco","vivacity","live","wisdot","se-wi-trails"]:
