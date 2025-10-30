@@ -468,3 +468,138 @@ body {
     font-size: 1.4rem;
   }
 }
+
+/* Shared info tooltip + modal styling */
+.info-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: #ffffff;
+  color: #0b1736;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(11, 23, 54, 0.1);
+  transition: transform 0.15s ease;
+}
+
+.info-button:hover,
+.info-button:focus {
+  transform: translateY(-1px);
+}
+
+.info-button:focus-visible {
+  outline: 3px solid rgba(11, 102, 195, 0.35);
+  outline-offset: 2px;
+}
+
+.tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.tooltip .tooltip-panel {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 120%;
+  background: #111827;
+  color: #ffffff;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 20;
+}
+
+.tooltip .tooltip-panel::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #111827 transparent transparent transparent;
+}
+
+.tooltip:focus-within .tooltip-panel,
+.tooltip:hover .tooltip-panel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(-50%) translateY(-2px);
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 2000;
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal-backdrop__overlay {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}
+
+.modal {
+  background: #ffffff;
+  border-radius: 16px;
+  max-width: 600px;
+  width: 100%;
+  padding: 24px 30px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
+  color: #0b1736;
+  display: grid;
+  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.modal h2 {
+  margin: 0;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.modal-button {
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.modal-button.primary {
+  background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary));
+  color: #ffffff;
+  box-shadow: 0 12px 26px rgba(11, 102, 195, 0.28);
+}
+
+.modal-button.secondary {
+  background: #e5e7eb;
+  color: #111827;
+}
