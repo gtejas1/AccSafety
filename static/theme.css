@@ -496,9 +496,21 @@ body {
   outline-offset: 2px;
 }
 
+.heading-with-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.heading-with-info__title {
+  margin: 0;
+}
+
 .tooltip {
   position: relative;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
 }
 
 .tooltip .tooltip-panel {
@@ -562,19 +574,29 @@ body {
 .modal {
   background: #ffffff;
   border-radius: 16px;
-  max-width: 600px;
-  width: 100%;
-  padding: 24px 30px;
+  max-width: 520px;
+  width: min(520px, calc(100% - 48px));
+  padding: 20px 24px;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.25);
   color: #0b1736;
-  display: grid;
-  gap: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
   position: relative;
   z-index: 1;
 }
 
 .modal h2 {
   margin: 0;
+}
+
+.modal p {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.modal p + p {
+  margin-top: 8px;
 }
 
 .modal-actions {

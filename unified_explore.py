@@ -556,7 +556,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         [
             html.Div(
                 [
-                    html.H2("Explore Counts", style={"margin": 0}),
+                    html.H2("Explore Counts", className="heading-with-info__title"),
                     html.Span(
                         [
                             html.Button(
@@ -572,7 +572,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         className="tooltip",
                     ),
                 ],
-                style={"display": "flex", "alignItems": "center", "gap": "12px", "flexWrap": "wrap"},
+                className="heading-with-info",
             ),
             html.P("Pick Mode, then Facility, then Source.", className="app-muted"),
 
