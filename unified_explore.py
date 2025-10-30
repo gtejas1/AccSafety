@@ -6,6 +6,7 @@ import random
 from datetime import datetime, timedelta, timezone
 import urllib.parse
 import pandas as pd
+import plotly.graph_objects as go
 from sqlalchemy import create_engine
 
 import requests
@@ -307,6 +308,138 @@ def _build_view_link(row: pd.Series) -> str:
         return f"[Open](/trail/dashboard?location={loc_q})"
     return "[Open](https://uwm.edu/ipit/wisconsin-pedestrian-volume-model/)"
 
+
+def _build_eco_dashboard_content(df: pd.DataFrame) -> list:
+    df_counts = df.copy()
+    if "Total counts" not in df_counts.columns or df_counts.empty:
+        df_counts = pd.DataFrame(columns=["Location", "Total counts"])
+    else:
+        df_counts["Total counts"] = pd.to_numeric(df_counts["Total counts"], errors="coerce")
+        df_counts = df_counts.dropna(subset=["Total counts"])
+        df_counts["Location"] = df_counts["Location"].fillna("Unknown location").astype(str)
+
+    if df_counts.empty:
+        peak_day_volume = None
+        average_daily = None
+        total_volume = None
+    else:
+        peak_day_volume = float(df_counts["Total counts"].max())
+        average_daily = float(df_counts["Total counts"].mean())
+        total_volume = float(df_counts["Total counts"].sum())
+
+    per_location = (
+        df_counts.groupby("Location", as_index=False)["Total counts"].sum()
+        if not df_counts.empty
+        else pd.DataFrame(columns=["Location", "Total counts"])
+    )
+    per_location = per_location.sort_values("Total counts", ascending=False)
+    top_locations = per_location.head(5)
+
+    def _fmt_int(value: float | int | None) -> str:
+        if value is None or pd.isna(value):
+            return "—"
+        return f"{int(round(float(value))):,}"
+
+    def _fmt_float(value: float | int | None) -> str:
+        if value is None or pd.isna(value):
+            return "—"
+        return f"{float(value):,.1f}"
+
+    metrics = [
+        ("Peak day volume", _fmt_int(peak_day_volume)),
+        ("Average daily count", _fmt_float(average_daily)),
+        ("Total recorded volume", _fmt_int(total_volume)),
+    ]
+
+    metrics_row = dbc.Row(
+        [
+            dbc.Col(
+                html.Div(
+                    [
+                        html.Div(label, className="app-muted small text-uppercase"),
+                        html.Div(value, className="fw-semibold fs-4"),
+                    ],
+                    className="p-3 bg-light border rounded h-100",
+                ),
+                xs=12,
+                md=4,
+            )
+            for label, value in metrics
+        ],
+        className="g-3",
+    )
+
+    pie_fig = go.Figure()
+    if not per_location.empty:
+        pie_fig.add_trace(
+            go.Pie(
+                labels=per_location["Location"],
+                values=per_location["Total counts"],
+                hole=0.55,
+                sort=False,
+                hovertemplate="%{label}: %{value:,}<extra></extra>",
+            )
+        )
+    pie_fig.update_layout(
+        margin=dict(t=10, b=10, l=10, r=10),
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=-0.1),
+        height=320,
+    )
+    if per_location.empty:
+        pie_fig.add_annotation(
+            text="No data available",
+            showarrow=False,
+            font=dict(color="#94a3b8", size=16),
+            x=0.5,
+            y=0.5,
+        )
+
+    if top_locations.empty:
+        top_list_items = [
+            html.Li("No locations available", className="app-muted mb-0"),
+        ]
+    else:
+        top_list_items = [
+            html.Li(
+                [
+                    html.Span(row["Location"], className="me-2"),
+                    html.Span(_fmt_int(row["Total counts"]), className="fw-semibold"),
+                ],
+                className="d-flex justify-content-between align-items-center mb-2",
+            )
+            for _, row in top_locations.iterrows()
+        ]
+
+    card_content = [
+        html.H3("Pilot Eco-Counter Snapshot", className="mb-3"),
+        metrics_row,
+        dbc.Row(
+            [
+                dbc.Col(
+                    dcc.Graph(
+                        figure=pie_fig,
+                        config={"displayModeBar": False},
+                        style={"height": "100%"},
+                    ),
+                    xs=12,
+                    lg=7,
+                ),
+                dbc.Col(
+                    [
+                        html.H5("Top locations", className="mb-3"),
+                        html.Ul(top_list_items, className="list-unstyled mb-0"),
+                    ],
+                    xs=12,
+                    lg=5,
+                ),
+            ],
+            className="g-4 align-items-start",
+        ),
+    ]
+
+    return [card(card_content, class_name="mb-3")]
+
 def _opts(vals) -> list[dict]:
     uniq = sorted({v for v in vals if isinstance(v, str) and v.strip()})
     return [{"label": v, "value": v} for v in uniq]
@@ -592,6 +725,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     # Map (right, top)
     map_card = card([html.Div(id="pf-map", children=[])], class_name="mb-3")
 
+    eco_wrap = html.Div(id="wrap-eco", children=[], style={"display": "none"})
+
     # Table (right, bottom)
     table_block = card(
         [
@@ -634,6 +769,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     dbc.Col(
                         [
                             html.Div(id="wrap-map", children=[map_card], style={"display": "none"}),
+                            eco_wrap,
                             dcc.Loading(
                                 id="pf-wrap-loader",
                                 type="default",
@@ -733,11 +869,13 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     @app.callback(
         Output("pf-map", "children"),     # 0 map content
         Output("wrap-map", "style"),      # 1 map card visibility
-        Output("pf-table", "data"),       # 2 table rows
-        Output("wrap-table", "style"),    # 3 table card visibility
-        Output("wrap-results", "style"),  # 4 (sentinel) keep as block once ready
-        Output("pf-desc", "children"),    # 5 description content
-        Output("wrap-desc", "style"),     # 6 description visibility
+        Output("wrap-eco", "children"),   # 2 eco dashboard content
+        Output("wrap-eco", "style"),      # 3 eco dashboard visibility
+        Output("pf-table", "data"),       # 4 table rows
+        Output("wrap-table", "style"),    # 5 table card visibility
+        Output("wrap-results", "style"),  # 6 (sentinel) keep as block once ready
+        Output("pf-desc", "children"),    # 7 description content
+        Output("wrap-desc", "style"),     # 8 description visibility
         Input("pf-mode", "value"),
         Input("pf-facility", "value"),
         Input("pf-source", "value"),
@@ -747,7 +885,17 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         # wait until all filters selected (Duration removed)
         has_all = all([mode, facility, source])
         if not has_all:
-            return [], {"display": "none"}, [], {"display": "none"}, {"display": "none"}, [], {"display": "none"}
+            return (
+                [],
+                {"display": "none"},
+                [],
+                {"display": "none"},
+                [],
+                {"display": "none"},
+                {"display": "none"},
+                [],
+                {"display": "none"},
+            )
 
         df = base_df.copy()
         cf = str.casefold
@@ -797,6 +945,17 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if embed_component is not None:
             map_children = embed_component
             map_style = {"display": "block"}
+
+        eco_children = []
+        eco_style = {"display": "none"}
+        show_eco_dashboard = (
+            str(mode or "").strip().casefold() == "bicyclist"
+            and str(facility or "").strip().casefold() == "on-street (sidewalk/bike lane)"
+            and source_val == "wisconsin pilot counting counts"
+        )
+        if show_eco_dashboard:
+            eco_children = _build_eco_dashboard_content(df)
+            eco_style = {"display": "block"}
 
         # --- Descriptions by source selection ---
         mode_val = (mode or "").strip().lower()
@@ -872,12 +1031,32 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         desc_style = {"display": "block"} if description else {"display": "none"}
 
         if df.empty:
-            return map_children, map_style, [], {"display": "block"}, {"display": "block"}, description, desc_style
+            return (
+                map_children,
+                map_style,
+                eco_children,
+                eco_style,
+                [],
+                {"display": "block"},
+                {"display": "block"},
+                description,
+                desc_style,
+            )
 
         df = df.copy()
         df["View"] = df.apply(_build_view_link, axis=1)
         rows = df[[c["id"] for c in DISPLAY_COLUMNS]].to_dict("records")
-        return map_children, map_style, rows, {"display": "block"}, {"display": "block"}, description, desc_style
+        return (
+            map_children,
+            map_style,
+            eco_children,
+            eco_style,
+            rows,
+            {"display": "block"},
+            {"display": "block"},
+            description,
+            desc_style,
+        )
 
     def _trail_crossing_desc():
         return html.Div(
