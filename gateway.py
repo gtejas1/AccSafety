@@ -1,5 +1,8 @@
 # gateway.py
+import json
 import os
+from typing import Dict, List
+from pathlib import Path
 from urllib.parse import quote
 from flask import Flask, render_template, render_template_string, redirect, request, session
 
@@ -12,8 +15,74 @@ from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore
 
 
+BASE_DIR = Path(__file__).resolve().parent
+
 VALID_USERS = {"admin": "admin", "user1": "mypassword"}
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
+
+
+def load_whats_new_entries(limit: int = 15):
+    """Load What's New entries from a manually curated JSON file."""
+
+    whats_new_path = BASE_DIR / "whats_new.json"
+    if not whats_new_path.exists():
+        return []
+
+    try:
+        raw_entries = json.loads(whats_new_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+
+    normalized_entries: List[Dict[str, object]] = []
+    for raw_entry in raw_entries:
+        if not isinstance(raw_entry, dict):
+            continue
+
+        version = str(raw_entry.get("version") or "").strip()
+        if not version:
+            continue
+
+        version_full = str(raw_entry.get("version_full") or version).strip() or version
+        date = str(raw_entry.get("date") or "").strip()
+
+        highlights_raw = raw_entry.get("highlights", [])
+        if isinstance(highlights_raw, str):
+            highlights = [highlights_raw.strip()]
+        else:
+            highlights = [str(item).strip() for item in highlights_raw if str(item).strip()]
+
+        if not highlights:
+            continue
+
+        links_raw = raw_entry.get("links") or []
+        if isinstance(links_raw, dict):
+            links_iterable = [links_raw]
+        else:
+            links_iterable = links_raw
+
+        links = []
+        for link in links_iterable:
+            if not isinstance(link, dict):
+                continue
+            label = str(link.get("label") or "").strip()
+            url = str(link.get("url") or "").strip()
+            if label and url:
+                links.append({"label": label, "url": url})
+
+        normalized_entries.append(
+            {
+                "version": version,
+                "version_full": version_full,
+                "date": date,
+                "highlights": highlights,
+                "links": links or None,
+            }
+        )
+
+        if len(normalized_entries) >= limit:
+            break
+
+    return normalized_entries
 
 
 def create_server():
@@ -277,6 +346,7 @@ def create_server():
       </div>
       <nav class="app-nav portal-nav" aria-label="Main navigation">
         <a class="app-link" href="/guide">User Guide</a>
+        <a class="app-link" href="/whats-new">What's New</a>
         <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
       </nav>
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
@@ -389,6 +459,11 @@ def create_server():
     @server.route("/guide")
     def user_guide():
         return render_template("user_guide.html", user=session.get("user", "user"))
+
+    @server.route("/whats-new")
+    def whats_new():
+        entries = load_whats_new_entries()
+        return render_template("whats_new.html", entries=entries, user=session.get("user", "user"))
 
     return server
 
