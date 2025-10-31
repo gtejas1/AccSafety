@@ -21,15 +21,15 @@ VALID_USERS = {"admin": "admin", "user1": "mypassword"}
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
 
 
-def load_changelog_entries(limit: int = 15):
-    """Load changelog entries from a manually curated JSON file."""
+def load_whats_new_entries(limit: int = 15):
+    """Load What's New entries from a manually curated JSON file."""
 
-    changelog_path = BASE_DIR / "changelog.json"
-    if not changelog_path.exists():
+    whats_new_path = BASE_DIR / "whats_new.json"
+    if not whats_new_path.exists():
         return []
 
     try:
-        raw_entries = json.loads(changelog_path.read_text(encoding="utf-8"))
+        raw_entries = json.loads(whats_new_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return []
 
@@ -346,7 +346,7 @@ def create_server():
       </div>
       <nav class="app-nav portal-nav" aria-label="Main navigation">
         <a class="app-link" href="/guide">User Guide</a>
-        <a class="app-link" href="/changelog">Changelog</a>
+        <a class="app-link" href="/whats-new">What's New</a>
         <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
       </nav>
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
@@ -460,10 +460,10 @@ def create_server():
     def user_guide():
         return render_template("user_guide.html", user=session.get("user", "user"))
 
-    @server.route("/changelog")
-    def changelog():
-        entries = load_changelog_entries()
-        return render_template("changelog.html", entries=entries, user=session.get("user", "user"))
+    @server.route("/whats-new")
+    def whats_new():
+        entries = load_whats_new_entries()
+        return render_template("whats_new.html", entries=entries, user=session.get("user", "user"))
 
     return server
 

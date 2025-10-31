@@ -3,13 +3,13 @@
     "version": "2025.10.30",
     "date": "2025-10-30",
     "highlights": [
-      "Added a dedicated changelog page inside the portal so partners can review the latest updates without leaving the app.",
-      "Switched the changelog source to a checked-in JSON file so deployments without Git metadata still surface release notes."
+      "Added a dedicated What's New page inside the portal so partners can review the latest updates without leaving the app.",
+      "Switched the What's New source to a checked-in JSON file so deployments without Git metadata still surface release notes."
     ],
     "links": [
       {
-        "label": "View the portal changelog",
-        "url": "/changelog"
+        "label": "View the portal What's New page",
+        "url": "/whats-new"
       }
     ]
   },
