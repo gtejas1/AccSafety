@@ -1,35 +1,33 @@
 [
   {
-    "version": "2024.07",
-    "date": "2024-07-22",
+    "version": "2025.10.30",
+    "date": "2025-10-30",
     "highlights": [
-      "Launched the Summer Safety update with a refreshed home page that spotlights the most-used crash, trail, and eco dashboards in one place.",
-      "Introduced neighborhood-level crash density heatmaps so planners can spot hotspots without running custom queries.",
-      "Added a quick-start guide link in the header to help new agency partners get oriented in minutes."
+      "Added a dedicated changelog page inside the portal so partners can review the latest updates without leaving the app.",
+      "Switched the changelog source to a checked-in JSON file so deployments without Git metadata still surface release notes."
     ],
     "links": [
       {
-        "label": "Summer Safety quick-start guide",
-        "url": "https://example.org/accsafety/summer-safety-2024"
+        "label": "View the portal changelog",
+        "url": "/changelog"
       }
     ]
   },
   {
-    "version": "2024.06",
-    "date": "2024-06-14",
+    "version": "2025.10.29",
+    "date": "2025-10-29",
     "highlights": [
-      "Rolled out corridor comparison cards that highlight year-over-year crash trends for your saved routes.",
-      "Made the downloads page friendlier with plain-language file names and estimated download sizes.",
-      "Improved screen reader support across the portal navigation for better accessibility."
+      "Replaced the Unified Explore basemap with an ArcGIS embed for faster loading and consistent layer styling across corridors.",
+      "Simplified the explore view by removing heavy Plotly dependencies while preserving the key corridor analytics."
     ]
   },
   {
-    "version": "2024.05",
-    "date": "2024-05-02",
+    "version": "2025.10.28",
+    "date": "2025-10-28",
     "highlights": [
-      "Published a new overview tab that explains what each dashboard covers and who it helps.",
-      "Simplified sign-in messaging so first-time users know exactly which credentials to use.",
-      "Tuned the mobile layout so charts resize cleanly on tablets during field visits."
+      "Enabled shareable Vivacity dashboard links that remember the selected mode and sensor context.",
+      "Expanded the default Vivacity selection so new viewers immediately see representative corridors.",
+      "Grouped Vivacity time-series charts by direction to make northbound and southbound trends easier to compare."
     ]
   }
 ]
