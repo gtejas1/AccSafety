@@ -1,8 +1,7 @@
 # gateway.py
+import json
 import os
-import subprocess
-from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List
 from pathlib import Path
 from urllib.parse import quote
 from flask import Flask, render_template, render_template_string, redirect, request, session
@@ -21,105 +20,69 @@ BASE_DIR = Path(__file__).resolve().parent
 VALID_USERS = {"admin": "admin", "user1": "mypassword"}
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
 
-def _resolve_remote_base_url(base_dir: Path) -> Optional[str]:
-    """Return a browsable remote URL if the repository has one configured."""
 
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(base_dir), "config", "--get", "remote.origin.url"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
+def load_whats_new_entries(limit: int = 15):
+    """Load What's New entries from a manually curated JSON file."""
 
-    remote = result.stdout.strip()
-    if not remote:
-        return None
-
-    if remote.startswith("git@github.com:"):
-        remote = remote.replace("git@github.com:", "https://github.com/")
-    if remote.endswith(".git"):
-        remote = remote[:-4]
-
-    if remote.startswith("https://") or remote.startswith("http://"):
-        if "github.com" in remote:
-            return remote
-        return None
-    return None
-
-
-def load_changelog_entries(limit: int = 15):
-    """Load recent commit history as changelog entries."""
-
-    try:
-        result = subprocess.run(
-            [
-                "git",
-                "-C",
-                str(BASE_DIR),
-                "log",
-                f"-{limit}",
-                "--date=iso-strict",
-                "--pretty=format:%H%x1f%ad%x1f%s%x1f%b%x1e",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    whats_new_path = BASE_DIR / "whats_new.json"
+    if not whats_new_path.exists():
         return []
 
-    remote_base = _resolve_remote_base_url(BASE_DIR)
-    entries = []
+    try:
+        raw_entries = json.loads(whats_new_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
 
-    for raw_entry in result.stdout.strip("\n\x1e").split("\x1e"):
-        if not raw_entry.strip():
+    normalized_entries: List[Dict[str, object]] = []
+    for raw_entry in raw_entries:
+        if not isinstance(raw_entry, dict):
             continue
-        parts = raw_entry.split("\x1f")
-        if len(parts) < 3:
+
+        version = str(raw_entry.get("version") or "").strip()
+        if not version:
             continue
 
-        commit_hash, raw_date, subject = parts[:3]
-        body = parts[3] if len(parts) > 3 else ""
+        version_full = str(raw_entry.get("version_full") or version).strip() or version
+        date = str(raw_entry.get("date") or "").strip()
 
-        try:
-            parsed_date = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
-            display_date = parsed_date.strftime("%Y-%m-%d")
-        except ValueError:
-            display_date = raw_date
-
-        highlights: List[str] = []
-        for line in body.splitlines():
-            clean_line = line.strip().lstrip("-*•").strip()
-            if clean_line:
-                highlights.append(clean_line)
+        highlights_raw = raw_entry.get("highlights", [])
+        if isinstance(highlights_raw, str):
+            highlights = [highlights_raw.strip()]
+        else:
+            highlights = [str(item).strip() for item in highlights_raw if str(item).strip()]
 
         if not highlights:
-            subject = subject.strip()
-            if subject:
-                highlights.append(subject)
+            continue
 
-        entry: Dict[str, object] = {
-            "version": commit_hash[:7],
-            "version_full": commit_hash,
-            "date": display_date,
-            "highlights": highlights,
-            "links": None,
-        }
+        links_raw = raw_entry.get("links") or []
+        if isinstance(links_raw, dict):
+            links_iterable = [links_raw]
+        else:
+            links_iterable = links_raw
 
-        if remote_base:
-            entry["links"] = [
-                {
-                    "label": "View commit",
-                    "url": f"{remote_base}/commit/{commit_hash}",
-                }
-            ]
+        links = []
+        for link in links_iterable:
+            if not isinstance(link, dict):
+                continue
+            label = str(link.get("label") or "").strip()
+            url = str(link.get("url") or "").strip()
+            if label and url:
+                links.append({"label": label, "url": url})
 
-        entries.append(entry)
+        normalized_entries.append(
+            {
+                "version": version,
+                "version_full": version_full,
+                "date": date,
+                "highlights": highlights,
+                "links": links or None,
+            }
+        )
 
-    return entries
+        if len(normalized_entries) >= limit:
+            break
+
+    return normalized_entries
 
 
 def create_server():
@@ -383,7 +346,7 @@ def create_server():
       </div>
       <nav class="app-nav portal-nav" aria-label="Main navigation">
         <a class="app-link" href="/guide">User Guide</a>
-        <a class="app-link" href="/changelog">Changelog</a>
+        <a class="app-link" href="/whats-new">What's New</a>
         <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
       </nav>
       <div class="app-user">Signed in as <strong>{{ user }}</strong> · <a href="/logout">Log out</a></div>
@@ -497,10 +460,10 @@ def create_server():
     def user_guide():
         return render_template("user_guide.html", user=session.get("user", "user"))
 
-    @server.route("/changelog")
-    def changelog():
-        entries = load_changelog_entries()
-        return render_template("changelog.html", entries=entries, user=session.get("user", "user"))
+    @server.route("/whats-new")
+    def whats_new():
+        entries = load_whats_new_entries()
+        return render_template("whats_new.html", entries=entries, user=session.get("user", "user"))
 
     return server
 

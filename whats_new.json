@@ -1,0 +1,33 @@
+[
+  {
+    "version": "2025.10.30",
+    "date": "2025-10-30",
+    "highlights": [
+      "Added a dedicated What's New page inside the portal so partners can review the latest updates without leaving the app.",
+      "Switched the What's New source to a checked-in JSON file so deployments without Git metadata still surface release notes."
+    ],
+    "links": [
+      {
+        "label": "View the portal What's New page",
+        "url": "/whats-new"
+      }
+    ]
+  },
+  {
+    "version": "2025.10.29",
+    "date": "2025-10-29",
+    "highlights": [
+      "Replaced the Unified Explore basemap with an ArcGIS embed for faster loading and consistent layer styling across corridors.",
+      "Simplified the explore view by removing heavy Plotly dependencies while preserving the key corridor analytics."
+    ]
+  },
+  {
+    "version": "2025.10.28",
+    "date": "2025-10-28",
+    "highlights": [
+      "Enabled shareable Vivacity dashboard links that remember the selected mode and sensor context.",
+      "Expanded the default Vivacity selection so new viewers immediately see representative corridors.",
+      "Grouped Vivacity time-series charts by direction to make northbound and southbound trends easier to compare."
+    ]
+  }
+]
