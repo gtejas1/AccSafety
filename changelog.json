@@ -1,32 +1,35 @@
 [
   {
-    "version": "2024.05",
-    "version_full": "2024.05",
-    "date": "2024-05-10",
+    "version": "2024.07",
+    "date": "2024-07-22",
     "highlights": [
-      "Introduced manual release notes sourced from a checked-in JSON file.",
-      "Documented recent mobility dashboard enhancements for partner review."
+      "Launched the Summer Safety update with a refreshed home page that spotlights the most-used crash, trail, and eco dashboards in one place.",
+      "Introduced neighborhood-level crash density heatmaps so planners can spot hotspots without running custom queries.",
+      "Added a quick-start guide link in the header to help new agency partners get oriented in minutes."
     ],
     "links": [
       {
-        "label": "Program overview",
-        "url": "https://uwm.edu/ipit/wi-pedbike-dashboard/"
+        "label": "Summer Safety quick-start guide",
+        "url": "https://example.org/accsafety/summer-safety-2024"
       }
     ]
   },
   {
-    "version": "2024.04",
-    "date": "2024-04-18",
+    "version": "2024.06",
+    "date": "2024-06-14",
     "highlights": [
-      "Expanded statewide safety ingest pipeline coverage.",
-      "Refined portal navigation labels for clarity."
+      "Rolled out corridor comparison cards that highlight year-over-year crash trends for your saved routes.",
+      "Made the downloads page friendlier with plain-language file names and estimated download sizes.",
+      "Improved screen reader support across the portal navigation for better accessibility."
     ]
   },
   {
-    "version": "2024.03",
-    "date": "2024-03-02",
+    "version": "2024.05",
+    "date": "2024-05-02",
     "highlights": [
-      "Improved authentication messaging for new partners."
+      "Published a new overview tab that explains what each dashboard covers and who it helps.",
+      "Simplified sign-in messaging so first-time users know exactly which credentials to use.",
+      "Tuned the mobile layout so charts resize cleanly on tablets during field visits."
     ]
   }
 ]
