@@ -1,0 +1,32 @@
+[
+  {
+    "version": "2024.05",
+    "version_full": "2024.05",
+    "date": "2024-05-10",
+    "highlights": [
+      "Introduced manual release notes sourced from a checked-in JSON file.",
+      "Documented recent mobility dashboard enhancements for partner review."
+    ],
+    "links": [
+      {
+        "label": "Program overview",
+        "url": "https://uwm.edu/ipit/wi-pedbike-dashboard/"
+      }
+    ]
+  },
+  {
+    "version": "2024.04",
+    "date": "2024-04-18",
+    "highlights": [
+      "Expanded statewide safety ingest pipeline coverage.",
+      "Refined portal navigation labels for clarity."
+    ]
+  },
+  {
+    "version": "2024.03",
+    "date": "2024-03-02",
+    "highlights": [
+      "Improved authentication messaging for new partners."
+    ]
+  }
+]
