@@ -732,7 +732,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     ),
                     dbc.Col(
                         [
-                            html.Div(id="wrap-map", children=[map_card], style={"display": "none"}),
+                            html.Div(id="wrap-map", children=[map_card]),
                             eco_wrap,
                             dcc.Loading(
                                 id="pf-wrap-loader",
@@ -860,7 +860,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             return (
                 base_map_children,
                 [],
-                {"display": "none"},
+                {"display": "block"},
                 [],
                 {"display": "none"},
                 [],
@@ -913,13 +913,13 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         df["View"] = df.apply(_build_view_link, axis=1)
 
         source_val = str(source or "").strip().casefold()
-        map_layers, legend_children, has_points = _build_leaflet_layers(df)
+        map_layers, legend_children, _has_points = _build_leaflet_layers(df)
         map_children = [
             dl.TileLayer(),
             dl.ScaleControl(position="bottomleft"),
             *map_layers,
         ]
-        map_style = {"display": "block"} if has_points else {"display": "none"}
+        map_style = {"display": "block"}
 
         eco_children = []
         eco_style = {"display": "none"}
