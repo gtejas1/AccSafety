@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import time
 import random
+import json
+import itertools
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 import urllib.parse
 import pandas as pd
@@ -11,86 +14,59 @@ from sqlalchemy import create_engine
 
 import requests
 import dash
-from dash import dcc, html, Input, Output, dash_table
+import dash_leaflet as dl
+from dash import dcc, html, Input, Output, State, dash_table
 import dash_bootstrap_components as dbc
+from dash.exceptions import PreventUpdate
 
 from theme import card, dash_page
 
 DB_URL = "postgresql://postgres:gw2ksoft@localhost/TrafficDB"
 ENGINE = create_engine(DB_URL)
 
+WI_COUNTIES_PATH = Path("assets/data/wi_counties.geojson")
+try:
+    _WI_COUNTIES = json.loads(WI_COUNTIES_PATH.read_text())
+except FileNotFoundError:
+    _WI_COUNTIES = {"type": "FeatureCollection", "features": []}
+
+DEFAULT_CENTER = [43.07196694820907, -88.15601552734218]
+DEFAULT_ZOOM = 7
+HIGHLIGHT_ZOOM = 14
+_SOURCE_TYPE_COLORS = [
+    "#2563eb",
+    "#0f766e",
+    "#f97316",
+    "#7c3aed",
+    "#db2777",
+    "#0ea5e9",
+    "#ef4444",
+]
+_COUNTY_STYLE = {
+    "color": "#1f2937",
+    "weight": 1,
+    "fillOpacity": 0,
+}
+_COUNTY_HOVER_STYLE = {
+    "weight": 2,
+    "color": "#0ea5e9",
+    "fillOpacity": 0.05,
+}
+
 # ---- Custom UI source (Milwaukee StoryMap image card path) ----
 NEW_SOURCE_NAME = "Annual Average Estimated Counts (Milwaukee County)"
 NEW_FACILITY    = "On-Street (Sidewalk/Bike Lane)"
 NEW_MODE        = "Both"
 STORYMAP_URL    = "https://storymaps.arcgis.com/stories/281bfdde23a7411ca63f84d1fafa2098"
-
-# ---- ArcGIS config for Wisconsin Ped/Bike Database (Statewide) ----
-SW_ITEM_ID = "5badd855f3384cb1ab03eb0470a93f20"
-SW_CENTER  = "-88.15601552734218,43.07196694820907"
-SW_SCALE   = "1155581.108577"
-SW_THEME   = "light"
-SW_FLAGS   = [
-    "bookmarks-enabled",
-    "heading-enabled",
-    "legend-enabled",
-    "information-enabled",
-    "share-enabled",
-]
-
-# ---- ArcGIS config for SEWRPC Trail User Counts ----
-SEWRPC_ITEM_ID = "5e8b05a112b94650a301851d1e1a2261"
-SEWRPC_CENTER  = "-88.03767204768742,43.16456958096229"
-SEWRPC_SCALE   = "1155581.108577"
-SEWRPC_THEME   = "light"
-SEWRPC_FLAGS   = [
-    "bookmarks-enabled",
-    "legend-enabled",
-    "information-enabled",
-    "share-enabled",
-]
-
-# ---- ArcGIS config for Milwaukee AAEC map (NEW_SOURCE_NAME) ----
-MKE_AAEC_ITEM_ID = "7ff38f1ef8fa4f43a939a7fdefc06129"
-MKE_AAEC_CENTER  = "-87.92059898860481,43.02041024549958"
-MKE_AAEC_SCALE   = "288895.277144"
-MKE_AAEC_THEME   = "light"
-MKE_AAEC_FLAGS   = [
-    "bookmarks-enabled",
-    "legend-enabled",
-    "information-enabled",
-    "share-enabled",
-]
-
-# ---- NEW: Mid-Block crossing (Pedestrian) - Milwaukee County map ----
+# ---- NEW: Mid-Block crossing (Pedestrian) - Milwaukee County ----
 MIDBLOCK_MODE       = "Pedestrian"
 MIDBLOCK_FACILITY   = "Mid-Block crossing"
 MIDBLOCK_SOURCE     = "Mid-Block pedestrian counts (Milwaukee County)"
-MIDBLOCK_ITEM_ID    = "4fb509de628b44ffba4ef5d26c5145d9"
-MIDBLOCK_CENTER     = "-87.95344553737603,43.065172443412855"
-MIDBLOCK_SCALE      = "288895.277144"
-MIDBLOCK_THEME      = "light"
-MIDBLOCK_FLAGS      = [
-    "legend-enabled",
-    "information-enabled",
-    "share-enabled",
-]
 
 # ---- NEW: Trail Crossing Crash Models (Exposure-Based Study) ----
 TRAIL_CROSS_MODE            = "Both"
 TRAIL_CROSS_FACILITY        = "Trail Crossings"
 TRAIL_CROSS_SOURCE          = "Trail Crossing Crash Models (Exposure-Based Study)"
-TRAIL_CROSS_ITEM_ID         = "08541fe9b8e044c2b864f224285087ee"
-TRAIL_CROSS_CENTER          = "-88.09723807958986,43.058800525669064"
-TRAIL_CROSS_SCALE           = "1155581.1085775"
-TRAIL_CROSS_THEME           = "light"
-TRAIL_CROSS_FLAGS           = [
-    "bookmarks-enabled",
-    "legend-enabled",
-    "information-enabled",
-]
-TRAIL_CROSS_PORTAL_URL      = "https://uwm.maps.arcgis.com"
-TRAIL_CROSS_SCRIPT_SRC      = "https://js.arcgis.com/4.34/embeddable-components/"
 
 # ---- Special rows (Intersection) ----
 SP_LOCATION     = "W Wells St & N 68th St Intersection"
@@ -118,26 +94,8 @@ try:
 except Exception:
     LOCAL_TZ = timezone.utc
 
-# ---- ArcGIS embeddable (Pilot map defaults) ----
-ARCGIS_EMBED_SCRIPT_SRC = "https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"
-ARCGIS_ITEM_ID          = "b1c8cf7f6ace440ea97743ef95e7b1f6"
-ARCGIS_PORTAL_URL       = "https://uwm.maps.arcgis.com"
-ARCGIS_CENTER           = "-88.29241753108553,43.84041853130462"
-ARCGIS_SCALE            = "2311162.217155"
-ARCGIS_THEME            = "light"
-ARCGIS_BOOKMARKS        = True
-ARCGIS_LEGEND           = True
-ARCGIS_INFO             = True
-ARCGIS_MIN_HEIGHT       = "420px"
-
 # ---- NEW: Pedestrian + Intersection + AAEC (Wisconsin Statewide) ----
 PED_INT_AAEC_STATEWIDE = "Annual Average Estimated Counts (Wisconsin Statewide)"
-PED_INT_AAEC_EMBED_URL = (
-    "https://www.arcgis.com/apps/Embed/index.html"
-    "?webmap=1c16b969156844dfb493597bbab5da75"
-    "&extent=-87.9534,43.0184,-87.8522,43.0583"
-    "&zoom=true&scale=true&legendlayers=true&disable_scroll=true&theme=light"
-)
 
 # ---- Table display columns ----
 DISPLAY_COLUMNS = [
@@ -146,6 +104,12 @@ DISPLAY_COLUMNS = [
     {"name": "Total counts", "id": "Total counts", "type": "numeric"},
     {"name": "Source type", "id": "Source type"},
     {"name": "View", "id": "View", "presentation": "markdown"},
+]
+
+TABLE_HIDDEN_COLUMNS = ["Latitude", "Longitude"]
+TABLE_COLUMNS = DISPLAY_COLUMNS + [
+    {"name": "Latitude", "id": "Latitude", "type": "numeric"},
+    {"name": "Longitude", "id": "Longitude", "type": "numeric"},
 ]
 
 UNIFIED_SQL = """
@@ -309,6 +273,200 @@ def _build_view_link(row: pd.Series) -> str:
     return "[Open](https://uwm.edu/ipit/wisconsin-pedestrian-volume-model/)"
 
 
+def _parse_markdown_link(value: str | None) -> tuple[str, str] | None:
+    if not isinstance(value, str):
+        return None
+    value = value.strip()
+    if not (value.startswith("[") and "](" in value and value.endswith(")")):
+        return None
+    try:
+        label, remainder = value[1:].split("](", 1)
+        href = remainder[:-1]
+    except ValueError:
+        return None
+    if not href:
+        return None
+    return label or "Open", href
+
+
+def _build_leaflet_layers(df: pd.DataFrame) -> tuple[list, list, bool]:
+    layers: list = []
+    legend_children: list = []
+
+    counties_layer = dl.GeoJSON(
+        id="pf-map-counties",
+        data=_WI_COUNTIES,
+        options={"style": _COUNTY_STYLE},
+        hoverStyle=_COUNTY_HOVER_STYLE,
+    )
+    layers.append(counties_layer)
+
+    if df is None or df.empty:
+        return layers, legend_children, False
+
+    df_points = df.dropna(subset=["Latitude", "Longitude"])
+    if df_points.empty:
+        return layers, legend_children, False
+
+    df_points = df_points.copy()
+    df_points["Latitude"] = pd.to_numeric(df_points["Latitude"], errors="coerce")
+    df_points["Longitude"] = pd.to_numeric(df_points["Longitude"], errors="coerce")
+    df_points = df_points.dropna(subset=["Latitude", "Longitude"])
+    if df_points.empty:
+        return layers, legend_children, False
+
+    color_cycle = itertools.cycle(_SOURCE_TYPE_COLORS)
+    color_map: dict[str, str] = {}
+
+    def _color_for(source_type: str) -> str:
+        key = (source_type or "Unknown").strip() or "Unknown"
+        if key not in color_map:
+            color_map[key] = next(color_cycle)
+        return color_map[key]
+
+    def _fmt_total(value) -> str:
+        try:
+            num = float(value)
+        except (TypeError, ValueError):
+            return "—"
+        if pd.isna(num):
+            return "—"
+        return f"{int(round(num)):,}"
+
+    markers = []
+    for _, row in df_points.iterrows():
+        lat = row.get("Latitude")
+        lon = row.get("Longitude")
+        if pd.isna(lat) or pd.isna(lon):
+            continue
+
+        location = (row.get("Location") or "Unknown location").strip() or "Unknown location"
+        duration = (row.get("Duration") or "—").strip() or "—"
+        total_counts = _fmt_total(row.get("Total counts"))
+        source_type = (row.get("Source type") or "Unknown").strip() or "Unknown"
+        source_name = (row.get("Source") or "Unknown").strip() or "Unknown"
+        facility = (row.get("Facility type") or "—").strip() or "—"
+        mode = (row.get("Mode") or "—").strip() or "—"
+        color = _color_for(source_type)
+
+        link_info = _parse_markdown_link(row.get("View"))
+        if link_info:
+            link_label, link_href = link_info
+            link_component = html.A(
+                link_label,
+                href=link_href,
+                target="_blank",
+                rel="noopener noreferrer",
+                className="pf-map-popup-link",
+            )
+        else:
+            link_component = None
+
+        popup_details = [
+            html.Div(
+                [
+                    html.Span("Duration", className="pf-map-popup-label"),
+                    html.Span(duration, className="pf-map-popup-value"),
+                ],
+                className="pf-map-popup-row",
+            ),
+            html.Div(
+                [
+                    html.Span("Total counts", className="pf-map-popup-label"),
+                    html.Span(total_counts, className="pf-map-popup-value"),
+                ],
+                className="pf-map-popup-row",
+            ),
+            html.Div(
+                [
+                    html.Span("Source type", className="pf-map-popup-label"),
+                    html.Span(source_type, className="pf-map-popup-value"),
+                ],
+                className="pf-map-popup-row",
+            ),
+            html.Div(
+                [
+                    html.Span("Facility", className="pf-map-popup-label"),
+                    html.Span(facility, className="pf-map-popup-value"),
+                ],
+                className="pf-map-popup-row",
+            ),
+            html.Div(
+                [
+                    html.Span("Mode", className="pf-map-popup-label"),
+                    html.Span(mode, className="pf-map-popup-value"),
+                ],
+                className="pf-map-popup-row",
+            ),
+            html.Div(
+                [
+                    html.Span("Source", className="pf-map-popup-label"),
+                    html.Span(source_name, className="pf-map-popup-value"),
+                ],
+                className="pf-map-popup-row",
+            ),
+        ]
+        if link_component:
+            popup_details.append(
+                html.Div(link_component, className="pf-map-popup-actions")
+            )
+
+        popup = dl.Popup(
+            html.Div(
+                [
+                    html.H5(location, className="pf-map-popup-title"),
+                    *popup_details,
+                ],
+                className="pf-map-popup",
+            ),
+            maxWidth=320,
+        )
+
+        marker = dl.CircleMarker(
+            center=(lat, lon),
+            radius=9,
+            color=color,
+            fill=True,
+            fillOpacity=0.85,
+            weight=2,
+            children=popup,
+        )
+        markers.append(marker)
+
+    if not markers:
+        return layers, legend_children, False
+
+    site_layer = dl.LayerGroup(markers, id="pf-map-sites")
+    layers.append(site_layer)
+
+    legend_children = [
+        html.Div(
+            [
+                html.Div("Source type", className="pf-map-legend-title"),
+                html.Ul(
+                    [
+                        html.Li(
+                            [
+                                html.Span(
+                                    className="pf-map-legend-swatch",
+                                    style={"backgroundColor": color_map[label]},
+                                ),
+                                html.Span(label, className="pf-map-legend-label"),
+                            ],
+                            className="pf-map-legend-item",
+                        )
+                        for label in color_map
+                    ],
+                    className="pf-map-legend-list list-unstyled mb-0",
+                ),
+            ],
+            className="pf-map-legend-inner",
+        )
+    ]
+
+    return layers, legend_children, True
+
+
 def _build_eco_dashboard_content(df: pd.DataFrame) -> list:
     df_counts = df.copy()
     if "Total counts" not in df_counts.columns or df_counts.empty:
@@ -444,230 +602,6 @@ def _opts(vals) -> list[dict]:
     uniq = sorted({v for v in vals if isinstance(v, str) and v.strip()})
     return [{"label": v, "value": v} for v in uniq]
 
-# ---------- ArcGIS iframe helper (reusable for multiple sources) ----------
-def _arcgis_embedded_map_component(
-    container_id: str,
-    *,
-    item_id: str,
-    center: str,
-    scale: str,
-    theme: str = "light",
-    flags: list[str] | None = None,
-) -> html.Iframe:
-    flags = (flags or [])
-    flags_html = " ".join(flags)
-    srcdoc = f"""<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8"/>
-    <meta name="viewport" content="width=device-width,initial-scale=1"/>
-    <script type="module" src="{ARCGIS_EMBED_SCRIPT_SRC}"></script>
-    <style>
-      html,body{{margin:0;padding:0;height:100%;width:100%;background:transparent}}
-      #holder{{height:100%;width:100%;display:flex;align-items:stretch;justify-content:stretch}}
-      arcgis-embedded-map{{height:100%;width:100%}}
-    </style>
-  </head>
-  <body>
-    <div id="holder">
-      <arcgis-embedded-map
-        item-id="{item_id}"
-        theme="{theme}"
-        portal-url="{ARCGIS_PORTAL_URL}"
-        center="{center}"
-        scale="{scale}"
-        {flags_html}
-      ></arcgis-embedded-map>
-    </div>
-  </body>
-</html>"""
-    return html.Iframe(
-        id=container_id,
-        srcDoc=srcdoc,
-        sandbox="allow-scripts allow-same-origin allow-popups allow-forms",
-        style={
-            "width": "100%",
-            "height": "600px",
-            "minHeight": ARCGIS_MIN_HEIGHT,
-            "border": "0",
-            "borderRadius": "10px",
-            "boxShadow": "0 1px 4px rgba(0,0,0,0.1)",
-            "background": "transparent",
-        },
-    )
-
-
-def _trail_crossing_embedded_map(container_id: str = "trail-crossing-map") -> html.Iframe:
-    def _attrs_html() -> str:
-        base_attrs = [
-            ("item-id", TRAIL_CROSS_ITEM_ID),
-            ("portal-url", TRAIL_CROSS_PORTAL_URL),
-            ("theme", TRAIL_CROSS_THEME),
-            ("center", TRAIL_CROSS_CENTER),
-            ("scale", TRAIL_CROSS_SCALE),
-        ]
-        return "".join(
-            f"\n        {name}=\"{value}\""
-            for name, value in base_attrs
-            if value
-        )
-
-    def _flags_html() -> str:
-        return "".join(f"\n        {flag}" for flag in (TRAIL_CROSS_FLAGS or []))
-
-    srcdoc = f"""<!doctype html>
-<html lang=\"en\">
-  <head>
-    <meta charset=\"utf-8\"/>
-    <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>
-    <script type=\"module\" src=\"{TRAIL_CROSS_SCRIPT_SRC}\"></script>
-    <style>
-      html,body{{margin:0;padding:0;height:100%;width:100%;background:transparent}}
-      #holder{{height:100%;width:100%;display:flex;align-items:stretch;justify-content:stretch}}
-      arcgis-embedded-map{{height:100%;width:100%}}
-    </style>
-  </head>
-  <body>
-    <div id=\"holder\">
-      <arcgis-embedded-map{_attrs_html()}{_flags_html()}>
-      </arcgis-embedded-map>
-    </div>
-  </body>
-</html>"""
-
-    return html.Iframe(
-        id=container_id,
-        srcDoc=srcdoc,
-        sandbox="allow-scripts allow-same-origin allow-popups allow-forms",
-        style={
-            "width": "100%",
-            "height": "600px",
-            "minHeight": ARCGIS_MIN_HEIGHT,
-            "border": "0",
-            "borderRadius": "10px",
-            "boxShadow": "0 1px 4px rgba(0,0,0,0.1)",
-            "background": "transparent",
-        },
-    )
-
-
-DEFAULT_IFRAME_STYLE = {
-    "width": "100%",
-    "height": "600px",
-    "minHeight": ARCGIS_MIN_HEIGHT,
-    "border": "0",
-    "borderRadius": "10px",
-    "boxShadow": "0 1px 4px rgba(0,0,0,0.1)",
-    "background": "transparent",
-}
-
-
-SOURCE_EMBEDS: dict[str, dict] = {
-    "wisconsin pilot counting counts": {
-        "kind": "arcgis",
-        "container_id": "pilot-map-container",
-        "item_id": ARCGIS_ITEM_ID,
-        "center": ARCGIS_CENTER,
-        "scale": ARCGIS_SCALE,
-        "theme": ARCGIS_THEME,
-        "flags": [
-            flag
-            for flag, enabled in (
-                ("bookmarks-enabled", ARCGIS_BOOKMARKS),
-                ("legend-enabled", ARCGIS_LEGEND),
-                ("information-enabled", ARCGIS_INFO),
-            )
-            if enabled
-        ],
-    },
-    "wisconsin ped/bike database (statewide)": {
-        "kind": "arcgis",
-        "container_id": "statewide-map-container",
-        "item_id": SW_ITEM_ID,
-        "center": SW_CENTER,
-        "scale": SW_SCALE,
-        "theme": SW_THEME,
-        "flags": SW_FLAGS,
-    },
-    "sewrpc trail user counts": {
-        "kind": "arcgis",
-        "container_id": "sewrpc-trails-map",
-        "item_id": SEWRPC_ITEM_ID,
-        "center": SEWRPC_CENTER,
-        "scale": SEWRPC_SCALE,
-        "theme": SEWRPC_THEME,
-        "flags": SEWRPC_FLAGS,
-    },
-    "off-street trail (sewrpc trail user counts)": {
-        "kind": "arcgis",
-        "container_id": "sewrpc-trails-map",
-        "item_id": SEWRPC_ITEM_ID,
-        "center": SEWRPC_CENTER,
-        "scale": SEWRPC_SCALE,
-        "theme": SEWRPC_THEME,
-        "flags": SEWRPC_FLAGS,
-    },
-    NEW_SOURCE_NAME.strip().casefold(): {
-        "kind": "arcgis",
-        "container_id": "mke-aaec-map",
-        "item_id": MKE_AAEC_ITEM_ID,
-        "center": MKE_AAEC_CENTER,
-        "scale": MKE_AAEC_SCALE,
-        "theme": MKE_AAEC_THEME,
-        "flags": MKE_AAEC_FLAGS,
-    },
-    TRAIL_CROSS_SOURCE.strip().casefold(): {
-        "kind": "builder",
-        "builder": _trail_crossing_embedded_map,
-    },
-    PED_INT_AAEC_STATEWIDE.strip().casefold(): {
-        "kind": "iframe",
-        "container_id": "ped-int-aaec-statewide-map",
-        "src": PED_INT_AAEC_EMBED_URL,
-    },
-    MIDBLOCK_SOURCE.strip().casefold(): {
-        "kind": "arcgis",
-        "container_id": "midblock-map",
-        "item_id": MIDBLOCK_ITEM_ID,
-        "center": MIDBLOCK_CENTER,
-        "scale": MIDBLOCK_SCALE,
-        "theme": MIDBLOCK_THEME,
-        "flags": MIDBLOCK_FLAGS,
-    },
-}
-
-
-def _source_embed_component(source_val: str | None):
-    if not source_val:
-        return None
-    key = source_val.strip().casefold()
-    config = SOURCE_EMBEDS.get(key)
-    if not config:
-        return None
-
-    kind = config.get("kind")
-    if kind == "arcgis":
-        return _arcgis_embedded_map_component(
-            container_id=config["container_id"],
-            item_id=config["item_id"],
-            center=config["center"],
-            scale=config["scale"],
-            theme=config.get("theme", "light"),
-            flags=config.get("flags") or [],
-        )
-    if kind == "iframe":
-        return html.Iframe(
-            id=config.get("container_id"),
-            src=config.get("src"),
-            style={**DEFAULT_IFRAME_STYLE, **(config.get("style") or {})},
-            sandbox="allow-same-origin allow-scripts allow-popups allow-forms",
-        )
-    if kind == "builder":
-        builder = config.get("builder")
-        if callable(builder):
-            return builder()
-    return None
-
 # ---------- App ----------
 def create_unified_explore(server, prefix: str = "/explore/"):
     app = dash.Dash(
@@ -723,7 +657,36 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     desc_block = card([html.Div(id="pf-desc", children=[])], class_name="mb-3")
 
     # Map (right, top)
-    map_card = card([html.Div(id="pf-map", children=[])], class_name="mb-3")
+    map_card = card(
+        [
+            html.Div(
+                [
+                    dl.Map(
+                        id="pf-leaflet-map",
+                        center=DEFAULT_CENTER,
+                        zoom=DEFAULT_ZOOM,
+                        zoomControl=True,
+                        style={"height": "600px", "width": "100%", "borderRadius": "12px"},
+                        children=[
+                            dl.TileLayer(),
+                            dl.ScaleControl(position="bottomleft"),
+                        ],
+                    ),
+                    html.Button(
+                        "Reset view",
+                        id="pf-map-home",
+                        n_clicks=0,
+                        className="pf-map-home btn btn-light btn-sm",
+                        title="Return to statewide view",
+                    ),
+                    html.Div(id="pf-map-legend", className="pf-map-legend shadow-sm"),
+                ],
+                id="pf-map",
+                className="pf-map-wrapper position-relative",
+            )
+        ],
+        class_name="mb-3",
+    )
 
     eco_wrap = html.Div(id="wrap-eco", children=[], style={"display": "none"})
 
@@ -736,11 +699,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 children=[
                     dash_table.DataTable(
                         id="pf-table",
-                        columns=DISPLAY_COLUMNS,
+                        columns=TABLE_COLUMNS,
                         data=[],
                         markdown_options={"html": True, "link_target": "_self"},
                         page_size=25,
                         sort_action="native",
+                        hidden_columns=TABLE_HIDDEN_COLUMNS,
                         style_table={"overflowX": "auto"},
                         style_as_list_view=True,
                         style_header={"backgroundColor": "#f1f5f9", "fontWeight": "bold", "fontSize": "15px"},
@@ -867,25 +831,34 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
     # ---------- Apply filters & toggle visibility ----------
     @app.callback(
-        Output("pf-map", "children"),     # 0 map content
-        Output("wrap-map", "style"),      # 1 map card visibility
-        Output("wrap-eco", "children"),   # 2 eco dashboard content
-        Output("wrap-eco", "style"),      # 3 eco dashboard visibility
-        Output("pf-table", "data"),       # 4 table rows
-        Output("wrap-table", "style"),    # 5 table card visibility
-        Output("wrap-results", "style"),  # 6 (sentinel) keep as block once ready
-        Output("pf-desc", "children"),    # 7 description content
-        Output("wrap-desc", "style"),     # 8 description visibility
+        Output("pf-leaflet-map", "children"),  # 0 map layers
+        Output("pf-map-legend", "children"),   # 1 legend overlay
+        Output("wrap-map", "style"),           # 2 map card visibility
+        Output("wrap-eco", "children"),        # 3 eco dashboard content
+        Output("wrap-eco", "style"),           # 4 eco dashboard visibility
+        Output("pf-table", "data"),            # 5 table rows
+        Output("wrap-table", "style"),         # 6 table card visibility
+        Output("wrap-results", "style"),       # 7 sentinel visibility
+        Output("pf-desc", "children"),         # 8 description content
+        Output("wrap-desc", "style"),          # 9 description visibility
         Input("pf-mode", "value"),
         Input("pf-facility", "value"),
         Input("pf-source", "value"),
         prevent_initial_call=False,
     )
     def _apply_filters(mode, facility, source):
+        default_layers, _, _ = _build_leaflet_layers(pd.DataFrame())
+        base_map_children = [
+            dl.TileLayer(),
+            dl.ScaleControl(position="bottomleft"),
+            *default_layers,
+        ]
+
         # wait until all filters selected (Duration removed)
         has_all = all([mode, facility, source])
         if not has_all:
             return (
+                base_map_children,
                 [],
                 {"display": "none"},
                 [],
@@ -936,15 +909,17 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             }
             df = pd.concat([df, pd.DataFrame([sp2_row])], ignore_index=True)
 
-        # --- Map selection (Pilot OR Statewide OR SEWRPC Trails OR Milwaukee AAEC OR NEW AAEC Statewide embed OR Mid-Block) ---
-        source_val = str(source or "").strip().casefold()
-        map_children = []
-        map_style = {"display": "none"}
+        df = df.copy()
+        df["View"] = df.apply(_build_view_link, axis=1)
 
-        embed_component = _source_embed_component(source_val)
-        if embed_component is not None:
-            map_children = embed_component
-            map_style = {"display": "block"}
+        source_val = str(source or "").strip().casefold()
+        map_layers, legend_children, has_points = _build_leaflet_layers(df)
+        map_children = [
+            dl.TileLayer(),
+            dl.ScaleControl(position="bottomleft"),
+            *map_layers,
+        ]
+        map_style = {"display": "block"} if has_points else {"display": "none"}
 
         eco_children = []
         eco_style = {"display": "none"}
@@ -1033,6 +1008,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if df.empty:
             return (
                 map_children,
+                legend_children,
                 map_style,
                 eco_children,
                 eco_style,
@@ -1043,11 +1019,11 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 desc_style,
             )
 
-        df = df.copy()
-        df["View"] = df.apply(_build_view_link, axis=1)
-        rows = df[[c["id"] for c in DISPLAY_COLUMNS]].to_dict("records")
+        table_cols = [c["id"] for c in DISPLAY_COLUMNS] + TABLE_HIDDEN_COLUMNS
+        rows = df[table_cols].to_dict("records")
         return (
             map_children,
+            legend_children,
             map_style,
             eco_children,
             eco_style,
@@ -1172,6 +1148,54 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 )
             ]
         )
+
+    @app.callback(
+        Output("pf-leaflet-map", "center"),
+        Output("pf-leaflet-map", "zoom"),
+        Input("pf-table", "active_cell"),
+        Input("pf-map-home", "n_clicks"),
+        Input("pf-leaflet-map", "children"),
+        State("pf-table", "derived_viewport_data"),
+        prevent_initial_call=True,
+    )
+    def _sync_map_to_table(active_cell, home_clicks, map_children, viewport_rows):
+        ctx = dash.callback_context
+        if not getattr(ctx, "triggered", None):
+            raise PreventUpdate
+
+        trigger_id = ctx.triggered[0]["prop_id"].split(".")[0]
+
+        if trigger_id == "pf-map-home" or trigger_id == "pf-leaflet-map":
+            return DEFAULT_CENTER, DEFAULT_ZOOM
+
+        if trigger_id != "pf-table":
+            raise PreventUpdate
+
+        if not active_cell or not viewport_rows:
+            raise PreventUpdate
+
+        if active_cell.get("column_id") != "Location":
+            raise PreventUpdate
+
+        row_index = active_cell.get("row")
+        if row_index is None:
+            raise PreventUpdate
+
+        if row_index < 0 or row_index >= len(viewport_rows):
+            raise PreventUpdate
+
+        row = viewport_rows[row_index]
+        lat = row.get("Latitude")
+        lon = row.get("Longitude")
+        try:
+            lat_val = float(lat)
+            lon_val = float(lon)
+        except (TypeError, ValueError):
+            raise PreventUpdate
+        if pd.isna(lat_val) or pd.isna(lon_val):
+            raise PreventUpdate
+
+        return [lat_val, lon_val], HIGHLIGHT_ZOOM
 
     def _pilot_counts_desc():
         return html.Div(
