@@ -1,6 +1,7 @@
 flask
 dash
 dash_bootstrap_components
+dash-leaflet
 pandas
 plotly
 sqlalchemy
