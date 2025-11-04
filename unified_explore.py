@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 
 import requests
 import dash
-from dash import dcc, html, Input, Output, dash_table
+from dash import dcc, html, Input, Output, State, dash_table
 import dash_bootstrap_components as dbc
 
 from theme import card, dash_page
@@ -687,7 +687,26 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     # Left: Filters
     filter_block = card(
         [
-            html.H2("Explore Counts"),
+            html.Div(
+                [
+                    html.H2("Explore Counts", className="heading-with-info__title"),
+                    html.Span(
+                        [
+                            html.Button(
+                                "i",
+                                id="explore-info-button",
+                                className="info-button",
+                                title="Show instructions",
+                                n_clicks=0,
+                                **{"aria-label": "Show instructions", "type": "button"},
+                            ),
+                            html.Span("Click for quick instructions", className="tooltip-panel", role="tooltip"),
+                        ],
+                        className="tooltip",
+                    ),
+                ],
+                className="heading-with-info",
+            ),
             html.P("Pick Mode, then Facility, then Source.", className="app-muted"),
 
             html.Div(
@@ -757,6 +776,52 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     app.layout = dash_page(
         "Explore",
         [
+            dcc.Location(id="explore-url"),
+            dcc.Store(id="explore-intro-state", storage_type="local"),
+            html.Div(
+                [
+                    html.Div(id="explore-intro-backdrop", className="modal-backdrop__overlay", n_clicks=0),
+                    html.Div(
+                        [
+                            html.H2("Getting Started", id="explore-intro-title"),
+                            html.P(
+                                "Use the Explore Available Datasets button to open the unified data explorer.",
+                            ),
+                            html.P(
+                                "Hover charts and map layers for details; use top filters to refine by Mode, Facility, and Data source.",
+                            ),
+                            html.P(
+                                "Look for “Open” links near sites to jump to analytics or related project pages.",
+                            ),
+                            html.Div(
+                                [
+                                    html.Button(
+                                        "Got it",
+                                        id="explore-dismiss",
+                                        className="modal-button primary",
+                                        n_clicks=0,
+                                    ),
+                                    html.Button(
+                                        "Dismiss (don’t remember)",
+                                        id="explore-dismiss-once",
+                                        className="modal-button secondary",
+                                        n_clicks=0,
+                                    ),
+                                ],
+                                className="modal-actions",
+                            ),
+                        ],
+                        className="modal",
+                        role="document",
+                        **{"aria-labelledby": "explore-intro-title"},
+                    ),
+                ],
+                id="explore-intro-modal",
+                className="modal-backdrop",
+                hidden=True,
+                role="dialog",
+                **{"aria-modal": "true"},
+            ),
             dbc.Row(
                 [
                     dbc.Col(
@@ -785,6 +850,56 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             html.Div(id="wrap-results", style={"display": "none"}),
         ],
     )
+
+    @app.callback(
+        Output("explore-intro-modal", "hidden"),
+        Output("explore-intro-state", "data"),
+        Input("explore-url", "search"),
+        Input("explore-info-button", "n_clicks"),
+        Input("explore-dismiss", "n_clicks"),
+        Input("explore-dismiss-once", "n_clicks"),
+        Input("explore-intro-backdrop", "n_clicks"),
+        State("explore-intro-state", "data"),
+        prevent_initial_call=False,
+    )
+    def _toggle_intro_modal(search, info_clicks, got_it_clicks, dismiss_once_clicks, backdrop_clicks, store_data):
+        ctx = dash.callback_context
+        trigger = ctx.triggered[0]["prop_id"].split(".")[0] if ctx.triggered else None
+
+        stored = store_data or {}
+        dismissed = bool(stored.get("dismissed"))
+
+        params = {}
+        if search:
+            params = urllib.parse.parse_qs(search.lstrip("?"))
+        force_intro = "1" in (params.get("intro") or [])
+        reset_intro = "1" in (params.get("reset_intro") or [])
+
+        store_update = dash.no_update
+        if reset_intro:
+            dismissed = False
+            store_update = {"dismissed": False}
+
+        if trigger == "explore-dismiss":
+            return True, {"dismissed": True}
+
+        if trigger == "explore-info-button":
+            return False, store_update
+
+        if trigger == "explore-dismiss-once":
+            return True, store_update
+
+        if trigger == "explore-intro-backdrop":
+            return True, store_update
+
+        # Initial load or URL change
+        if force_intro:
+            return False, store_update
+
+        if dismissed:
+            return True, store_update
+
+        return False, store_update
 
     # ---------- Progressive options ----------
     @app.callback(
