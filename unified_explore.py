@@ -377,14 +377,15 @@ def _build_summary_dashboard_content(df: pd.DataFrame) -> list:
                 values=per_location["Total counts"],
                 hole=0.55,
                 sort=False,
-                hovertemplate="%{label}: %{value:,}<extra></extra>",
+                hovertemplate="%{label}: %{value:,} (%{percent:.1%})<extra></extra>",
+                textinfo="percent",
+                textposition="inside",
             )
         )
     pie_fig.update_layout(
         margin=dict(t=10, b=10, l=10, r=10),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.1),
-        height=320,
+        showlegend=False,
+        height=340,
     )
     if per_location.empty:
         pie_fig.add_annotation(
@@ -422,7 +423,7 @@ def _build_summary_dashboard_content(df: pd.DataFrame) -> list:
                         dcc.Graph(
                             figure=pie_fig,
                             config={"displayModeBar": False},
-                            style={"height": "100%"},
+                            style={"minHeight": "340px"},
                         ),
                     ],
                     xs=12,
@@ -725,10 +726,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     # Description (left under filters)
     desc_block = card([html.Div(id="pf-desc", children=[])], class_name="mb-3")
 
-    summary_block = card([html.Div(id="pf-summary")], class_name="mb-3")
-
     # Map (right, top)
     map_card = card([html.Div(id="pf-map", children=[])], class_name="mb-3")
+
+    summary_block = card([html.Div(id="pf-summary")], class_name="mb-3")
 
     # Table (right, bottom)
     table_block = card(
@@ -766,17 +767,17 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         [
                             filter_block,
                             html.Div(id="wrap-desc", children=[desc_block], style={"display": "none"}),
-                            html.Div(
-                                id="wrap-summary",
-                                children=[summary_block],
-                                style={"display": "none"},
-                            ),
                         ],
                         lg=4, md=12, className="mb-3",
                     ),
                     dbc.Col(
                         [
                             html.Div(id="wrap-map", children=[map_card], style={"display": "none"}),
+                            html.Div(
+                                id="wrap-summary",
+                                children=[summary_block],
+                                style={"display": "none"},
+                            ),
                             dcc.Loading(
                                 id="pf-wrap-loader",
                                 type="default",
