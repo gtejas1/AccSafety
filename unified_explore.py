@@ -562,6 +562,23 @@ DEFAULT_IFRAME_STYLE = {
 }
 
 
+EMBED_SYMBOLOGY_BY_COMBO: dict[tuple[str, str, str], dict] = {
+    (
+        NEW_MODE.strip().casefold(),
+        NEW_FACILITY.strip().casefold(),
+        NEW_SOURCE_NAME.strip().casefold(),
+    ): {
+        "kind": "arcgis",
+        "container_id": "mke-aaec-map",
+        "item_id": MKE_AAEC_ITEM_ID,
+        "center": MKE_AAEC_CENTER,
+        "scale": MKE_AAEC_SCALE,
+        "theme": MKE_AAEC_THEME,
+        "flags": MKE_AAEC_FLAGS,
+    },
+}
+
+
 SOURCE_EMBEDS: dict[str, dict] = {
     "wisconsin pilot counting counts": {
         "kind": "arcgis",
@@ -637,11 +654,20 @@ SOURCE_EMBEDS: dict[str, dict] = {
 }
 
 
-def _source_embed_component(source_val: str | None):
+def _source_embed_component(
+    mode_val: str | None,
+    facility_val: str | None,
+    source_val: str | None,
+):
     if not source_val:
         return None
-    key = source_val.strip().casefold()
-    config = SOURCE_EMBEDS.get(key)
+    mode_key = (mode_val or "").strip().casefold()
+    facility_key = (facility_val or "").strip().casefold()
+    source_key = (source_val or "").strip().casefold()
+
+    config = EMBED_SYMBOLOGY_BY_COMBO.get((mode_key, facility_key, source_key))
+    if not config:
+        config = SOURCE_EMBEDS.get(source_key)
     if not config:
         return None
 
@@ -937,11 +963,11 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             df = pd.concat([df, pd.DataFrame([sp2_row])], ignore_index=True)
 
         # --- Map selection (Pilot OR Statewide OR SEWRPC Trails OR Milwaukee AAEC OR NEW AAEC Statewide embed OR Mid-Block) ---
-        source_val = str(source or "").strip().casefold()
+        source_cf = str(source or "").strip().casefold()
         map_children = []
         map_style = {"display": "none"}
 
-        embed_component = _source_embed_component(source_val)
+        embed_component = _source_embed_component(mode, facility, source)
         if embed_component is not None:
             map_children = embed_component
             map_style = {"display": "block"}
@@ -951,7 +977,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         show_eco_dashboard = (
             str(mode or "").strip().casefold() == "bicyclist"
             and str(facility or "").strip().casefold() == "on-street (sidewalk/bike lane)"
-            and source_val == "wisconsin pilot counting counts"
+            and source_cf == "wisconsin pilot counting counts"
         )
         if show_eco_dashboard:
             eco_children = _build_eco_dashboard_content(df)
@@ -965,31 +991,34 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if (
             mode_val == TRAIL_CROSS_MODE.strip().lower()
             and fac_val == TRAIL_CROSS_FACILITY.strip().lower()
-            and source_val == TRAIL_CROSS_SOURCE.strip().casefold()
+            and source_cf == TRAIL_CROSS_SOURCE.strip().casefold()
         ):
             description = _trail_crossing_desc()
 
         # NEW: Pedestrian + Intersection + AAEC (Wisconsin Statewide)
-        elif (mode_val == "pedestrian"
+        elif (
+            mode_val == "pedestrian"
             and fac_val == "intersection"
-            and source_val == PED_INT_AAEC_STATEWIDE.strip().casefold()):
+            and source_cf == PED_INT_AAEC_STATEWIDE.strip().casefold()
+        ):
             description = _ped_int_statewide_aaec_desc()
 
         elif (
             mode_val == "pedestrian"
             and fac_val == "mid-block crossing"
-            and source_val == MIDBLOCK_SOURCE.strip().casefold()
+            and source_cf == MIDBLOCK_SOURCE.strip().casefold()
         ):
             description = _midblock_ped_desc()
 
         else:
             bicyclist_combo = (
                 mode_val == "bicyclist"
-                and fac_val == "intersection" and source_val == "wisconsin pilot counting counts"
+                and fac_val == "intersection"
+                and source_cf == "wisconsin pilot counting counts"
             ) or (
                 mode_val == "bicyclist"
                 and fac_val == "on-street (sidewalk/bike lane)"
-                and source_val == "wisconsin ped/bike database (statewide)"
+                and source_cf == "wisconsin ped/bike database (statewide)"
             )
 
             if bicyclist_combo:
@@ -998,31 +1027,31 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             # Statewide + Intersection (Bicyclist)
             elif (mode_val == "bicyclist"
                   and fac_val == "intersection"
-                  and source_val == "wisconsin ped/bike database (statewide)"):
+                  and source_cf == "wisconsin ped/bike database (statewide)"):
                 description = _statewide_onstreet_desc()
 
             # Statewide + Intersection (Pedestrian)
             elif (mode_val == "pedestrian"
                   and fac_val == "intersection"
-                  and source_val == "wisconsin ped/bike database (statewide)"):
+                  and source_cf == "wisconsin ped/bike database (statewide)"):
                 description = _ped_statewide_desc()
 
             elif (mode_val == "pedestrian"
                   and fac_val == "on-street (sidewalk)"
-                  and source_val == "wisconsin ped/bike database (statewide)"):
+                  and source_cf == "wisconsin ped/bike database (statewide)"):
                 description = _ped_statewide_desc()
             elif (mode_val == "pedestrian"
                   and fac_val == "intersection"
-                  and source_val == "wisconsin pilot counting counts"):
+                  and source_cf == "wisconsin pilot counting counts"):
                 description = _pilot_counts_desc()
-            elif source_val == "wisconsin pilot counting counts":
+            elif source_cf == "wisconsin pilot counting counts":
                 description = _pilot_counts_desc()
-            elif source_val in {
+            elif source_cf in {
                 "sewrpc trail user counts",
                 "off-street trail (sewrpc trail user counts)",
             }:
                 description = _sewrpc_trails_desc()
-            elif source_val == NEW_SOURCE_NAME.strip().casefold():
+            elif source_cf == NEW_SOURCE_NAME.strip().casefold():
                 description = _custom_mke_estimated_desc()
             else:
                 # No specific description requested for the Mid-Block dataset
