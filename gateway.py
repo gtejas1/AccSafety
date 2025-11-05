@@ -355,11 +355,11 @@ def create_server():
     </header>
 
     <main class="app-content">
-      <section class="app-card">
+      <section class="app-card app-card--hero">
         <div class="home-hero">
           <div class="home-hero__copy">
             <h1>Explore Wisconsin Pedestrian and Bicyclist Mobility Data</h1>
-            <p class="desc">
+            <p class="desc desc--hero">
               The AccSafety Dashboard visualizes statewide pedestrian and bicycle count data from real-time and historical sources to support data-driven safety and planning decisions.
               It bridges research and implementation by integrating current and legacy datasets across Wisconsin.
             </p>
@@ -382,7 +382,8 @@ def create_server():
               item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
               theme="light"
               portal-url="https://uwm.maps.arcgis.com"
-              extent="-93.014679,42.457043,-86.249548,47.302500"
+              center="-88.01501274592921,43.039734737956515"
+              scale="1155581.108577"
               legend-enabled
               information-enabled
               bookmarks-enabled
