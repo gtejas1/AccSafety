@@ -309,7 +309,7 @@ def _build_view_link(row: pd.Series) -> str:
     return "[Open](https://uwm.edu/ipit/wisconsin-pedestrian-volume-model/)"
 
 
-def _build_eco_dashboard_content(df: pd.DataFrame) -> list:
+def _build_summary_dashboard_content(df: pd.DataFrame) -> list:
     df_counts = df.copy()
     if "Total counts" not in df_counts.columns or df_counts.empty:
         df_counts = pd.DataFrame(columns=["Location", "Total counts"])
@@ -377,14 +377,15 @@ def _build_eco_dashboard_content(df: pd.DataFrame) -> list:
                 values=per_location["Total counts"],
                 hole=0.55,
                 sort=False,
-                hovertemplate="%{label}: %{value:,}<extra></extra>",
+                hovertemplate="%{label}: %{value:,} (%{percent:.1%})<extra></extra>",
+                textinfo="percent",
+                textposition="inside",
             )
         )
     pie_fig.update_layout(
         margin=dict(t=10, b=10, l=10, r=10),
-        showlegend=True,
-        legend=dict(orientation="h", yanchor="bottom", y=-0.1),
-        height=320,
+        showlegend=False,
+        height=340,
     )
     if per_location.empty:
         pie_fig.add_annotation(
@@ -411,17 +412,20 @@ def _build_eco_dashboard_content(df: pd.DataFrame) -> list:
             for _, row in top_locations.iterrows()
         ]
 
-    card_content = [
-        html.H3("Pilot Eco-Counter Snapshot", className="mb-3"),
+    summary_content = [
+        html.H3("Dataset Snapshot", className="mb-3"),
         metrics_row,
         dbc.Row(
             [
                 dbc.Col(
-                    dcc.Graph(
-                        figure=pie_fig,
-                        config={"displayModeBar": False},
-                        style={"height": "100%"},
-                    ),
+                    [
+                        html.H5("Location distribution", className="mb-3"),
+                        dcc.Graph(
+                            figure=pie_fig,
+                            config={"displayModeBar": False},
+                            style={"minHeight": "340px"},
+                        ),
+                    ],
                     xs=12,
                     lg=7,
                 ),
@@ -438,7 +442,7 @@ def _build_eco_dashboard_content(df: pd.DataFrame) -> list:
         ),
     ]
 
-    return [card(card_content, class_name="mb-3")]
+    return summary_content
 
 def _opts(vals) -> list[dict]:
     uniq = sorted({v for v in vals if isinstance(v, str) and v.strip()})
@@ -725,7 +729,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     # Map (right, top)
     map_card = card([html.Div(id="pf-map", children=[])], class_name="mb-3")
 
-    eco_wrap = html.Div(id="wrap-eco", children=[], style={"display": "none"})
+    summary_block = card([html.Div(id="pf-summary")], class_name="mb-3")
 
     # Table (right, bottom)
     table_block = card(
@@ -769,7 +773,11 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     dbc.Col(
                         [
                             html.Div(id="wrap-map", children=[map_card], style={"display": "none"}),
-                            eco_wrap,
+                            html.Div(
+                                id="wrap-summary",
+                                children=[summary_block],
+                                style={"display": "none"},
+                            ),
                             dcc.Loading(
                                 id="pf-wrap-loader",
                                 type="default",
@@ -869,8 +877,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     @app.callback(
         Output("pf-map", "children"),     # 0 map content
         Output("wrap-map", "style"),      # 1 map card visibility
-        Output("wrap-eco", "children"),   # 2 eco dashboard content
-        Output("wrap-eco", "style"),      # 3 eco dashboard visibility
+        Output("pf-summary", "children"), # 2 summary content
+        Output("wrap-summary", "style"),  # 3 summary visibility
         Output("pf-table", "data"),       # 4 table rows
         Output("wrap-table", "style"),    # 5 table card visibility
         Output("wrap-results", "style"),  # 6 (sentinel) keep as block once ready
@@ -946,16 +954,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             map_children = embed_component
             map_style = {"display": "block"}
 
-        eco_children = []
-        eco_style = {"display": "none"}
-        show_eco_dashboard = (
-            str(mode or "").strip().casefold() == "bicyclist"
-            and str(facility or "").strip().casefold() == "on-street (sidewalk/bike lane)"
-            and source_val == "wisconsin pilot counting counts"
-        )
-        if show_eco_dashboard:
-            eco_children = _build_eco_dashboard_content(df)
-            eco_style = {"display": "block"}
+        summary_children = _build_summary_dashboard_content(df)
+        summary_style = {"display": "block"}
 
         # --- Descriptions by source selection ---
         mode_val = (mode or "").strip().lower()
@@ -1034,8 +1034,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             return (
                 map_children,
                 map_style,
-                eco_children,
-                eco_style,
+                summary_children,
+                summary_style,
                 [],
                 {"display": "block"},
                 {"display": "block"},
@@ -1049,8 +1049,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         return (
             map_children,
             map_style,
-            eco_children,
-            eco_style,
+            summary_children,
+            summary_style,
             rows,
             {"display": "block"},
             {"display": "block"},
