@@ -355,37 +355,43 @@ def create_server():
     </header>
 
     <main class="app-content">
-      <section class="app-card">
-        <h1>Explore Wisconsin Pedestrian and Bicyclist Mobility Data</h1>
-        <p class="desc">
-          The AccSafety Dashboard visualizes statewide pedestrian and bicycle count data from real-time and historical sources to support data-driven safety and planning decisions.
-          It bridges research and implementation by integrating current and legacy datasets across Wisconsin.
-        </p>
+      <section class="app-card app-card--hero">
+        <div class="home-hero">
+          <div class="home-hero__copy">
+            <h1>Explore Wisconsin Pedestrian and Bicyclist Mobility Data</h1>
+            <p class="desc desc--hero">
+              The AccSafety Dashboard visualizes statewide pedestrian and bicycle count data from real-time and historical sources to support data-driven safety and planning decisions.
+              It bridges research and implementation by integrating current and legacy datasets across Wisconsin.
+            </p>
 
-        <div class="cta-wrap">
-          <a class="cta-explore" href="/explore/">Explore Available Datasets</a>
-          <a class="cta-secondary" href="/guide">Read the User Guide</a>
+            <div class="cta-wrap">
+              <a class="cta-explore" href="/explore/">Explore Available Datasets</a>
+              <a class="cta-secondary" href="/guide">Read the User Guide</a>
 
-          <!-- Tooltip + info icon -->
-          <span class="tooltip">
-            <button id="info-button" class="info-button" aria-label="Show instructions" title="Show instructions">i</button>
-            <span class="tooltip-panel" role="tooltip">Click for quick instructions</span>
-          </span>
+              <!-- Tooltip + info icon -->
+              <span class="tooltip">
+                <button id="info-button" class="info-button" aria-label="Show instructions" title="Show instructions">i</button>
+                <span class="tooltip-panel" role="tooltip">Click for quick instructions</span>
+              </span>
+            </div>
+          </div>
+
+          <div class="home-hero__map">
+            <arcgis-embedded-map
+              class="portal-map"
+              item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
+              theme="light"
+              portal-url="https://uwm.maps.arcgis.com"
+              center="-88.01501274592921,43.039734737956515"
+              scale="1155581.108577"
+              legend-enabled
+              information-enabled
+              bookmarks-enabled
+              layer-list-enabled
+              search-enabled>
+            </arcgis-embedded-map>
+          </div>
         </div>
-
-        <arcgis-embedded-map
-          class="portal-map"
-          item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
-          theme="light"
-          portal-url="https://uwm.maps.arcgis.com"
-          center="-88.01501274592921,43.039734737956515"
-          scale="1155581.108577"
-          legend-enabled
-          information-enabled
-          bookmarks-enabled
-          layer-list-enabled
-          search-enabled>
-        </arcgis-embedded-map>
       </section>
     </main>
   </div>
