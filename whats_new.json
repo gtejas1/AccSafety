@@ -1,4 +1,20 @@
-[
+[ 
+  {
+    "version": "2025.11.05",
+    "date": "2025-11-05",
+    "highlights": [
+      "The AccSafety portal at accsafety.uwm.edu now automatically loads over HTTPS so partners always browse the site securely."
+    ]
+  },
+  {
+    "version": "2025.11.04",
+    "date": "2025-11-04",
+    "highlights": [
+      "Unified Explore now keeps a Dataset Snapshot beside the map so you can review top locations and totals without leaving the results view.",
+      "The location distribution donut chart highlights percent share values directly on the graphic for quicker comparisons.",
+      "Links that open ECO dashboards now carry over the selected mode, ensuring shared URLs and Explore shortcuts land on the right pedestrian or bicyclist view."
+    ]
+  },
   {
     "version": "2025.10.30",
     "date": "2025-10-30",
