@@ -393,7 +393,7 @@ def create_server():
     <div class="modal">
       <h2 id="intro-title">Getting Started</h2>
       <p>Use the <strong>Explore Available Datasets</strong> button to open the unified data explorer.</p>
-      <p>Hover charts and map layers for details; use top filters to refine by <em>Mode</em>, <em>Facility</em>, and <em>Data source</em>. Look for “Open” links near sites to jump to analytics or related project pages.</p>
+      <p>Use top filters to refine by <em>Mode</em>, <em>Facility</em>, and <em>Data source</em>. Look for “Open” links near sites to jump to analytics or related project pages.</p>
       <div style="display:flex;gap:10px;justify-content:flex-end;">
         <button id="close-modal" class="primary">Got it</button>
         <button id="close-once" class="secondary">Dismiss (don’t remember)</button>

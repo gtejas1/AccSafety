@@ -33,7 +33,6 @@ SW_SCALE   = "1155581.108577"
 SW_THEME   = "light"
 SW_FLAGS   = [
     "bookmarks-enabled",
-    "heading-enabled",
     "legend-enabled",
     "information-enabled",
     "share-enabled",
