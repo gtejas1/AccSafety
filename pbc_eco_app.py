@@ -1,6 +1,8 @@
 # pbc_eco_app.py — ECO temporary counts dashboard
 import io
 import urllib.parse
+from typing import Optional
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -29,8 +31,16 @@ MODE_TABLE = {
 }
 MODE_OPTIONS = [{"label": m, "value": m} for m in ["Pedestrian", "Bicyclist"]]  # hide "Both" in UI
 
+def _normalize_mode(mode: Optional[str]) -> str:
+    mode = (mode or "").strip()
+    if mode in MODE_TABLE:
+        return mode
+    return "Pedestrian"
+
+
 def _table_for_mode(mode: str) -> str:
-    return MODE_TABLE.get(mode or "", "")
+    normalized = _normalize_mode(mode)
+    return MODE_TABLE.get(normalized, "")
 
 # --- SQL helpers that USE your new tables/view layout -------------------------
 _BOUNDS_SQL = text("""
@@ -229,10 +239,8 @@ def create_eco_dash(server, prefix="/eco/"):
     def eco_set_date_range(search):
         q = dict(urllib.parse.parse_qsl((search or "").lstrip("?")))
         loc = q.get("location")
-        mode = q.get("mode") or "Pedestrian"
-        # if old deep link used "&mode=Both", keep it working silently but keep UI on Ped/Bike only
-        if mode not in MODE_TABLE:
-            mode = "Pedestrian"
+        mode = _normalize_mode(q.get("mode"))
+        # keep legacy deep links (e.g., "Both") functional; unknown/blank modes default to Pedestrian
         table = _table_for_mode(mode)
 
         if not loc:
@@ -262,9 +270,10 @@ def create_eco_dash(server, prefix="/eco/"):
         if not mode:
             return dash.no_update
         q = dict(urllib.parse.parse_qsl((search or "").lstrip("?")))
-        if q.get("mode") == mode:
+        normalized = _normalize_mode(mode)
+        if q.get("mode") == normalized:
             return dash.no_update
-        q["mode"] = mode
+        q["mode"] = normalized
         return "?" + urllib.parse.urlencode(q)
 
     # ---- Charts ---------------------------------------------------------------
@@ -280,9 +289,7 @@ def create_eco_dash(server, prefix="/eco/"):
     def eco_update_graphs(start_date, end_date, search):
         q = dict(urllib.parse.parse_qsl((search or "").lstrip("?")))
         loc = q.get("location")
-        mode = q.get("mode") or "Pedestrian"
-        if mode not in MODE_TABLE:
-            mode = "Pedestrian"
+        mode = _normalize_mode(q.get("mode"))
         table = _table_for_mode(mode)
 
         # If dates missing (first render), infer from SQL
