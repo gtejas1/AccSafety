@@ -9,6 +9,8 @@ import dash_bootstrap_components as dbc
 
 PORTAL_URL = "/"
 BRAND_NAME = "AccSafety"
+BRAND_LOGO_SRC = "/static/img/accsafety-logo.png"
+BRAND_LOGO_ALT = "AccSafety logo"
 
 
 def portal_link(text: str = "Back to Portal") -> html.A:
@@ -31,13 +33,18 @@ def build_header(
         nav_items.insert(0, portal_link())
 
     header_children = [
+        html.Img(
+            src=BRAND_LOGO_SRC,
+            alt=BRAND_LOGO_ALT,
+            className="app-logo",
+        ),
         html.Div(
             [
                 html.Span(BRAND_NAME, className="app-brand"),
                 html.Span(subtitle, className="app-subtitle"),
             ],
             className="app-header-title",
-        )
+        ),
     ]
 
     header_children.append(html.Nav(nav_items, className="app-nav"))
