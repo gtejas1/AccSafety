@@ -42,6 +42,30 @@ def _table_for_mode(mode: str) -> str:
     normalized = _normalize_mode(mode)
     return MODE_TABLE.get(normalized, "")
 
+
+def _table_for_location_mode(location: Optional[str], mode: str) -> str:
+    """Return the per-mode ECO table, falling back to trail data when appropriate."""
+    table = _table_for_mode(mode)
+    if not (location and table):
+        return table
+
+    with ENGINE.connect() as con:
+        has_primary = con.execute(
+            text(f"SELECT 1 FROM {table} WHERE location_name = :loc LIMIT 1"),
+            {"loc": location},
+        ).first()
+        if has_primary:
+            return table
+
+        has_trail = con.execute(
+            text("SELECT 1 FROM trail_traffic_data WHERE location_name = :loc LIMIT 1"),
+            {"loc": location},
+        ).first()
+
+    if has_trail:
+        return "trail_traffic_data"
+    return table
+
 # --- SQL helpers that USE your new tables/view layout -------------------------
 _BOUNDS_SQL = text("""
 WITH all_hits AS (
@@ -198,7 +222,7 @@ def create_eco_dash(server, prefix="/eco/"):
     def _eco_download():
         location = flask_request.args.get("location")
         mode = flask_request.args.get("mode", "Pedestrian")
-        table = _table_for_mode(mode)
+        table = _table_for_location_mode(location, mode)
         if not location or not table:
             return "Location or mode not specified", 400
         q = text(f"""
@@ -241,7 +265,7 @@ def create_eco_dash(server, prefix="/eco/"):
         loc = q.get("location")
         mode = _normalize_mode(q.get("mode"))
         # keep legacy deep links (e.g., "Both") functional; unknown/blank modes default to Pedestrian
-        table = _table_for_mode(mode)
+        table = _table_for_location_mode(loc, mode)
 
         if not loc:
             return dash.no_update, None, None, None, None, "", "Temporary Counts"
@@ -290,7 +314,7 @@ def create_eco_dash(server, prefix="/eco/"):
         q = dict(urllib.parse.parse_qsl((search or "").lstrip("?")))
         loc = q.get("location")
         mode = _normalize_mode(q.get("mode"))
-        table = _table_for_mode(mode)
+        table = _table_for_location_mode(loc, mode)
 
         # If dates missing (first render), infer from SQL
         if not (start_date and end_date) and loc:
