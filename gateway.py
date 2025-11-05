@@ -378,6 +378,7 @@ def create_server():
           portal-url="https://uwm.maps.arcgis.com"
           center="-88.01501274592921,43.039734737956515"
           scale="1155581.108577"
+          legend-state="open"
           legend-enabled
           information-enabled
           bookmarks-enabled
