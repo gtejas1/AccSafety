@@ -225,6 +225,7 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
 <body>
   <div class="app-shell">
     <header class="app-header">
+      <img src="/static/img/accsafety-logo.png" alt="AccSafety logo" class="app-logo">
       <div class="app-header-title">
         <span class="app-brand">AccSafety</span>
         <span class="app-subtitle">WisDOT Count Files</span>

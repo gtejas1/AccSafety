@@ -2,5 +2,7 @@ __pycache__/pbc_eco_app.cpython-311.pyc
 *.pyc
 *.pt
 *.zip
+# Local branding assets are provided outside version control.
+static/img/accsafety-logo.png
 *.pt
 *.zip
