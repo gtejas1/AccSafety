@@ -30,6 +30,8 @@ STORYMAP_URL    = "https://storymaps.arcgis.com/stories/281bfdde23a7411ca63f84d1
 SW_ITEM_ID = "5badd855f3384cb1ab03eb0470a93f20"
 SW_CENTER  = "-88.15601552734218,43.07196694820907"
 SW_SCALE   = "1155581.108577"
+# NOTE: Each *_FLAGS list must include 'legend-enabled' so ArcGIS map legends
+# load automatically for users.
 SW_THEME   = "light"
 SW_FLAGS   = [
     "bookmarks-enabled",
@@ -463,8 +465,15 @@ def _arcgis_embedded_map_component(
     theme: str = "light",
     flags: list[str] | None = None,
 ) -> html.Iframe:
-    flags = (flags or [])
-    flags_html = " ".join(flags)
+    base_flags: list[str] = []
+    for flag in (flags or []):
+        if flag not in base_flags:
+            base_flags.append(flag)
+
+    if ARCGIS_LEGEND and "legend-enabled" not in base_flags:
+        base_flags.insert(0, "legend-enabled")
+
+    flags_html = "".join(f"\n        {flag}" for flag in base_flags)
     srcdoc = f"""<!doctype html>
 <html lang="en">
   <head>
