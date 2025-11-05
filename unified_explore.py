@@ -15,6 +15,7 @@ from dash import dcc, html, Input, Output, dash_table
 import dash_bootstrap_components as dbc
 
 from theme import card, dash_page
+from pbc_eco_app import MODE_TABLE as ECO_MODE_TABLE
 
 DB_URL = "postgresql://postgres:gw2ksoft@localhost/TrafficDB"
 ENGINE = create_engine(DB_URL)
@@ -303,6 +304,10 @@ def _build_view_link(row: pd.Series) -> str:
         return f"[Open](/vivacity/?location={loc_q})"
     loc_q = _encode_location_for_href(loc)
     if src == "Wisconsin Pilot Counting Counts":
+        mode = (row.get("Mode") or "").strip()
+        if mode and mode in ECO_MODE_TABLE:
+            mode_q = _encode_location_for_href(mode)
+            return f"[Open](/eco/dashboard?location={loc_q}&mode={mode_q})"
         return f"[Open](/eco/dashboard?location={loc_q})"
     if src == "Off-Street Trail (SEWRPC Trail User Counts)":
         return f"[Open](/trail/dashboard?location={loc_q})"
