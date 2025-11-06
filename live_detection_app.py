@@ -73,6 +73,7 @@ CROSSWALK_LINES = [
 
 CROSSWALK_DISTANCE_THRESHOLD = 60.0  # maximum distance (px) from a line to count a crossing
 TRACK_STATE_TTL_SEC = 15.0
+CROSSWALK_NUDGE_STEP = 0.01  # normalized amount each navigation press moves a crosswalk
 
 
 def _point_side_of_line(point: Tuple[float, float], p1: Tuple[int, int], p2: Tuple[int, int]) -> float:
@@ -519,12 +520,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
 
     # ── UI Layout: Video + cumulative stats ───────────────────────────────────
     crosswalk_cards = []
-    slider_order: List[str] = []
-    slider_inputs: List[Input] = []
-    slider_items = []
     for cw in initial_crosswalks:
         key = cw["key"]
-        slider_order.append(key)
         crosswalk_cards.append(
             dbc.Card(
                 dbc.CardBody(
@@ -558,64 +555,78 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             )
         )
 
-        slider_items.append(
+    direction_icons = {"north": "↑", "south": "↓", "west": "←", "east": "→"}
+    direction_titles = {
+        "north": "Nudge the line upward",
+        "south": "Nudge the line downward",
+        "west": "Nudge the line to the left",
+        "east": "Nudge the line to the right",
+    }
+    direction_vectors = {
+        "north": (0.0, -CROSSWALK_NUDGE_STEP),
+        "south": (0.0, CROSSWALK_NUDGE_STEP),
+        "west": (-CROSSWALK_NUDGE_STEP, 0.0),
+        "east": (CROSSWALK_NUDGE_STEP, 0.0),
+    }
+
+    control_items: List[dbc.AccordionItem] = []
+    button_inputs: List[Input] = []
+    button_lookup: Dict[str, Tuple[str, str]] = {}
+
+    for cw in initial_crosswalks:
+        key = cw["key"]
+        control_items.append(
             dbc.AccordionItem(
                 [
-                    html.Div(
-                        [
-                            html.Div("Start X (p1.x)", className="small text-muted"),
-                            dcc.Slider(
-                                id=f"slider-{key}-p1x",
-                                min=0.0,
-                                max=1.0,
-                                step=0.005,
-                                value=float(cw["p1"][0]),
-                                tooltip={"always_visible": True, "placement": "bottom"},
-                            ),
-                        ],
-                        className="mb-3",
+                    html.P(
+                        "Use the arrow buttons to nudge this crosswalk line. Each press moves the endpoints by 1% of the frame.",
+                        className="small text-muted",
                     ),
                     html.Div(
                         [
-                            html.Div("Start Y (p1.y)", className="small text-muted"),
-                            dcc.Slider(
-                                id=f"slider-{key}-p1y",
-                                min=0.0,
-                                max=1.0,
-                                step=0.005,
-                                value=float(cw["p1"][1]),
-                                tooltip={"always_visible": True, "placement": "bottom"},
+                            dbc.Button(
+                                direction_icons["north"],
+                                id=f"btn-{key}-north",
+                                color="secondary",
+                                outline=True,
+                                size="sm",
+                                title=direction_titles["north"],
+                            ),
+                            html.Div(
+                                [
+                                    dbc.Button(
+                                        direction_icons["west"],
+                                        id=f"btn-{key}-west",
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title=direction_titles["west"],
+                                    ),
+                                    html.Span(
+                                        "Move line",
+                                        className="small text-muted",
+                                    ),
+                                    dbc.Button(
+                                        direction_icons["east"],
+                                        id=f"btn-{key}-east",
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title=direction_titles["east"],
+                                    ),
+                                ],
+                                className="d-flex align-items-center gap-2",
+                            ),
+                            dbc.Button(
+                                direction_icons["south"],
+                                id=f"btn-{key}-south",
+                                color="secondary",
+                                outline=True,
+                                size="sm",
+                                title=direction_titles["south"],
                             ),
                         ],
-                        className="mb-3",
-                    ),
-                    html.Div(
-                        [
-                            html.Div("End X (p2.x)", className="small text-muted"),
-                            dcc.Slider(
-                                id=f"slider-{key}-p2x",
-                                min=0.0,
-                                max=1.0,
-                                step=0.005,
-                                value=float(cw["p2"][0]),
-                                tooltip={"always_visible": True, "placement": "bottom"},
-                            ),
-                        ],
-                        className="mb-3",
-                    ),
-                    html.Div(
-                        [
-                            html.Div("End Y (p2.y)", className="small text-muted"),
-                            dcc.Slider(
-                                id=f"slider-{key}-p2y",
-                                min=0.0,
-                                max=1.0,
-                                step=0.005,
-                                value=float(cw["p2"][1]),
-                                tooltip={"always_visible": True, "placement": "bottom"},
-                            ),
-                        ],
-                        className="mb-1",
+                        className="d-flex flex-column align-items-center gap-2 mt-2",
                     ),
                 ],
                 title=cw["name"],
@@ -623,14 +634,10 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             )
         )
 
-        slider_inputs.extend(
-            [
-                Input(f"slider-{key}-p1x", "value"),
-                Input(f"slider-{key}-p1y", "value"),
-                Input(f"slider-{key}-p2x", "value"),
-                Input(f"slider-{key}-p2y", "value"),
-            ]
-        )
+        for direction in ("north", "west", "east", "south"):
+            btn_id = f"btn-{key}-{direction}"
+            button_inputs.append(Input(btn_id, "n_clicks"))
+            button_lookup[btn_id] = (key, direction)
 
     crosswalk_store_payload = [
         {
@@ -647,11 +654,11 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             [
                 html.H5("Adjust Crosswalk Lines"),
                 html.P(
-                    "Drag the sliders to reposition each crosswalk line. Values are normalized to the video frame.",
+                    "Use the navigation buttons to nudge each crosswalk line. Moves are applied in 1% increments of the frame.",
                     className="text-muted",
                 ),
                 dbc.Accordion(
-                    slider_items,
+                    control_items,
                     start_collapsed=True,
                     flush=True,
                     id="crosswalk-adjust-accordion",
@@ -786,44 +793,74 @@ def create_live_detection_app(server, prefix: str = "/live/"):
 
     @app.callback(
         Output("crosswalk-config-store", "data"),
-        [*slider_inputs],
+        [*button_inputs],
         prevent_initial_call=False,
     )
-    def _apply_crosswalk_adjustments(*slider_values):
+    def _apply_crosswalk_adjustments(*_unused):
         worker.start()
-        current_by_key = {cw["key"]: cw for cw in worker.get_crosswalk_config()}
-        values_iter = iter(slider_values)
-        updated_config = []
-        for key in slider_order:
-            base = current_by_key.get(key, {})
-            base_p1 = base.get("p1", (0.0, 0.0))
-            base_p2 = base.get("p2", (1.0, 1.0))
+        ctx = dash.callback_context
+        config_snapshot = worker.get_crosswalk_config()
 
-            x1 = next(values_iter, None)
-            y1 = next(values_iter, None)
-            x2 = next(values_iter, None)
-            y2 = next(values_iter, None)
-
-            if x1 is None:
-                x1 = base_p1[0]
-            if y1 is None:
-                y1 = base_p1[1]
-            if x2 is None:
-                x2 = base_p2[0]
-            if y2 is None:
-                y2 = base_p2[1]
-
-            updated_config.append(
+        if not ctx.triggered:
+            return [
                 {
-                    "key": key,
-                    "name": base.get("name", f"{key.title()} Crosswalk"),
-                    "p1": (float(x1), float(y1)),
-                    "p2": (float(x2), float(y2)),
+                    "key": item["key"],
+                    "name": item["name"],
+                    "p1": [item["p1"][0], item["p1"][1]],
+                    "p2": [item["p2"][0], item["p2"][1]],
                 }
-            )
+                for item in config_snapshot
+            ]
 
-        if updated_config:
-            worker.set_crosswalk_config(updated_config)
+        triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        target = button_lookup.get(triggered_id)
+        if not target:
+            return [
+                {
+                    "key": item["key"],
+                    "name": item["name"],
+                    "p1": [item["p1"][0], item["p1"][1]],
+                    "p2": [item["p2"][0], item["p2"][1]],
+                }
+                for item in config_snapshot
+            ]
+
+        key, direction = target
+        dx, dy = direction_vectors.get(direction, (0.0, 0.0))
+
+        def _clamp(value: float) -> float:
+            return max(0.0, min(1.0, value))
+
+        updated_config = []
+        for item in config_snapshot:
+            if item["key"] == key:
+                p1 = (_clamp(item["p1"][0] + dx), _clamp(item["p1"][1] + dy))
+                p2 = (_clamp(item["p2"][0] + dx), _clamp(item["p2"][1] + dy))
+                label = item.get("label")
+                if label:
+                    label = (_clamp(label[0] + dx), _clamp(label[1] + dy))
+                updated_config.append(
+                    {
+                        "key": item["key"],
+                        "name": item["name"],
+                        "p1": p1,
+                        "p2": p2,
+                        "label": label,
+                    }
+                )
+            else:
+                updated_config.append(
+                    {
+                        "key": item["key"],
+                        "name": item["name"],
+                        "p1": tuple(item["p1"]),
+                        "p2": tuple(item["p2"]),
+                        "label": item.get("label"),
+                    }
+                )
+
+        worker.set_crosswalk_config(updated_config)
+        refreshed = worker.get_crosswalk_config()
 
         return [
             {
@@ -832,7 +869,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 "p1": [item["p1"][0], item["p1"][1]],
                 "p2": [item["p2"][0], item["p2"][1]],
             }
-            for item in updated_config
+            for item in refreshed
         ]
 
     return app
