@@ -7,7 +7,9 @@ from __future__ import annotations
 import os
 import time
 import threading
-from typing import Optional, List, Dict, Tuple
+import math
+import json
+from typing import Optional, List, Dict, Tuple, Any
 from datetime import datetime
 
 import cv2
@@ -34,6 +36,100 @@ TARGET_WIDTH = int(os.getenv("YOLO_TARGET_WIDTH", 960))
 SCORE_THRESH = float(os.getenv("YOLO_SCORE_THRESH", 0.4))
 FRAME_SKIP = int(os.getenv("YOLO_FRAME_SKIP", 0))
 READ_TIMEOUT_SEC = float(os.getenv("YOLO_READ_TIMEOUT", 8))
+
+# Virtual crosswalk definitions expressed as normalized coordinates (x, y)
+# relative to the incoming frame. These were calibrated against the public
+# Silver Spring at Santa Monica feed and may need adjustment if the camera
+# angle or resolution changes substantially.
+CROSSWALK_LINES = [
+    {
+        "key": "north",
+        "name": "North Crosswalk",
+        "p1": (0.15, 0.24),
+        "p2": (0.90, 0.18),
+        "label": (0.58, 0.11),
+    },
+    {
+        "key": "east",
+        "name": "East Crosswalk",
+        "p1": (0.84, 0.20),
+        "p2": (0.97, 0.86),
+        "label": (0.90, 0.53),
+    },
+    {
+        "key": "south",
+        "name": "South Crosswalk",
+        "p1": (0.18, 0.88),
+        "p2": (0.92, 0.96),
+        "label": (0.60, 0.97),
+    },
+    {
+        "key": "west",
+        "name": "West Crosswalk",
+        "p1": (0.17, 0.26),
+        "p2": (0.05, 0.86),
+        "label": (0.07, 0.57),
+    },
+]
+
+CROSSWALK_DISTANCE_THRESHOLD = 60.0  # maximum distance (px) from a line to count a crossing
+TRACK_STATE_TTL_SEC = 15.0
+CROSSWALK_NUDGE_STEP = 0.01  # normalized amount each navigation press moves a crosswalk
+CROSSWALK_ROTATE_STEP_DEG = 5.0
+CROSSWALK_SCALE_STEP = 0.05
+CROSSWALK_MIN_LENGTH = 0.05
+CROSSWALK_CONFIG_PATH = os.getenv(
+    "YOLO_CROSSWALK_CONFIG_PATH",
+    os.path.join(os.path.dirname(__file__), "crosswalk_config.json"),
+)
+
+
+def _clamp_norm(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
+def _clamp_point(pair: Tuple[float, float]) -> Tuple[float, float]:
+    return (_clamp_norm(pair[0]), _clamp_norm(pair[1]))
+
+
+def _point_side_of_line(point: Tuple[float, float], p1: Tuple[int, int], p2: Tuple[int, int]) -> float:
+    """Return the signed distance (scaled) of a point relative to a directed line."""
+    x, y = point
+    x1, y1 = p1
+    x2, y2 = p2
+    return (x - x1) * (y2 - y1) - (y - y1) * (x2 - x1)
+
+
+def _rotate_point(
+    point: Tuple[float, float],
+    center: Tuple[float, float],
+    angle_rad: float,
+) -> Tuple[float, float]:
+    """Rotate a normalized point around a center by angle_rad radians."""
+    x, y = point
+    cx, cy = center
+    dx = x - cx
+    dy = y - cy
+    cos_a = math.cos(angle_rad)
+    sin_a = math.sin(angle_rad)
+    rx = dx * cos_a - dy * sin_a + cx
+    ry = dx * sin_a + dy * cos_a + cy
+    return _clamp_point((rx, ry))
+
+
+def _scale_point(
+    point: Tuple[float, float],
+    center: Tuple[float, float],
+    factor: float,
+) -> Tuple[float, float]:
+    """Scale a normalized point away from or toward the center by factor."""
+    x, y = point
+    cx, cy = center
+    dx = x - cx
+    dy = y - cy
+    sx = cx + dx * factor
+    sy = cy + dy * factor
+    return _clamp_point((sx, sy))
 
 
 def _find_allowed_class_ids(model: YOLO) -> Tuple[List[int], Dict[int, str]]:
@@ -88,6 +184,18 @@ class VideoWorker:
         self.stop_flag = threading.Event()
         self.frame_count = 0
         self._started = threading.Event()
+        self._crosswalk_cache_shape: Optional[Tuple[int, int]] = None
+        self._crosswalk_cache_pixels: List[
+            Tuple[str, str, Tuple[int, int], Tuple[int, int], Optional[Tuple[int, int]], float]
+        ] = []
+        self.crosswalk_config_path = CROSSWALK_CONFIG_PATH
+        self._config_io_lock = threading.Lock()
+
+        saved_crosswalks = self._load_saved_crosswalk_config()
+        if saved_crosswalks:
+            self.set_crosswalk_config(saved_crosswalks)
+        else:
+            self.set_crosswalk_config(CROSSWALK_LINES)
 
     # ────────────────────────────────────────────────────────────────────────
     def connect(self) -> None:
@@ -112,7 +220,143 @@ class VideoWorker:
             groups = set(self.class_group.values())
             self._counted_ids = {group: set() for group in groups}
 
-    def _update_counts(self, results) -> None:
+    def _reset_tracker_history(self) -> None:
+        """Reset the cache of tracker IDs that have been counted."""
+        groups = set(self.class_group.values())
+        with self.stats_lock:
+            self._counted_ids = {group: set() for group in groups}
+            self._track_sides = {}
+            self._track_last_seen = {}
+
+    def clear_totals(self) -> None:
+        """Clear cumulative counts and tracker history."""
+        with self.crosswalk_lock:
+            config_snapshot = [dict(cw) for cw in self.crosswalk_config]
+        with self.stats_lock:
+            self.total_counts = {"pedestrians": 0, "cyclists": 0}
+            self.start_time = None
+            groups = set(self.class_group.values())
+            self._counted_ids = {group: set() for group in groups}
+            self._track_sides = {}
+            self._track_last_seen = {}
+            self.crosswalk_counts = {
+                cw["key"]: {"pedestrians": 0, "cyclists": 0} for cw in config_snapshot
+            }
+
+    def set_crosswalk_config(self, lines: List[Dict[str, object]]) -> None:
+        """Replace the crosswalk configuration with new normalized endpoints."""
+
+        normalized: List[Dict[str, object]] = []
+        for cw in lines:
+            key = str(cw.get("key"))
+            if not key:
+                continue
+            name = cw.get("name") or f"{key.title()} Crosswalk"
+            p1 = _clamp_point(cw.get("p1", (0.0, 0.0)))
+            p2 = _clamp_point(cw.get("p2", (1.0, 1.0)))
+            label = cw.get("label")
+            if label is None:
+                mid_x = (p1[0] + p2[0]) / 2.0
+                mid_y = max(0.0, min(1.0, (p1[1] + p2[1]) / 2.0 - 0.05))
+                label = (mid_x, mid_y)
+            else:
+                label = _clamp_point(label)
+            normalized.append({"key": key, "name": name, "p1": p1, "p2": p2, "label": label})
+
+        if not normalized:
+            return
+
+        with self.crosswalk_lock:
+            self.crosswalk_config = normalized
+            self._crosswalk_cache_shape = None
+            persist_snapshot = [dict(cw) for cw in normalized]
+
+        with self.stats_lock:
+            prev_counts = {
+                key: {"pedestrians": counts.get("pedestrians", 0), "cyclists": counts.get("cyclists", 0)}
+                for key, counts in self.crosswalk_counts.items()
+            }
+            self.crosswalk_counts = {
+                cw["key"]: prev_counts.get(
+                    cw["key"], {"pedestrians": 0, "cyclists": 0}
+                )
+                for cw in normalized
+            }
+            self._track_sides = {}
+            self._track_last_seen = {}
+
+        self._persist_crosswalk_config(persist_snapshot)
+
+    def get_crosswalk_config(self) -> List[Dict[str, object]]:
+        """Return a copy of the current crosswalk configuration."""
+        with self.crosswalk_lock:
+            snapshot = [
+                {
+                    "key": cw["key"],
+                    "name": cw["name"],
+                    "p1": tuple(cw["p1"]),
+                    "p2": tuple(cw["p2"]),
+                    "label": (tuple(cw["label"])) if cw.get("label") else None,
+                }
+                for cw in self.crosswalk_config
+            ]
+        return snapshot
+
+    def _get_crosswalk_pixels(
+        self, frame_shape: Tuple[int, int, int]
+    ) -> List[Tuple[str, str, Tuple[int, int], Tuple[int, int], Optional[Tuple[int, int]], float]]:
+        """Return cached crosswalk endpoints (in pixels) for the given frame shape."""
+        h, w = frame_shape[:2]
+        shape_key = (w, h)
+        if self._crosswalk_cache_shape != shape_key:
+            with self.crosswalk_lock:
+                config_snapshot = [dict(cw) for cw in self.crosswalk_config]
+            self._crosswalk_cache_shape = shape_key
+            self._crosswalk_cache_pixels = []
+            for cw in config_snapshot:
+                x1 = int(cw["p1"][0] * w)
+                y1 = int(cw["p1"][1] * h)
+                x2 = int(cw["p2"][0] * w)
+                y2 = int(cw["p2"][1] * h)
+                label = cw.get("label")
+                label_px = None
+                if label is not None:
+                    label_px = (int(label[0] * w), int(label[1] * h))
+                length = math.hypot(x2 - x1, y2 - y1) or 1.0
+                self._crosswalk_cache_pixels.append(
+                    (cw["key"], cw["name"], (x1, y1), (x2, y2), label_px, length)
+                )
+        return self._crosswalk_cache_pixels
+
+    def _draw_crosswalks(
+        self,
+        frame,
+        crosswalk_pixels: List[
+            Tuple[str, str, Tuple[int, int], Tuple[int, int], Optional[Tuple[int, int]], float]
+        ],
+    ) -> None:
+        """Overlay virtual crosswalk lines and labels on the annotated frame."""
+        for _, name, p1, p2, label_px, _ in crosswalk_pixels:
+            cv2.line(frame, p1, p2, (0, 0, 255), 2)
+            if label_px:
+                cv2.putText(
+                    frame,
+                    name,
+                    label_px,
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 0, 255),
+                    1,
+                    cv2.LINE_AA,
+                )
+
+    def _update_counts(
+        self,
+        results,
+        crosswalk_pixels: List[
+            Tuple[str, str, Tuple[int, int], Tuple[int, int], Optional[Tuple[int, int]], float]
+        ],
+    ) -> None:
         """Accumulate total pedestrian/cyclist counts since start."""
         try:
             boxes = results[0].boxes
@@ -197,8 +441,9 @@ class VideoWorker:
                 tracker="bytetrack.yaml",
             )
 
-            self._update_counts(results)
+            self._update_counts(results, crosswalk_pixels)
             annotated = results[0].plot()
+            self._draw_crosswalks(annotated, crosswalk_pixels)
 
             ok, jpg = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
             if ok:
@@ -209,14 +454,17 @@ class VideoWorker:
         with self.frame_lock:
             return self.latest_jpeg
 
-    def get_stats(self) -> Tuple[int, int, Optional[str]]:
+    def get_stats(self) -> Tuple[int, int, Optional[str], Dict[str, Dict[str, int]]]:
         """Return cumulative totals and start time string."""
         with self.stats_lock:
             ped = self.total_counts.get("pedestrians", 0)
             cyc = self.total_counts.get("cyclists", 0)
             st = self.start_time
+            crosswalk_snapshot = {
+                key: counts.copy() for key, counts in self.crosswalk_counts.items()
+            }
         start_str = st.strftime("%Y-%m-%d %H:%M:%S") if st else None
-        return ped, cyc, start_str
+        return ped, cyc, start_str, crosswalk_snapshot
 
     # ────────────────────────────────────────────────────────────────────────
     def start(self) -> None:
@@ -248,6 +496,7 @@ class VideoWorker:
 def create_live_detection_app(server, prefix: str = "/live/"):
     """Attach the live detection Dash app to the shared Flask server."""
     worker = VideoWorker(RTSP_URL, MODEL_PATH)
+    initial_crosswalks = worker.get_crosswalk_config()
 
     def _video_feed():
         worker.start()
@@ -284,6 +533,292 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     app.title = "Live Object Detection"
 
     # ── UI Layout: Video + cumulative stats ───────────────────────────────────
+    crosswalk_cards: List[dbc.Col] = []
+    for cw in initial_crosswalks:
+        key = cw["key"]
+        crosswalk_cards.append(
+            dbc.Col(
+                dbc.Card(
+                    dbc.CardBody(
+                        [
+                            html.Div(cw["name"], className="text-muted"),
+                            html.Div(
+                                [
+                                    html.Span(
+                                        "Pedestrians",
+                                        className="small text-uppercase text-muted",
+                                    ),
+                                    html.Span(
+                                        "0",
+                                        id=f"crosswalk-{key}-ped",
+                                        className="fs-4 fw-bold text-primary",
+                                    ),
+                                ],
+                                className="d-flex justify-content-between align-items-baseline mt-2",
+                            ),
+                            html.Div(
+                                [
+                                    html.Span(
+                                        "Cyclists",
+                                        className="small text-uppercase text-muted",
+                                    ),
+                                    html.Span(
+                                        "0",
+                                        id=f"crosswalk-{key}-cyc",
+                                        className="fs-4 fw-bold text-success",
+                                    ),
+                                ],
+                                className="d-flex justify-content-between align-items-baseline",
+                            ),
+                        ]
+                    ),
+                    className="shadow-sm h-100",
+                ),
+                xs=12,
+                sm=6,
+                md=6,
+                lg=3,
+                className="d-flex",
+            )
+        )
+
+    direction_icons = {"north": "↑", "south": "↓", "west": "←", "east": "→"}
+    direction_titles = {
+        "north": "Nudge the line upward",
+        "south": "Nudge the line downward",
+        "west": "Nudge the line to the left",
+        "east": "Nudge the line to the right",
+    }
+    direction_vectors = {
+        "north": (0.0, -CROSSWALK_NUDGE_STEP),
+        "south": (0.0, CROSSWALK_NUDGE_STEP),
+        "west": (-CROSSWALK_NUDGE_STEP, 0.0),
+        "east": (CROSSWALK_NUDGE_STEP, 0.0),
+    }
+    rotation_titles = {
+        "rotate-left": "Rotate counter-clockwise by 5 degrees",
+        "rotate-right": "Rotate clockwise by 5 degrees",
+    }
+    scale_titles = {
+        "expand": "Lengthen this crosswalk line by 5%",
+        "shrink": "Shorten this crosswalk line by 5%",
+    }
+
+    control_items: List[dbc.AccordionItem] = []
+    button_inputs: List[Input] = []
+    button_lookup: Dict[str, Tuple[str, str]] = {}
+
+    for cw in initial_crosswalks:
+        key = cw["key"]
+        control_items.append(
+            dbc.AccordionItem(
+                [
+                    html.P(
+                        "Use the controls to nudge, rotate, or resize this crosswalk line. Move presses shift endpoints by 1%, rotation adjusts by 5°, and resize changes the line length by 5%.",
+                        className="small text-muted",
+                    ),
+                    html.Div(
+                        [
+                            html.Div(
+                                [
+                                    dbc.Button(
+                                        direction_icons["north"],
+                                        id=f"btn-{key}-north",
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title=direction_titles["north"],
+                                    ),
+                                    html.Div(
+                                        [
+                                            dbc.Button(
+                                                direction_icons["west"],
+                                                id=f"btn-{key}-west",
+                                                color="secondary",
+                                                outline=True,
+                                                size="sm",
+                                                title=direction_titles["west"],
+                                            ),
+                                            html.Span(
+                                                "Move line",
+                                                className="small text-muted",
+                                            ),
+                                            dbc.Button(
+                                                direction_icons["east"],
+                                                id=f"btn-{key}-east",
+                                                color="secondary",
+                                                outline=True,
+                                                size="sm",
+                                                title=direction_titles["east"],
+                                            ),
+                                        ],
+                                        className="d-flex align-items-center gap-2",
+                                    ),
+                                    dbc.Button(
+                                        direction_icons["south"],
+                                        id=f"btn-{key}-south",
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title=direction_titles["south"],
+                                    ),
+                                ],
+                                className="d-flex flex-column align-items-center gap-2",
+                            ),
+                            html.Div(
+                                [
+                                    dbc.Button(
+                                        "⟲",
+                                        id=f"btn-{key}-rotate-left",
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title=rotation_titles["rotate-left"],
+                                    ),
+                                    html.Span(
+                                        "Rotate",
+                                        className="small text-muted",
+                                    ),
+                                    dbc.Button(
+                                        "⟳",
+                                        id=f"btn-{key}-rotate-right",
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title=rotation_titles["rotate-right"],
+                                    ),
+                                ],
+                                className="d-flex align-items-center gap-2",
+                            ),
+                            html.Div(
+                                [
+                                    dbc.Button(
+                                        "−",
+                                        id=f"btn-{key}-shrink",
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title=scale_titles["shrink"],
+                                    ),
+                                    html.Span(
+                                        "Resize",
+                                        className="small text-muted",
+                                    ),
+                                    dbc.Button(
+                                        "+",
+                                        id=f"btn-{key}-expand",
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title=scale_titles["expand"],
+                                    ),
+                                ],
+                                className="d-flex align-items-center gap-2",
+                            ),
+                        ],
+                        className="d-flex flex-column align-items-center gap-3 mt-2",
+                    ),
+                ],
+                title=cw["name"],
+                item_id=key,
+            )
+        )
+
+        for direction in ("north", "west", "east", "south"):
+            btn_id = f"btn-{key}-{direction}"
+            button_inputs.append(Input(btn_id, "n_clicks"))
+            button_lookup[btn_id] = (key, f"move:{direction}")
+
+        for action in ("rotate-left", "rotate-right", "shrink", "expand"):
+            btn_id = f"btn-{key}-{action}"
+            button_inputs.append(Input(btn_id, "n_clicks"))
+            button_lookup[btn_id] = (key, action)
+
+    crosswalk_store_payload = [
+        {
+            "key": cw["key"],
+            "name": cw["name"],
+            "p1": [float(cw["p1"][0]), float(cw["p1"][1])],
+            "p2": [float(cw["p2"][0]), float(cw["p2"][1])],
+            "label": (
+                [float(cw["label"][0]), float(cw["label"][1])]
+                if cw.get("label")
+                else None
+            ),
+        }
+        for cw in initial_crosswalks
+    ]
+
+    crosswalk_line_controls = dbc.Card(
+        dbc.CardBody(
+            [
+                html.H5("Adjust Crosswalk Lines"),
+                html.P(
+                    "Use the controls below to move, rotate, or resize each crosswalk line in small increments.",
+                    className="text-muted",
+                ),
+                dbc.Accordion(
+                    control_items,
+                    start_collapsed=True,
+                    flush=True,
+                    id="crosswalk-adjust-accordion",
+                ),
+                dcc.Store(id="crosswalk-config-store", data=crosswalk_store_payload),
+            ]
+        ),
+        className="shadow-sm",
+    )
+
+    start_time_card = dbc.Card(
+        dbc.CardBody(
+            [
+                html.Div("Detection Started", className="text-muted"),
+                html.H5(id="start-time", className="mb-0"),
+            ]
+        ),
+        className="shadow-sm h-100",
+    )
+
+    ped_card = dbc.Card(
+        dbc.CardBody(
+            [
+                html.Div("Pedestrians Detected", className="text-muted"),
+                html.H2(id="ped-count", className="mb-0 text-primary"),
+            ]
+        ),
+        className="shadow-sm h-100",
+    )
+
+    cyc_card = dbc.Card(
+        dbc.CardBody(
+            [
+                html.Div("Cyclists Detected", className="text-muted"),
+                html.H2(id="cyc-count", className="mb-0 text-success"),
+            ]
+        ),
+        className="shadow-sm h-100",
+    )
+
+    counts_panel = html.Div(
+        [
+            dbc.Row(
+                [
+                    dbc.Col(start_time_card, xs=12, md=4),
+                    dbc.Col(ped_card, xs=6, md=4),
+                    dbc.Col(cyc_card, xs=6, md=4),
+                ],
+                class_name="g-3",
+            ),
+            html.Div(
+                "Crosswalk Counts (both directions)",
+                className="text-muted mt-4 mb-2",
+            ),
+            dbc.Row(crosswalk_cards, class_name="g-3"),
+            dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
+        ],
+        className="mt-3",
+    )
+
     app.layout = dash_page(
         "Long Term Counts · Live Detection",
         [
@@ -295,40 +830,18 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     dbc.Row(
                         [
                             dbc.Col(
-                                html.Img(
-                                    src=route_path,
-                                    style={"width": "100%", "borderRadius": "12px"},
-                                ),
+                                [
+                                    html.Img(
+                                        src=route_path,
+                                        style={"width": "100%", "borderRadius": "12px"},
+                                    ),
+                                    counts_panel,
+                                ],
                                 md=8,
                             ),
                             dbc.Col(
                                 [
-                                    html.Div(
-                                        [
-                                            html.Div("Detection Started At", className="text-muted"),
-                                            html.H5(id="start-time", className="mb-3"),
-                                        ]
-                                    ),
-                                    html.Hr(),
-                                    dbc.Card(
-                                        dbc.CardBody(
-                                            [
-                                                html.Div("Pedestrians Detected", className="text-muted"),
-                                                html.H2(id="ped-count", className="mb-0 text-primary"),
-                                            ]
-                                        ),
-                                        className="mb-3 shadow-sm",
-                                    ),
-                                    dbc.Card(
-                                        dbc.CardBody(
-                                            [
-                                                html.Div("Cyclists Detected", className="text-muted"),
-                                                html.H2(id="cyc-count", className="mb-0 text-success"),
-                                            ]
-                                        ),
-                                        className="mb-3 shadow-sm",
-                                    ),
-                                    dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
+                                    crosswalk_line_controls,
                                 ],
                                 md=4,
                             ),
@@ -346,12 +859,156 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         Output("ped-count", "children"),
         Output("cyc-count", "children"),
         Output("start-time", "children"),
+        *[
+            Output(f"crosswalk-{cw['key']}-ped", "children")
+            for cw in initial_crosswalks
+        ],
+        *[
+            Output(f"crosswalk-{cw['key']}-cyc", "children")
+            for cw in initial_crosswalks
+        ],
         Input("stat-timer", "n_intervals"),
         prevent_initial_call=False,
     )
     def _update_stats(_):
         worker.start()
-        ped, cyc, start_str = worker.get_stats()
-        return str(ped), str(cyc), (start_str or "—")
+        ped, cyc, start_str, crosswalk_counts = worker.get_stats()
+        outputs: List[str] = [str(ped), str(cyc), (start_str or "—")]
+        for cw in initial_crosswalks:
+            counts = crosswalk_counts.get(
+                cw["key"], {"pedestrians": 0, "cyclists": 0}
+            )
+            outputs.append(str(counts.get("pedestrians", 0)))
+        for cw in initial_crosswalks:
+            counts = crosswalk_counts.get(
+                cw["key"], {"pedestrians": 0, "cyclists": 0}
+            )
+            outputs.append(str(counts.get("cyclists", 0)))
+        return outputs
+
+    @app.callback(
+        Output("crosswalk-config-store", "data"),
+        [*button_inputs],
+        prevent_initial_call=False,
+    )
+    def _apply_crosswalk_adjustments(*_unused):
+        worker.start()
+        ctx = dash.callback_context
+        config_snapshot = worker.get_crosswalk_config()
+
+        if not ctx.triggered:
+            return [
+                {
+                    "key": item["key"],
+                    "name": item["name"],
+                    "p1": [item["p1"][0], item["p1"][1]],
+                    "p2": [item["p2"][0], item["p2"][1]],
+                    "label": (
+                        [item["label"][0], item["label"][1]]
+                        if item.get("label")
+                        else None
+                    ),
+                }
+                for item in config_snapshot
+            ]
+
+        triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        target = button_lookup.get(triggered_id)
+        if not target:
+            return [
+                {
+                    "key": item["key"],
+                    "name": item["name"],
+                    "p1": [item["p1"][0], item["p1"][1]],
+                    "p2": [item["p2"][0], item["p2"][1]],
+                    "label": (
+                        [item["label"][0], item["label"][1]]
+                        if item.get("label")
+                        else None
+                    ),
+                }
+                for item in config_snapshot
+            ]
+
+        key, action = target
+
+        updated_config = []
+        for item in config_snapshot:
+            if item["key"] == key:
+                p1 = (float(item["p1"][0]), float(item["p1"][1]))
+                p2 = (float(item["p2"][0]), float(item["p2"][1]))
+                label = item.get("label")
+                label_tuple = (
+                    (float(label[0]), float(label[1])) if label is not None else None
+                )
+
+                if action.startswith("move:"):
+                    direction = action.split(":", 1)[1]
+                    dx, dy = direction_vectors.get(direction, (0.0, 0.0))
+                    p1 = (_clamp_norm(p1[0] + dx), _clamp_norm(p1[1] + dy))
+                    p2 = (_clamp_norm(p2[0] + dx), _clamp_norm(p2[1] + dy))
+                    if label_tuple:
+                        label_tuple = (
+                            _clamp_norm(label_tuple[0] + dx),
+                            _clamp_norm(label_tuple[1] + dy),
+                        )
+                elif action in {"rotate-left", "rotate-right"}:
+                    angle = math.radians(CROSSWALK_ROTATE_STEP_DEG)
+                    if action == "rotate-left":
+                        angle = -angle
+                    center = ((p1[0] + p2[0]) / 2.0, (p1[1] + p2[1]) / 2.0)
+                    p1 = _rotate_point(p1, center, angle)
+                    p2 = _rotate_point(p2, center, angle)
+                    if label_tuple:
+                        label_tuple = _rotate_point(label_tuple, center, angle)
+                elif action in {"expand", "shrink"}:
+                    factor = 1.0 + CROSSWALK_SCALE_STEP
+                    if action == "shrink":
+                        factor = max(0.0, 1.0 - CROSSWALK_SCALE_STEP)
+                    center = ((p1[0] + p2[0]) / 2.0, (p1[1] + p2[1]) / 2.0)
+                    new_p1 = _scale_point(p1, center, factor)
+                    new_p2 = _scale_point(p2, center, factor)
+                    new_length = math.hypot(new_p2[0] - new_p1[0], new_p2[1] - new_p1[1])
+                    if new_length >= CROSSWALK_MIN_LENGTH:
+                        p1, p2 = new_p1, new_p2
+                        if label_tuple:
+                            label_tuple = _scale_point(label_tuple, center, factor)
+                updated_config.append(
+                    {
+                        "key": item["key"],
+                        "name": item["name"],
+                        "p1": p1,
+                        "p2": p2,
+                        "label": label_tuple,
+                    }
+                )
+            else:
+                updated_config.append(
+                    {
+                        "key": item["key"],
+                        "name": item["name"],
+                        "p1": tuple(item["p1"]),
+                        "p2": tuple(item["p2"]),
+                        "label": tuple(item["label"]) if item.get("label") else None,
+                    }
+                )
+
+        worker.set_crosswalk_config(updated_config)
+        refreshed = worker.get_crosswalk_config()
+
+        return [
+            {
+                "key": item["key"],
+                "name": item["name"],
+                "p1": [item["p1"][0], item["p1"][1]],
+                "p2": [item["p2"][0], item["p2"][1]],
+                "label": (
+                    [item["label"][0], item["label"][1]]
+                    if item.get("label")
+                    else None
+                ),
+            }
+            for item in refreshed
+        ]
 
     return app
