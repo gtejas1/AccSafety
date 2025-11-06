@@ -17,7 +17,7 @@ from unified_explore import create_unified_explore
 
 BASE_DIR = Path(__file__).resolve().parent
 
-VALID_USERS = {"admin": "admin", "user1": "mypassword"}
+VALID_USERS = {"admin": "admin", "ipit": "ipit@2025!"}
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
 
 
@@ -381,8 +381,6 @@ def create_server():
           center="-88.01501274592921,43.039734737956515"
           scale="1155581.108577"
           legend-enabled
-          information-enabled
-          bookmarks-enabled
           layer-list-enabled
           search-enabled>
         </arcgis-embedded-map>

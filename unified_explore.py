@@ -27,7 +27,7 @@ NEW_MODE        = "Both"
 STORYMAP_URL    = "https://storymaps.arcgis.com/stories/281bfdde23a7411ca63f84d1fafa2098"
 
 # ---- ArcGIS config for Wisconsin Ped/Bike Database (Statewide) ----
-SW_ITEM_ID = "5badd855f3384cb1ab03eb0470a93f20"
+SW_ITEM_ID = "82ba60a9062c4742a371375b9dc95911"
 SW_CENTER  = "-88.15601552734218,43.07196694820907"
 SW_SCALE   = "1155581.108577"
 SW_THEME   = "light"

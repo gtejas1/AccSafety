@@ -178,12 +178,7 @@ class VideoWorker:
         self.stats_lock = threading.Lock()
         self.total_counts = {"pedestrians": 0, "cyclists": 0}
         self.start_time: Optional[datetime] = None
-        self.crosswalk_lock = threading.Lock()
-        self.crosswalk_config: List[Dict[str, object]] = []
-        self.crosswalk_counts: Dict[str, Dict[str, int]] = {}
         self._counted_ids: Dict[str, set[int]] = {}
-        self._track_sides: Dict[int, Dict[str, int]] = {}
-        self._track_last_seen: Dict[int, float] = {}
         self._reset_tracker_history()
 
         self.stop_flag = threading.Event()
@@ -211,96 +206,19 @@ class VideoWorker:
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self._reset_tracker_history()
 
-    def _load_saved_crosswalk_config(self) -> Optional[List[Dict[str, Any]]]:
-        """Load a persisted crosswalk configuration if available."""
+    def _reset_tracker_history(self) -> None:
+        """Reset the cache of tracker IDs that have been counted."""
+        groups = set(self.class_group.values())
+        with self.stats_lock:
+            self._counted_ids = {group: set() for group in groups}
 
-        path = getattr(self, "crosswalk_config_path", None)
-        if not path:
-            return None
-
-        try:
-            with open(path, "r", encoding="utf-8") as fh:
-                payload = json.load(fh)
-        except FileNotFoundError:
-            return None
-        except Exception:
-            return None
-
-        if not isinstance(payload, list):
-            return None
-
-        loaded: List[Dict[str, Any]] = []
-        for item in payload:
-            if not isinstance(item, dict):
-                continue
-            key = str(item.get("key") or "").strip()
-            if not key:
-                continue
-            name = item.get("name") or f"{key.title()} Crosswalk"
-            p1 = item.get("p1")
-            p2 = item.get("p2")
-            label = item.get("label")
-            try:
-                if not (isinstance(p1, (list, tuple)) and isinstance(p2, (list, tuple))):
-                    continue
-                p1_pair = (float(p1[0]), float(p1[1]))
-                p2_pair = (float(p2[0]), float(p2[1]))
-            except (TypeError, ValueError, IndexError):
-                continue
-
-            label_pair: Optional[Tuple[float, float]] = None
-            if isinstance(label, (list, tuple)):
-                try:
-                    label_pair = (float(label[0]), float(label[1]))
-                except (TypeError, ValueError, IndexError):
-                    label_pair = None
-
-            loaded.append({"key": key, "name": name, "p1": p1_pair, "p2": p2_pair, "label": label_pair})
-
-        if not loaded:
-            return None
-
-        return loaded
-
-    def _persist_crosswalk_config(self, config: List[Dict[str, object]]) -> None:
-        """Write the crosswalk configuration to disk for reuse."""
-
-        path = getattr(self, "crosswalk_config_path", None)
-        if not path:
-            return
-
-        payload = []
-        for item in config:
-            payload.append(
-                {
-                    "key": item["key"],
-                    "name": item["name"],
-                    "p1": [float(item["p1"][0]), float(item["p1"][1])],
-                    "p2": [float(item["p2"][0]), float(item["p2"][1])],
-                    "label": (
-                        [float(item["label"][0]), float(item["label"][1])]
-                        if item.get("label")
-                        else None
-                    ),
-                }
-            )
-
-        tmp_path = f"{path}.tmp"
-        try:
-            dir_name = os.path.dirname(path)
-            if dir_name:
-                os.makedirs(dir_name, exist_ok=True)
-            with self._config_io_lock:
-                with open(tmp_path, "w", encoding="utf-8") as fh:
-                    json.dump(payload, fh, indent=2)
-                os.replace(tmp_path, path)
-        except Exception:
-            try:
-                if os.path.exists(tmp_path):
-                    os.remove(tmp_path)
-            except OSError:
-                pass
-            return
+    def clear_totals(self) -> None:
+        """Clear cumulative counts and tracker history."""
+        with self.stats_lock:
+            self.total_counts = {"pedestrians": 0, "cyclists": 0}
+            self.start_time = None
+            groups = set(self.class_group.values())
+            self._counted_ids = {group: set() for group in groups}
 
     def _reset_tracker_history(self) -> None:
         """Reset the cache of tracker IDs that have been counted."""
@@ -451,82 +369,33 @@ class VideoWorker:
                 return
             classes = boxes.cls.int().tolist()
             track_ids = [int(tid) for tid in boxes.id.int().tolist()]
-            centers: List[Optional[Tuple[float, float]]] = []
-            if getattr(boxes, "xywh", None) is not None:
-                centers = [(float(x), float(y)) for x, y, _, _ in boxes.xywh.cpu().tolist()]
-            if len(centers) < len(track_ids):
-                centers.extend([None] * (len(track_ids) - len(centers)))
-            elif len(centers) > len(track_ids):
-                centers = centers[: len(track_ids)]
         except Exception:
             pass
         else:
             deltas = {"pedestrians": 0, "cyclists": 0}
             with self.stats_lock:
-                timestamp = time.time()
-                for cid, track_id, center in zip(classes, track_ids, centers):
+                for cid, track_id in zip(classes, track_ids):
                     group = self.class_group.get(cid)
                     if group is None:
                         continue
                     counted_for_group = self._counted_ids.setdefault(group, set())
-                    already_counted = track_id < 0 or track_id in counted_for_group
-                    if not already_counted:
-                        counted_for_group.add(track_id)
-                        if group == "pedestrian":
-                            deltas["pedestrians"] += 1
-                        elif group == "cyclist":
-                            deltas["cyclists"] += 1
-
-                    if track_id < 0 or center is None:
+                    if track_id < 0 or track_id in counted_for_group:
                         continue
-
-                    self._track_last_seen[track_id] = timestamp
-                    track_crosswalk_state = self._track_sides.setdefault(track_id, {})
-                    for key, _, p1, p2, _, length in crosswalk_pixels:
-                        side_val = _point_side_of_line(center, p1, p2)
-                        if side_val == 0:
-                            continue
-                        distance = abs(side_val) / length
-                        if distance > CROSSWALK_DISTANCE_THRESHOLD:
-                            continue
-                        side = 1 if side_val > 0 else -1
-                        prev_side = track_crosswalk_state.get(key)
-                        if prev_side is None:
-                            track_crosswalk_state[key] = side
-                            continue
-                        if prev_side != side:
-                            track_crosswalk_state[key] = side
-                            counts_for_crosswalk = self.crosswalk_counts.setdefault(
-                                key,
-                                {"pedestrians": 0, "cyclists": 0},
-                            )
-                            if group == "pedestrian":
-                                counts_for_crosswalk["pedestrians"] += 1
-                            elif group == "cyclist":
-                                counts_for_crosswalk["cyclists"] += 1
+                    counted_for_group.add(track_id)
+                    if group == "pedestrian":
+                        deltas["pedestrians"] += 1
+                    elif group == "cyclist":
+                        deltas["cyclists"] += 1
 
                 for key, delta in deltas.items():
                     if delta:
                         self.total_counts[key] += delta
                 if (deltas["pedestrians"] or deltas["cyclists"]) and self.start_time is None:
                     self.start_time = datetime.now()
-
-                self._prune_stale_tracks_locked(timestamp)
             return
 
         # If anything above failed, do not update counts.
         return
-
-    def _prune_stale_tracks_locked(self, now_ts: float) -> None:
-        """Remove cached per-track crosswalk state after a timeout."""
-        stale = [
-            track_id
-            for track_id, last_seen in self._track_last_seen.items()
-            if now_ts - last_seen > TRACK_STATE_TTL_SEC
-        ]
-        for track_id in stale:
-            self._track_last_seen.pop(track_id, None)
-            self._track_sides.pop(track_id, None)
 
     def loop(self) -> None:
         """Continuously read frames, run YOLO inference, and update totals."""
@@ -562,7 +431,6 @@ class VideoWorker:
                 )
 
             # detect pedestrians & cyclists only with persistent tracking
-            crosswalk_pixels = self._get_crosswalk_pixels(frame.shape)
             results = self.model.track(
                 frame,
                 verbose=False,
