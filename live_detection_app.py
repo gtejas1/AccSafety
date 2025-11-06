@@ -74,6 +74,17 @@ CROSSWALK_LINES = [
 CROSSWALK_DISTANCE_THRESHOLD = 60.0  # maximum distance (px) from a line to count a crossing
 TRACK_STATE_TTL_SEC = 15.0
 CROSSWALK_NUDGE_STEP = 0.01  # normalized amount each navigation press moves a crosswalk
+CROSSWALK_ROTATE_STEP_DEG = 5.0
+CROSSWALK_SCALE_STEP = 0.05
+CROSSWALK_MIN_LENGTH = 0.05
+
+
+def _clamp_norm(value: float) -> float:
+    return max(0.0, min(1.0, float(value)))
+
+
+def _clamp_point(pair: Tuple[float, float]) -> Tuple[float, float]:
+    return (_clamp_norm(pair[0]), _clamp_norm(pair[1]))
 
 
 def _point_side_of_line(point: Tuple[float, float], p1: Tuple[int, int], p2: Tuple[int, int]) -> float:
@@ -82,6 +93,38 @@ def _point_side_of_line(point: Tuple[float, float], p1: Tuple[int, int], p2: Tup
     x1, y1 = p1
     x2, y2 = p2
     return (x - x1) * (y2 - y1) - (y - y1) * (x2 - x1)
+
+
+def _rotate_point(
+    point: Tuple[float, float],
+    center: Tuple[float, float],
+    angle_rad: float,
+) -> Tuple[float, float]:
+    """Rotate a normalized point around a center by angle_rad radians."""
+    x, y = point
+    cx, cy = center
+    dx = x - cx
+    dy = y - cy
+    cos_a = math.cos(angle_rad)
+    sin_a = math.sin(angle_rad)
+    rx = dx * cos_a - dy * sin_a + cx
+    ry = dx * sin_a + dy * cos_a + cy
+    return _clamp_point((rx, ry))
+
+
+def _scale_point(
+    point: Tuple[float, float],
+    center: Tuple[float, float],
+    factor: float,
+) -> Tuple[float, float]:
+    """Scale a normalized point away from or toward the center by factor."""
+    x, y = point
+    cx, cy = center
+    dx = x - cx
+    dy = y - cy
+    sx = cx + dx * factor
+    sy = cy + dy * factor
+    return _clamp_point((sx, sy))
 
 
 def _find_allowed_class_ids(model: YOLO) -> Tuple[List[int], Dict[int, str]]:
@@ -182,24 +225,21 @@ class VideoWorker:
     def set_crosswalk_config(self, lines: List[Dict[str, object]]) -> None:
         """Replace the crosswalk configuration with new normalized endpoints."""
 
-        def _clamp_pair(pair: Tuple[float, float]) -> Tuple[float, float]:
-            return (max(0.0, min(1.0, float(pair[0]))), max(0.0, min(1.0, float(pair[1]))))
-
         normalized: List[Dict[str, object]] = []
         for cw in lines:
             key = str(cw.get("key"))
             if not key:
                 continue
             name = cw.get("name") or f"{key.title()} Crosswalk"
-            p1 = _clamp_pair(cw.get("p1", (0.0, 0.0)))
-            p2 = _clamp_pair(cw.get("p2", (1.0, 1.0)))
+            p1 = _clamp_point(cw.get("p1", (0.0, 0.0)))
+            p2 = _clamp_point(cw.get("p2", (1.0, 1.0)))
             label = cw.get("label")
             if label is None:
                 mid_x = (p1[0] + p2[0]) / 2.0
                 mid_y = max(0.0, min(1.0, (p1[1] + p2[1]) / 2.0 - 0.05))
                 label = (mid_x, mid_y)
             else:
-                label = _clamp_pair(label)
+                label = _clamp_point(label)
             normalized.append({"key": key, "name": name, "p1": p1, "p2": p2, "label": label})
 
         if not normalized:
@@ -568,6 +608,14 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         "west": (-CROSSWALK_NUDGE_STEP, 0.0),
         "east": (CROSSWALK_NUDGE_STEP, 0.0),
     }
+    rotation_titles = {
+        "rotate-left": "Rotate counter-clockwise by 5 degrees",
+        "rotate-right": "Rotate clockwise by 5 degrees",
+    }
+    scale_titles = {
+        "expand": "Lengthen this crosswalk line by 5%",
+        "shrink": "Shorten this crosswalk line by 5%",
+    }
 
     control_items: List[dbc.AccordionItem] = []
     button_inputs: List[Input] = []
@@ -579,54 +627,109 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             dbc.AccordionItem(
                 [
                     html.P(
-                        "Use the arrow buttons to nudge this crosswalk line. Each press moves the endpoints by 1% of the frame.",
+                        "Use the controls to nudge, rotate, or resize this crosswalk line. Move presses shift endpoints by 1%, rotation adjusts by 5°, and resize changes the line length by 5%.",
                         className="small text-muted",
                     ),
                     html.Div(
                         [
-                            dbc.Button(
-                                direction_icons["north"],
-                                id=f"btn-{key}-north",
-                                color="secondary",
-                                outline=True,
-                                size="sm",
-                                title=direction_titles["north"],
+                            html.Div(
+                                [
+                                    dbc.Button(
+                                        direction_icons["north"],
+                                        id=f"btn-{key}-north",
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title=direction_titles["north"],
+                                    ),
+                                    html.Div(
+                                        [
+                                            dbc.Button(
+                                                direction_icons["west"],
+                                                id=f"btn-{key}-west",
+                                                color="secondary",
+                                                outline=True,
+                                                size="sm",
+                                                title=direction_titles["west"],
+                                            ),
+                                            html.Span(
+                                                "Move line",
+                                                className="small text-muted",
+                                            ),
+                                            dbc.Button(
+                                                direction_icons["east"],
+                                                id=f"btn-{key}-east",
+                                                color="secondary",
+                                                outline=True,
+                                                size="sm",
+                                                title=direction_titles["east"],
+                                            ),
+                                        ],
+                                        className="d-flex align-items-center gap-2",
+                                    ),
+                                    dbc.Button(
+                                        direction_icons["south"],
+                                        id=f"btn-{key}-south",
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title=direction_titles["south"],
+                                    ),
+                                ],
+                                className="d-flex flex-column align-items-center gap-2",
                             ),
                             html.Div(
                                 [
                                     dbc.Button(
-                                        direction_icons["west"],
-                                        id=f"btn-{key}-west",
+                                        "⟲",
+                                        id=f"btn-{key}-rotate-left",
                                         color="secondary",
                                         outline=True,
                                         size="sm",
-                                        title=direction_titles["west"],
+                                        title=rotation_titles["rotate-left"],
                                     ),
                                     html.Span(
-                                        "Move line",
+                                        "Rotate",
                                         className="small text-muted",
                                     ),
                                     dbc.Button(
-                                        direction_icons["east"],
-                                        id=f"btn-{key}-east",
+                                        "⟳",
+                                        id=f"btn-{key}-rotate-right",
                                         color="secondary",
                                         outline=True,
                                         size="sm",
-                                        title=direction_titles["east"],
+                                        title=rotation_titles["rotate-right"],
                                     ),
                                 ],
                                 className="d-flex align-items-center gap-2",
                             ),
-                            dbc.Button(
-                                direction_icons["south"],
-                                id=f"btn-{key}-south",
-                                color="secondary",
-                                outline=True,
-                                size="sm",
-                                title=direction_titles["south"],
+                            html.Div(
+                                [
+                                    dbc.Button(
+                                        "−",
+                                        id=f"btn-{key}-shrink",
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title=scale_titles["shrink"],
+                                    ),
+                                    html.Span(
+                                        "Resize",
+                                        className="small text-muted",
+                                    ),
+                                    dbc.Button(
+                                        "+",
+                                        id=f"btn-{key}-expand",
+                                        color="secondary",
+                                        outline=True,
+                                        size="sm",
+                                        title=scale_titles["expand"],
+                                    ),
+                                ],
+                                className="d-flex align-items-center gap-2",
                             ),
                         ],
-                        className="d-flex flex-column align-items-center gap-2 mt-2",
+                        className="d-flex flex-column align-items-center gap-3 mt-2",
                     ),
                 ],
                 title=cw["name"],
@@ -637,7 +740,12 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         for direction in ("north", "west", "east", "south"):
             btn_id = f"btn-{key}-{direction}"
             button_inputs.append(Input(btn_id, "n_clicks"))
-            button_lookup[btn_id] = (key, direction)
+            button_lookup[btn_id] = (key, f"move:{direction}")
+
+        for action in ("rotate-left", "rotate-right", "shrink", "expand"):
+            btn_id = f"btn-{key}-{action}"
+            button_inputs.append(Input(btn_id, "n_clicks"))
+            button_lookup[btn_id] = (key, action)
 
     crosswalk_store_payload = [
         {
@@ -645,6 +753,11 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             "name": cw["name"],
             "p1": [float(cw["p1"][0]), float(cw["p1"][1])],
             "p2": [float(cw["p2"][0]), float(cw["p2"][1])],
+            "label": (
+                [float(cw["label"][0]), float(cw["label"][1])]
+                if cw.get("label")
+                else None
+            ),
         }
         for cw in initial_crosswalks
     ]
@@ -654,7 +767,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             [
                 html.H5("Adjust Crosswalk Lines"),
                 html.P(
-                    "Use the navigation buttons to nudge each crosswalk line. Moves are applied in 1% increments of the frame.",
+                    "Use the controls below to move, rotate, or resize each crosswalk line in small increments.",
                     className="text-muted",
                 ),
                 dbc.Accordion(
@@ -808,6 +921,11 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     "name": item["name"],
                     "p1": [item["p1"][0], item["p1"][1]],
                     "p2": [item["p2"][0], item["p2"][1]],
+                    "label": (
+                        [item["label"][0], item["label"][1]]
+                        if item.get("label")
+                        else None
+                    ),
                 }
                 for item in config_snapshot
             ]
@@ -821,31 +939,65 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     "name": item["name"],
                     "p1": [item["p1"][0], item["p1"][1]],
                     "p2": [item["p2"][0], item["p2"][1]],
+                    "label": (
+                        [item["label"][0], item["label"][1]]
+                        if item.get("label")
+                        else None
+                    ),
                 }
                 for item in config_snapshot
             ]
 
-        key, direction = target
-        dx, dy = direction_vectors.get(direction, (0.0, 0.0))
-
-        def _clamp(value: float) -> float:
-            return max(0.0, min(1.0, value))
+        key, action = target
 
         updated_config = []
         for item in config_snapshot:
             if item["key"] == key:
-                p1 = (_clamp(item["p1"][0] + dx), _clamp(item["p1"][1] + dy))
-                p2 = (_clamp(item["p2"][0] + dx), _clamp(item["p2"][1] + dy))
+                p1 = (float(item["p1"][0]), float(item["p1"][1]))
+                p2 = (float(item["p2"][0]), float(item["p2"][1]))
                 label = item.get("label")
-                if label:
-                    label = (_clamp(label[0] + dx), _clamp(label[1] + dy))
+                label_tuple = (
+                    (float(label[0]), float(label[1])) if label is not None else None
+                )
+
+                if action.startswith("move:"):
+                    direction = action.split(":", 1)[1]
+                    dx, dy = direction_vectors.get(direction, (0.0, 0.0))
+                    p1 = (_clamp_norm(p1[0] + dx), _clamp_norm(p1[1] + dy))
+                    p2 = (_clamp_norm(p2[0] + dx), _clamp_norm(p2[1] + dy))
+                    if label_tuple:
+                        label_tuple = (
+                            _clamp_norm(label_tuple[0] + dx),
+                            _clamp_norm(label_tuple[1] + dy),
+                        )
+                elif action in {"rotate-left", "rotate-right"}:
+                    angle = math.radians(CROSSWALK_ROTATE_STEP_DEG)
+                    if action == "rotate-left":
+                        angle = -angle
+                    center = ((p1[0] + p2[0]) / 2.0, (p1[1] + p2[1]) / 2.0)
+                    p1 = _rotate_point(p1, center, angle)
+                    p2 = _rotate_point(p2, center, angle)
+                    if label_tuple:
+                        label_tuple = _rotate_point(label_tuple, center, angle)
+                elif action in {"expand", "shrink"}:
+                    factor = 1.0 + CROSSWALK_SCALE_STEP
+                    if action == "shrink":
+                        factor = max(0.0, 1.0 - CROSSWALK_SCALE_STEP)
+                    center = ((p1[0] + p2[0]) / 2.0, (p1[1] + p2[1]) / 2.0)
+                    new_p1 = _scale_point(p1, center, factor)
+                    new_p2 = _scale_point(p2, center, factor)
+                    new_length = math.hypot(new_p2[0] - new_p1[0], new_p2[1] - new_p1[1])
+                    if new_length >= CROSSWALK_MIN_LENGTH:
+                        p1, p2 = new_p1, new_p2
+                        if label_tuple:
+                            label_tuple = _scale_point(label_tuple, center, factor)
                 updated_config.append(
                     {
                         "key": item["key"],
                         "name": item["name"],
                         "p1": p1,
                         "p2": p2,
-                        "label": label,
+                        "label": label_tuple,
                     }
                 )
             else:
@@ -855,7 +1007,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                         "name": item["name"],
                         "p1": tuple(item["p1"]),
                         "p2": tuple(item["p2"]),
-                        "label": item.get("label"),
+                        "label": tuple(item["label"]) if item.get("label") else None,
                     }
                 )
 
@@ -868,6 +1020,11 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 "name": item["name"],
                 "p1": [item["p1"][0], item["p1"][1]],
                 "p2": [item["p2"][0], item["p2"][1]],
+                "label": (
+                    [item["label"][0], item["label"][1]]
+                    if item.get("label")
+                    else None
+                ),
             }
             for item in refreshed
         ]
