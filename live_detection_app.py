@@ -82,6 +82,8 @@ class VideoWorker:
         self.stats_lock = threading.Lock()
         self.total_counts = {"pedestrians": 0, "cyclists": 0}
         self.start_time: Optional[datetime] = None
+        self._counted_ids: Dict[str, set[int]] = {}
+        self._reset_tracker_history()
 
         self.stop_flag = threading.Event()
         self.frame_count = 0
@@ -94,29 +96,62 @@ class VideoWorker:
         if not self.cap.isOpened():
             raise RuntimeError("Failed to open RTSP stream")
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self._reset_tracker_history()
+
+    def _reset_tracker_history(self) -> None:
+        """Reset the cache of tracker IDs that have been counted."""
+        groups = set(self.class_group.values())
+        with self.stats_lock:
+            self._counted_ids = {group: set() for group in groups}
+
+    def clear_totals(self) -> None:
+        """Clear cumulative counts and tracker history."""
+        with self.stats_lock:
+            self.total_counts = {"pedestrians": 0, "cyclists": 0}
+            self.start_time = None
+            groups = set(self.class_group.values())
+            self._counted_ids = {group: set() for group in groups}
 
     def _update_counts(self, results) -> None:
         """Accumulate total pedestrian/cyclist counts since start."""
-        ped = cyc = 0
         try:
             boxes = results[0].boxes
-            if boxes is not None and boxes.cls is not None:
-                classes = boxes.cls.int().tolist()
-                for cid in classes:
-                    if cid in self.class_group:
-                        if self.class_group[cid] == "pedestrian":
-                            ped += 1
-                        elif self.class_group[cid] == "cyclist":
-                            cyc += 1
+            if (
+                boxes is None
+                or boxes.cls is None
+                or boxes.id is None
+                or len(boxes.cls) == 0
+            ):
+                return
+            classes = boxes.cls.int().tolist()
+            track_ids = [int(tid) for tid in boxes.id.int().tolist()]
         except Exception:
             pass
+        else:
+            deltas = {"pedestrians": 0, "cyclists": 0}
+            with self.stats_lock:
+                for cid, track_id in zip(classes, track_ids):
+                    group = self.class_group.get(cid)
+                    if group is None:
+                        continue
+                    counted_for_group = self._counted_ids.setdefault(group, set())
+                    if track_id < 0 or track_id in counted_for_group:
+                        continue
+                    counted_for_group.add(track_id)
+                    if group == "pedestrian":
+                        deltas["pedestrians"] += 1
+                    elif group == "cyclist":
+                        deltas["cyclists"] += 1
 
-        # Add detected counts to totals
-        with self.stats_lock:
-            self.total_counts["pedestrians"] += ped
-            self.total_counts["cyclists"] += cyc
-            if self.start_time is None:
-                self.start_time = datetime.now()
+                for key, delta in deltas.items():
+                    if delta:
+                        self.total_counts[key] += delta
+                if (deltas["pedestrians"] or deltas["cyclists"]) and self.start_time is None:
+                    self.start_time = datetime.now()
+            return
+
+        # If anything above failed, do not update counts.
+        return
 
     def loop(self) -> None:
         """Continuously read frames, run YOLO inference, and update totals."""
@@ -151,13 +186,15 @@ class VideoWorker:
                     frame, (TARGET_WIDTH, int(h * scale)), interpolation=cv2.INTER_AREA
                 )
 
-            # detect pedestrians & cyclists only
-            results = self.model.predict(
+            # detect pedestrians & cyclists only with persistent tracking
+            results = self.model.track(
                 frame,
                 verbose=False,
                 conf=SCORE_THRESH,
                 imgsz=frame.shape[1],
                 classes=self.allowed_class_ids,
+                persist=True,
+                tracker="bytetrack.yaml",
             )
 
             self._update_counts(results)
