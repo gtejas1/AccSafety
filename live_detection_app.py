@@ -659,7 +659,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 dcc.Store(id="crosswalk-config-store", data=crosswalk_store_payload),
             ]
         ),
-        className="mt-3 shadow-sm",
+        className="shadow-sm",
     )
 
     app.layout = dash_page(
@@ -678,44 +678,69 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                                         src=route_path,
                                         style={"width": "100%", "borderRadius": "12px"},
                                     ),
-                                    crosswalk_line_controls,
+                                    html.Div(
+                                        [
+                                            html.Div(
+                                                [
+                                                    html.Div(
+                                                        "Detection Started At",
+                                                        className="text-muted",
+                                                    ),
+                                                    html.H5(
+                                                        id="start-time",
+                                                        className="mb-3",
+                                                    ),
+                                                ]
+                                            ),
+                                            html.Hr(),
+                                            dbc.Card(
+                                                dbc.CardBody(
+                                                    [
+                                                        html.Div(
+                                                            "Pedestrians Detected",
+                                                            className="text-muted",
+                                                        ),
+                                                        html.H2(
+                                                            id="ped-count",
+                                                            className="mb-0 text-primary",
+                                                        ),
+                                                    ]
+                                                ),
+                                                className="mb-3 shadow-sm",
+                                            ),
+                                            dbc.Card(
+                                                dbc.CardBody(
+                                                    [
+                                                        html.Div(
+                                                            "Cyclists Detected",
+                                                            className="text-muted",
+                                                        ),
+                                                        html.H2(
+                                                            id="cyc-count",
+                                                            className="mb-0 text-success",
+                                                        ),
+                                                    ]
+                                                ),
+                                                className="mb-3 shadow-sm",
+                                            ),
+                                            html.Div(
+                                                "Crosswalk Counts (both directions)",
+                                                className="text-muted mt-4 mb-2",
+                                            ),
+                                            *crosswalk_cards,
+                                            dcc.Interval(
+                                                id="stat-timer",
+                                                interval=1000,
+                                                n_intervals=0,
+                                            ),
+                                        ],
+                                        className="mt-4",
+                                    ),
                                 ],
                                 md=8,
                             ),
                             dbc.Col(
-                                [
-                                    html.Div(
-                                        [
-                                            html.Div("Detection Started At", className="text-muted"),
-                                            html.H5(id="start-time", className="mb-3"),
-                                        ]
-                                    ),
-                                    html.Hr(),
-                                    dbc.Card(
-                                        dbc.CardBody(
-                                            [
-                                                html.Div("Pedestrians Detected", className="text-muted"),
-                                                html.H2(id="ped-count", className="mb-0 text-primary"),
-                                            ]
-                                        ),
-                                        className="mb-3 shadow-sm",
-                                    ),
-                                    dbc.Card(
-                                        dbc.CardBody(
-                                            [
-                                                html.Div("Cyclists Detected", className="text-muted"),
-                                                html.H2(id="cyc-count", className="mb-0 text-success"),
-                                            ]
-                                        ),
-                                        className="mb-3 shadow-sm",
-                                    ),
-                                    html.Div(
-                                        "Crosswalk Counts (both directions)",
-                                        className="text-muted mt-4 mb-2",
-                                    ),
-                                    *crosswalk_cards,
-                                    dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
-                                ],
+                                [crosswalk_line_controls],
                                 md=4,
                             ),
                         ],
