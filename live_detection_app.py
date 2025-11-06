@@ -8,7 +8,8 @@ import os
 import time
 import threading
 import math
-from typing import Optional, List, Dict, Tuple
+import json
+from typing import Optional, List, Dict, Tuple, Any
 from datetime import datetime
 
 import cv2
@@ -77,6 +78,10 @@ CROSSWALK_NUDGE_STEP = 0.01  # normalized amount each navigation press moves a c
 CROSSWALK_ROTATE_STEP_DEG = 5.0
 CROSSWALK_SCALE_STEP = 0.05
 CROSSWALK_MIN_LENGTH = 0.05
+CROSSWALK_CONFIG_PATH = os.getenv(
+    "YOLO_CROSSWALK_CONFIG_PATH",
+    os.path.join(os.path.dirname(__file__), "crosswalk_config.json"),
+)
 
 
 def _clamp_norm(value: float) -> float:
@@ -188,7 +193,14 @@ class VideoWorker:
         self._crosswalk_cache_pixels: List[
             Tuple[str, str, Tuple[int, int], Tuple[int, int], Optional[Tuple[int, int]], float]
         ] = []
-        self.set_crosswalk_config(CROSSWALK_LINES)
+        self.crosswalk_config_path = CROSSWALK_CONFIG_PATH
+        self._config_io_lock = threading.Lock()
+
+        saved_crosswalks = self._load_saved_crosswalk_config()
+        if saved_crosswalks:
+            self.set_crosswalk_config(saved_crosswalks)
+        else:
+            self.set_crosswalk_config(CROSSWALK_LINES)
 
     # ────────────────────────────────────────────────────────────────────────
     def connect(self) -> None:
@@ -198,6 +210,97 @@ class VideoWorker:
             raise RuntimeError("Failed to open RTSP stream")
         self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         self._reset_tracker_history()
+
+    def _load_saved_crosswalk_config(self) -> Optional[List[Dict[str, Any]]]:
+        """Load a persisted crosswalk configuration if available."""
+
+        path = getattr(self, "crosswalk_config_path", None)
+        if not path:
+            return None
+
+        try:
+            with open(path, "r", encoding="utf-8") as fh:
+                payload = json.load(fh)
+        except FileNotFoundError:
+            return None
+        except Exception:
+            return None
+
+        if not isinstance(payload, list):
+            return None
+
+        loaded: List[Dict[str, Any]] = []
+        for item in payload:
+            if not isinstance(item, dict):
+                continue
+            key = str(item.get("key") or "").strip()
+            if not key:
+                continue
+            name = item.get("name") or f"{key.title()} Crosswalk"
+            p1 = item.get("p1")
+            p2 = item.get("p2")
+            label = item.get("label")
+            try:
+                if not (isinstance(p1, (list, tuple)) and isinstance(p2, (list, tuple))):
+                    continue
+                p1_pair = (float(p1[0]), float(p1[1]))
+                p2_pair = (float(p2[0]), float(p2[1]))
+            except (TypeError, ValueError, IndexError):
+                continue
+
+            label_pair: Optional[Tuple[float, float]] = None
+            if isinstance(label, (list, tuple)):
+                try:
+                    label_pair = (float(label[0]), float(label[1]))
+                except (TypeError, ValueError, IndexError):
+                    label_pair = None
+
+            loaded.append({"key": key, "name": name, "p1": p1_pair, "p2": p2_pair, "label": label_pair})
+
+        if not loaded:
+            return None
+
+        return loaded
+
+    def _persist_crosswalk_config(self, config: List[Dict[str, object]]) -> None:
+        """Write the crosswalk configuration to disk for reuse."""
+
+        path = getattr(self, "crosswalk_config_path", None)
+        if not path:
+            return
+
+        payload = []
+        for item in config:
+            payload.append(
+                {
+                    "key": item["key"],
+                    "name": item["name"],
+                    "p1": [float(item["p1"][0]), float(item["p1"][1])],
+                    "p2": [float(item["p2"][0]), float(item["p2"][1])],
+                    "label": (
+                        [float(item["label"][0]), float(item["label"][1])]
+                        if item.get("label")
+                        else None
+                    ),
+                }
+            )
+
+        tmp_path = f"{path}.tmp"
+        try:
+            dir_name = os.path.dirname(path)
+            if dir_name:
+                os.makedirs(dir_name, exist_ok=True)
+            with self._config_io_lock:
+                with open(tmp_path, "w", encoding="utf-8") as fh:
+                    json.dump(payload, fh, indent=2)
+                os.replace(tmp_path, path)
+        except Exception:
+            try:
+                if os.path.exists(tmp_path):
+                    os.remove(tmp_path)
+            except OSError:
+                pass
+            return
 
     def _reset_tracker_history(self) -> None:
         """Reset the cache of tracker IDs that have been counted."""
@@ -248,6 +351,7 @@ class VideoWorker:
         with self.crosswalk_lock:
             self.crosswalk_config = normalized
             self._crosswalk_cache_shape = None
+            persist_snapshot = [dict(cw) for cw in normalized]
 
         with self.stats_lock:
             prev_counts = {
@@ -262,6 +366,8 @@ class VideoWorker:
             }
             self._track_sides = {}
             self._track_last_seen = {}
+
+        self._persist_crosswalk_config(persist_snapshot)
 
     def get_crosswalk_config(self) -> List[Dict[str, object]]:
         """Return a copy of the current crosswalk configuration."""
