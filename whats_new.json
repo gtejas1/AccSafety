@@ -1,4 +1,13 @@
-[ 
+[
+  {
+    "version": "1.5",
+    "date": "2025-11-06",
+    "highlights": [
+      "Live detection now overlays per-crosswalk pedestrian and cyclist totals directly on the video feed, pairing the stream with dedicated count cards for each virtual line.",
+      "Operators can fine-tune crosswalk placement with new move, rotate, and resize controls that adjust each line in small increments for precise calibration.",
+      "Video tracking keeps stable IDs across frames so repeated detections are avoided while counts update in real time."
+    ]
+  },
   {
     "version": "1.4",
     "date": "2025-11-05",
