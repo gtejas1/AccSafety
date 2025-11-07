@@ -192,6 +192,119 @@ def _fetch_all() -> pd.DataFrame:
 
     return df
 
+
+def build_dashboard_metrics(
+    *,
+    max_source_highlights: int = 3,
+    max_global_highlights: int = 4,
+) -> dict:
+    """Return summary metrics for use on the portal home dashboard."""
+
+    df = _fetch_all()
+    total_sites = int(df.shape[0]) if not df.empty else 0
+
+    df_counts = df.copy()
+    if "Total counts" not in df_counts.columns:
+        df_counts["Total counts"] = pd.NA
+
+    df_counts["Total counts"] = pd.to_numeric(df_counts["Total counts"], errors="coerce")
+
+    location_series = df_counts.get("Location")
+    if location_series is None:
+        unique_locations = 0
+    else:
+        location_series = location_series.fillna("").astype(str).str.strip()
+        unique_locations = len({loc for loc in location_series if loc})
+
+    source_series = df_counts.get("Source")
+    if source_series is None:
+        df_counts["__source_clean"] = "Unknown source"
+        unique_sources = 1 if not df_counts.empty else 0
+    else:
+        source_series = source_series.fillna("").astype(str).str.strip()
+        df_counts["__source_clean"] = source_series.replace("", "Unknown source")
+        unique_sources = len(df_counts["__source_clean"].unique())
+
+    total_volume = float(df_counts["Total counts"].fillna(0).sum()) if not df_counts.empty else 0.0
+
+    def _clean_source_name(name: str) -> str:
+        name = (name or "").strip()
+        return name or "Unknown source"
+
+    per_source = []
+    if not df_counts.empty and unique_sources:
+        grouped = df_counts.groupby("__source_clean", dropna=False)
+        for raw_source, subset in grouped:
+            source_name = _clean_source_name(raw_source if isinstance(raw_source, str) else str(raw_source or ""))
+            subset_counts = pd.to_numeric(subset.get("Total counts"), errors="coerce")
+            subset_total = float(subset_counts.fillna(0).sum())
+            subset_sites = int(subset.shape[0])
+
+            highlights = []
+            subset_sorted = subset.assign(_counts=subset_counts.fillna(0)).sort_values("_counts", ascending=False)
+            for _, row in subset_sorted.head(max_source_highlights).iterrows():
+                location = (row.get("Location") or "").strip() or "Unknown location"
+                duration = (row.get("Duration") or "").strip()
+                count_value = row.get("Total counts")
+                try:
+                    count_value = int(round(float(count_value)))
+                except Exception:
+                    count_value = None
+                highlights.append(
+                    {
+                        "location": location,
+                        "duration": duration or None,
+                        "total_counts": count_value,
+                    }
+                )
+
+            per_source.append(
+                {
+                    "source": source_name,
+                    "site_count": subset_sites,
+                    "total_volume": int(round(subset_total)) if subset_total else 0,
+                    "highlights": highlights,
+                }
+            )
+
+    per_source.sort(key=lambda entry: entry.get("total_volume", 0), reverse=True)
+
+    global_highlights = []
+    if not df_counts.empty:
+        sorted_df = df_counts.assign(_counts=df_counts["Total counts"].fillna(0)).sort_values("_counts", ascending=False)
+        for _, row in sorted_df.head(max_global_highlights).iterrows():
+            source_name = _clean_source_name(row.get("__source_clean") or row.get("Source"))
+            location = (row.get("Location") or "").strip() or "Unknown location"
+            duration = (row.get("Duration") or "").strip()
+            count_value = row.get("Total counts")
+            try:
+                count_value = int(round(float(count_value)))
+            except Exception:
+                count_value = None
+            global_highlights.append(
+                {
+                    "source": source_name,
+                    "location": location,
+                    "duration": duration or None,
+                    "total_counts": count_value,
+                }
+            )
+
+    df_counts.pop("__source_clean", None)
+
+    metrics = {
+        "totals": {
+            "sites": total_sites,
+            "locations": unique_locations,
+            "sources": unique_sources,
+            "volume": int(round(total_volume)) if total_volume else 0,
+        },
+        "per_source": per_source,
+        "highlights": global_highlights,
+    }
+
+    return metrics
+
 def _encode_location_for_href(text: str) -> str:
     if not isinstance(text, str):
         return ""

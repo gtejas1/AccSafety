@@ -12,7 +12,7 @@ from vivacity_app import create_vivacity_dash
 from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
-from unified_explore import create_unified_explore
+from unified_explore import create_unified_explore, build_dashboard_metrics
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -265,6 +265,7 @@ def create_server():
     # ---- Portal Home ----
     @server.route("/")
     def home():
+        metrics = build_dashboard_metrics()
         return render_template_string("""
 <!doctype html>
 <html lang="en">
@@ -373,6 +374,103 @@ def create_server():
           </span>
         </div>
 
+        <div class="dashboard-section" aria-label="Dataset metrics overview">
+          {% set totals = metrics.totals or {} %}
+          <div class="dashboard-cards" role="list">
+            <article class="dashboard-card" role="listitem">
+              <span class="dashboard-card-label">Datasets</span>
+              <span class="dashboard-card-value">{{ '{:,}'.format(totals.get('sources', 0)) }}</span>
+              <span class="dashboard-card-hint">Unique data sources</span>
+            </article>
+            <article class="dashboard-card" role="listitem">
+              <span class="dashboard-card-label">Locations</span>
+              <span class="dashboard-card-value">{{ '{:,}'.format(totals.get('locations', 0)) }}</span>
+              <span class="dashboard-card-hint">Sites represented statewide</span>
+            </article>
+            <article class="dashboard-card" role="listitem">
+              <span class="dashboard-card-label">Records</span>
+              <span class="dashboard-card-value">{{ '{:,}'.format(totals.get('sites', 0)) }}</span>
+              <span class="dashboard-card-hint">Individual site entries</span>
+            </article>
+            <article class="dashboard-card" role="listitem">
+              <span class="dashboard-card-label">Total volume</span>
+              <span class="dashboard-card-value">{{ '{:,}'.format(totals.get('volume', 0)) }}</span>
+              <span class="dashboard-card-hint">Counts captured across datasets</span>
+            </article>
+          </div>
+
+          {% if metrics.highlights %}
+          <div class="dashboard-highlights">
+            <h2 class="dashboard-subtitle">Representative highlights</h2>
+            <ul class="dashboard-highlight-list">
+              {% for highlight in metrics.highlights %}
+              <li>
+                <div class="highlight-main">
+                  <span class="highlight-location">{{ highlight.location }}</span>
+                  {% if highlight.duration %}
+                    <span class="highlight-duration">{{ highlight.duration }}</span>
+                  {% endif %}
+                </div>
+                <div class="highlight-meta">
+                  <span class="highlight-source">{{ highlight.source }}</span>
+                  {% if highlight.total_counts is not none %}
+                    <span class="highlight-count">{{ '{:,}'.format(highlight.total_counts) }}</span>
+                  {% endif %}
+                </div>
+              </li>
+              {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+
+          <div class="dashboard-source-grid">
+            {% if metrics.per_source %}
+              {% for item in metrics.per_source %}
+              <article class="dashboard-source-card">
+                <header>
+                  <h3>{{ item.source }}</h3>
+                  <p class="dashboard-source-meta">
+                    <span>{{ '{:,}'.format(item.site_count) }} site{{ 's' if item.site_count != 1 else '' }}</span>
+                    <span aria-hidden="true">•</span>
+                    <span>{{ '{:,}'.format(item.total_volume) }} total counts</span>
+                  </p>
+                </header>
+                {% if item.highlights %}
+                <table class="dashboard-source-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Location</th>
+                      <th scope="col">Duration</th>
+                      <th scope="col" class="dashboard-col-numeric">Total counts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in item.highlights %}
+                    <tr>
+                      <td>{{ row.location }}</td>
+                      <td>{{ row.duration or '—' }}</td>
+                      <td class="dashboard-col-numeric">
+                        {% if row.total_counts is not none %}
+                          {{ '{:,}'.format(row.total_counts) }}
+                        {% else %}
+                          —
+                        {% endif %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+                {% else %}
+                <p class="dashboard-empty">No highlight records available.</p>
+                {% endif %}
+              </article>
+              {% endfor %}
+            {% else %}
+              <p class="dashboard-empty">No datasets are currently available.</p>
+            {% endif %}
+          </div>
+        </div>
+
         <arcgis-embedded-map
           class="portal-map"
           item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
@@ -450,7 +548,7 @@ def create_server():
   </script>
 </body>
 </html>
-        """, user=session.get("user", "user"))
+        """, metrics=metrics, user=session.get("user", "user"))
 
     # Convenience redirects
     for p in ["trail","eco","vivacity","live","wisdot","se-wi-trails"]:
