@@ -555,6 +555,21 @@ body {
   text-decoration: underline;
 }
 
+.viv-feed-img {
+  width: 100%;
+  display: block;
+  border-radius: 14px;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: #f8fafc;
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.viv-feed-img:not(:last-child) {
+  margin-bottom: 0;
+}
+
 @media (max-width: 1024px) {
   .guide-layout {
     grid-template-columns: 1fr;
