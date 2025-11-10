@@ -246,14 +246,135 @@ body {
   outline: none;
 }
 
+
+.portal-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  gap: 28px;
+  align-items: start;
+}
+
+.portal-primary {
+  display: grid;
+  gap: 20px;
+  align-content: start;
+}
+
+.portal-hero-text {
+  display: grid;
+  gap: 14px;
+  min-width: min(100%, 280px);
+}
+
+.portal-hero-text h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 2.4vw + 1.4rem, 2.45rem);
+}
+
+.portal-hero-text .desc {
+  margin: 0;
+  color: var(--brand-muted);
+  font-size: 1rem;
+}
+
+.portal-highlight-row {
+  display: grid;
+  gap: 16px;
+}
+
+.portal-highlight-row .portal-highlight-card {
+  min-width: 0;
+}
+
+.portal-visual {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
+.portal-quick-card {
+  background: linear-gradient(135deg, rgba(11, 102, 195, 0.08), rgba(14, 165, 233, 0.04));
+  border: 1px solid rgba(11, 102, 195, 0.18);
+  border-radius: 18px;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
+  padding: 20px 24px;
+  display: grid;
+  gap: 12px;
+}
+
+.portal-quick-card h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--brand-dark);
+}
+
+.portal-quick-card-section {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--brand-dark);
+}
+
+.portal-quick-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.portal-quick-links a {
+  color: var(--brand-primary);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.portal-quick-links a:hover,
+.portal-quick-links a:focus {
+  text-decoration: underline;
+}
+
+.portal-map-card {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+  padding: 18px 18px 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.portal-map-heading {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--brand-dark);
+}
+
 .portal-map {
   display: block;
   width: 100%;
-  min-height: 68vh;
-  height: clamp(420px, 70vh, 900px);
-  border-radius: 18px;
+  min-height: 320px;
+  height: clamp(320px, 48vh, 540px);
+  border-radius: 14px;
   border: 1px solid rgba(15, 23, 42, 0.12);
-  box-shadow: 0 20px 42px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
+}
+
+@media (max-width: 1080px) {
+  .portal-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-visual {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .portal-highlight-row {
+    gap: 12px;
+  }
 }
 
 .table-wrap {

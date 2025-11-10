@@ -20,7 +20,6 @@ BASE_DIR = Path(__file__).resolve().parent
 VALID_USERS = {"admin": "IPIT&uwm2024", "ipit": "IPIT&uwm2024"}
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
 
-
 def load_whats_new_entries(limit: int = 15):
     """Load What's New entries from a manually curated JSON file."""
 
@@ -285,20 +284,12 @@ def create_server():
       box-shadow:0 12px 26px rgba(11,102,195,0.28);
       position:relative;z-index:2;
     }
-    .cta-secondary {
-      display:inline-flex;align-items:center;gap:8px;
-      padding:10px 16px;border-radius:999px;
-      border:1px solid rgba(11,102,195,0.35);
-      background:white;color:var(--brand-primary);font-weight:600;text-decoration:none;
-      box-shadow:0 10px 24px rgba(15,23,42,0.08);
-    }
-    .cta-secondary:hover,
-    .cta-secondary:focus {
-      background:rgba(14,165,233,0.12);
-      text-decoration:none;
-    }
-    .cta-wrap {margin:8px 0 16px;position:relative;z-index:2;display:flex;align-items:center;gap:10px;}
+    .cta-wrap {margin:8px 0 16px;position:relative;z-index:2;display:flex;align-items:center;gap:12px;}
     .desc {color:#0b1736;margin:10px 0 20px;line-height:1.55;font-size:1rem;max-width:820px;}
+
+    .portal-quick-links {margin:16px 0 8px;display:grid;gap:10px;}
+    .portal-quick-links a {text-decoration:none;}
+    .portal-section-title {margin:8px 0 12px;font-size:1.3rem;font-weight:700;color:#0b1736;}
 
     .portal-highlight-grid {
       display:grid;gap:16px;margin:24px 0;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
@@ -374,49 +365,62 @@ def create_server():
 
     <main class="app-content">
       <section class="app-card">
-        <h1>Advance Wisconsin’s Non-Driver Safety Decisions</h1>
-        <p class="desc">
-          Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking and biking.
-          Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
-        </p>
+        <div class="portal-overview">
+          <div class="portal-primary">
+            <div class="portal-hero-text">
+              <h1>Explore Wisconsin's non-motorist data</h1>
+              
+            </div>
 
-        <div class="portal-highlight-grid" role="list">
-          <article class="portal-highlight-card" role="listitem">
-            <h3>Data Sources Available</h3>
-            <p class="portal-highlight-count">8</p>
-          </article>
-          <article class="portal-highlight-card" role="listitem">
-            <h3>Research Tools You Can Run</h3>
-            <p class="portal-highlight-count">7</p>
-          </article>
-          <article class="portal-highlight-card" role="listitem">
-            <h3>Analysis Options</h3>
-            <p class="portal-highlight-count">3</p>
-          </article>
+            <div class="cta-wrap">
+              <a class="cta-explore" href="/explore/">Explore Available Datasets</a>
+              <span class="tooltip">
+                <button id="info-button" class="info-button" aria-label="Show instructions" title="Show instructions">i</button>
+                <span class="tooltip-panel" role="tooltip">Click for quick instructions</span>
+              </span>
+            </div>
+
+            <div class="portal-map-card">
+              <h2 class="portal-map-heading">State wide non-driver activity &amp; safety view</h2>
+              <arcgis-embedded-map
+                class="portal-map"
+                item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
+                theme="light"
+                portal-url="https://uwm.maps.arcgis.com"
+                center="-88.01501274592921,43.039734737956515"
+                scale="1155581.108577"
+                legend-enabled
+                layer-list-enabled
+                search-enabled>
+              </arcgis-embedded-map>
+            </div>
+          </div>
+
+          <div class="portal-visual">
+            <aside class="portal-quick-card" aria-labelledby="quick-access-title">
+              <h2 id="quick-access-title">Quick Access</h2>
+              <ul class="portal-quick-links" aria-label="Long Term Counts">
+                <li><a href="/live/">Monitor Live Detection</a></li>
+                <li><a href="/vivacity/">Vivacity Analytics</a></li>
+              </ul>
+            </aside>
+
+            <div class="portal-highlight-row" role="list">
+              <article class="portal-highlight-card" role="listitem">
+                <h3>Data Sources Available</h3>
+                <p class="portal-highlight-count">7</p>
+              </article>
+              <article class="portal-highlight-card" role="listitem">
+                <h3>Research Tools You Can Run</h3>
+                <p class="portal-highlight-count">8</p>
+              </article>
+              <article class="portal-highlight-card" role="listitem">
+                <h3>Analysis Options</h3>
+                <p class="portal-highlight-count">15</p>
+              </article>
+            </div>
+          </div>
         </div>
-
-        <div class="cta-wrap">
-          <a class="cta-explore" href="/explore/">Explore Available Datasets</a>
-          <a class="cta-secondary" href="/guide">Read the User Guide</a>
-
-          <!-- Tooltip + info icon -->
-          <span class="tooltip">
-            <button id="info-button" class="info-button" aria-label="Show instructions" title="Show instructions">i</button>
-            <span class="tooltip-panel" role="tooltip">Click for quick instructions</span>
-          </span>
-        </div>
-
-        <arcgis-embedded-map
-          class="portal-map"
-          item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
-          theme="light"
-          portal-url="https://uwm.maps.arcgis.com"
-          center="-88.01501274592921,43.039734737956515"
-          scale="1155581.108577"
-          legend-enabled
-          layer-list-enabled
-          search-enabled>
-        </arcgis-embedded-map>
       </section>
     </main>
   </div>
@@ -483,7 +487,9 @@ def create_server():
   </script>
 </body>
 </html>
-        """, user=session.get("user", "user"))
+        """,
+        user=session.get("user", "user"),
+    )
 
     # Convenience redirects
     for p in ["trail","eco","vivacity","live","wisdot","se-wi-trails"]:
