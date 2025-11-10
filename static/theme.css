@@ -246,6 +246,81 @@ body {
   outline: none;
 }
 
+.portal-hero {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.portal-hero-text {
+  flex: 1 1 320px;
+  min-width: min(100%, 280px);
+  display: grid;
+  gap: 16px;
+}
+
+.portal-hero-text h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 2.4vw + 1.4rem, 2.45rem);
+}
+
+.portal-hero-text .desc {
+  margin: 0;
+  color: var(--brand-muted);
+  font-size: 1rem;
+}
+
+.portal-quick-card {
+  flex: 0 1 320px;
+  background: linear-gradient(135deg, rgba(11, 102, 195, 0.08), rgba(14, 165, 233, 0.04));
+  border: 1px solid rgba(11, 102, 195, 0.18);
+  border-radius: 18px;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
+  padding: 20px 24px;
+  display: grid;
+  gap: 12px;
+}
+
+.portal-quick-card h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: var(--brand-dark);
+}
+
+.portal-quick-card-section {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--brand-dark);
+}
+
+.portal-quick-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.portal-quick-links a {
+  color: var(--brand-primary);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.portal-quick-links a:hover,
+.portal-quick-links a:focus {
+  text-decoration: underline;
+}
+
+.portal-map-heading {
+  margin: 36px 0 12px;
+  font-size: 1.25rem;
+  color: var(--brand-dark);
+}
+
 .portal-map {
   display: block;
   width: 100%;

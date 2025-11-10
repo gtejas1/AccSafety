@@ -377,11 +377,24 @@ def create_server():
 
     <main class="app-content">
       <section class="app-card">
-        <h1>Advance Wisconsin’s Non-Driver Safety Decisions</h1>
-        <p class="desc">
-          Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking and biking.
-          Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
-        </p>
+        <div class="portal-hero">
+          <div class="portal-hero-text">
+            <h1>Advance Wisconsin’s Non-Driver Safety Decisions</h1>
+            <p class="desc">
+              Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking and biking.
+              Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
+            </p>
+          </div>
+
+          <aside class="portal-quick-card" aria-labelledby="quick-access-title">
+            <h2 id="quick-access-title">Quick Access</h2>
+            <p class="portal-quick-card-section">Long Term Counts:</p>
+            <ul class="portal-quick-links" aria-label="Long Term Counts">
+              <li><a href="/live/">Monitor Live Detection</a></li>
+              <li><a href="/vivacity/">Vivacity Analytics</a></li>
+            </ul>
+          </aside>
+        </div>
 
         <div class="portal-highlight-grid" role="list">
           <article class="portal-highlight-card" role="listitem">
@@ -409,12 +422,7 @@ def create_server():
           </span>
         </div>
 
-        <h2 class="portal-section-title">Quick Access</h2>
-        <nav class="portal-quick-links" aria-label="Quick Access">
-          <a class="cta-secondary" href="/vivacity/">Vivacity Dashboard</a>
-          <a class="cta-secondary" href="/live/">Permanent Locations Live Detection</a>
-        </nav>
-
+        <h2 class="portal-map-heading">State wide non-driver activity &amp; safety view</h2>
         <arcgis-embedded-map
           class="portal-map"
           item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
