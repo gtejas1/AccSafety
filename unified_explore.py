@@ -30,6 +30,8 @@ STORYMAP_URL    = "https://storymaps.arcgis.com/stories/281bfdde23a7411ca63f84d1
 SW_ITEM_ID = "82ba60a9062c4742a371375b9dc95911"
 SW_CENTER  = "-88.15601552734218,43.07196694820907"
 SW_SCALE   = "1155581.108577"
+# NOTE: Each *_FLAGS list must include 'legend-enabled' so ArcGIS map legends
+# load automatically for users.
 SW_THEME   = "light"
 SW_FLAGS   = [
     "bookmarks-enabled",
@@ -462,8 +464,18 @@ def _arcgis_embedded_map_component(
     theme: str = "light",
     flags: list[str] | None = None,
 ) -> html.Iframe:
-    flags = (flags or [])
-    flags_html = " ".join(flags)
+    base_flags: list[str] = []
+    for flag in (flags or []):
+        if flag not in base_flags:
+            base_flags.append(flag)
+
+    legend_enabled = "legend-enabled" in base_flags
+    if ARCGIS_LEGEND and not legend_enabled:
+        base_flags.insert(0, "legend-enabled")
+        legend_enabled = True
+
+    legend_state_attr = "\n        legend-state=\"open\"" if legend_enabled else ""
+    flags_html = "".join(f"\n        {flag}" for flag in base_flags)
     srcdoc = f"""<!doctype html>
 <html lang="en">
   <head>
@@ -483,7 +495,7 @@ def _arcgis_embedded_map_component(
         theme="{theme}"
         portal-url="{ARCGIS_PORTAL_URL}"
         center="{center}"
-        scale="{scale}"
+        scale="{scale}"{legend_state_attr}
         {flags_html}
       ></arcgis-embedded-map>
     </div>
@@ -506,6 +518,13 @@ def _arcgis_embedded_map_component(
 
 
 def _trail_crossing_embedded_map(container_id: str = "trail-crossing-map") -> html.Iframe:
+    base_flags: list[str] = []
+    for flag in (TRAIL_CROSS_FLAGS or []):
+        if flag not in base_flags:
+            base_flags.append(flag)
+
+    legend_state_attr = "\n        legend-state=\"open\"" if "legend-enabled" in base_flags else ""
+
     def _attrs_html() -> str:
         base_attrs = [
             ("item-id", TRAIL_CROSS_ITEM_ID),
@@ -521,7 +540,7 @@ def _trail_crossing_embedded_map(container_id: str = "trail-crossing-map") -> ht
         )
 
     def _flags_html() -> str:
-        return "".join(f"\n        {flag}" for flag in (TRAIL_CROSS_FLAGS or []))
+        return "".join(f"\n        {flag}" for flag in base_flags)
 
     srcdoc = f"""<!doctype html>
 <html lang=\"en\">
@@ -537,7 +556,7 @@ def _trail_crossing_embedded_map(container_id: str = "trail-crossing-map") -> ht
   </head>
   <body>
     <div id=\"holder\">
-      <arcgis-embedded-map{_attrs_html()}{_flags_html()}>
+      <arcgis-embedded-map{_attrs_html()}{legend_state_attr}{_flags_html()}>
       </arcgis-embedded-map>
     </div>
   </body>
