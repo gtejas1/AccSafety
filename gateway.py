@@ -377,63 +377,69 @@ def create_server():
 
     <main class="app-content">
       <section class="app-card">
-        <div class="portal-hero">
-          <div class="portal-hero-text">
-            <h1>Advance Wisconsin’s Non-Driver Safety Decisions</h1>
-            <p class="desc">
-              Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking and biking.
-              Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
-            </p>
+        <div class="portal-overview">
+          <div class="portal-primary">
+            <div class="portal-hero-text">
+              <h1>Advance Wisconsin’s Non-Driver Safety Decisions</h1>
+              <p class="desc">
+                Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking and biking.
+                Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
+              </p>
+            </div>
+
+            <div class="portal-highlight-row" role="list">
+              <article class="portal-highlight-card" role="listitem">
+                <h3>Data Sources Available</h3>
+                <p class="portal-highlight-count">8</p>
+              </article>
+              <article class="portal-highlight-card" role="listitem">
+                <h3>Research Tools You Can Run</h3>
+                <p class="portal-highlight-count">7</p>
+              </article>
+              <article class="portal-highlight-card" role="listitem">
+                <h3>Analysis Options</h3>
+                <p class="portal-highlight-count">3</p>
+              </article>
+            </div>
+
+            <div class="cta-wrap">
+              <a class="cta-explore" href="/explore/">Explore Available Datasets</a>
+              <a class="cta-secondary" href="/guide">Read the User Guide</a>
+
+              <!-- Tooltip + info icon -->
+              <span class="tooltip">
+                <button id="info-button" class="info-button" aria-label="Show instructions" title="Show instructions">i</button>
+                <span class="tooltip-panel" role="tooltip">Click for quick instructions</span>
+              </span>
+            </div>
           </div>
 
-          <aside class="portal-quick-card" aria-labelledby="quick-access-title">
-            <h2 id="quick-access-title">Quick Access</h2>
-            <p class="portal-quick-card-section">Long Term Counts:</p>
-            <ul class="portal-quick-links" aria-label="Long Term Counts">
-              <li><a href="/live/">Monitor Live Detection</a></li>
-              <li><a href="/vivacity/">Vivacity Analytics</a></li>
-            </ul>
-          </aside>
+          <div class="portal-visual">
+            <aside class="portal-quick-card" aria-labelledby="quick-access-title">
+              <h2 id="quick-access-title">Quick Access</h2>
+              <p class="portal-quick-card-section">Long Term Counts:</p>
+              <ul class="portal-quick-links" aria-label="Long Term Counts">
+                <li><a href="/live/">Monitor Live Detection</a></li>
+                <li><a href="/vivacity/">Vivacity Analytics</a></li>
+              </ul>
+            </aside>
+
+            <div class="portal-map-card">
+              <h2 class="portal-map-heading">State wide non-driver activity &amp; safety view</h2>
+              <arcgis-embedded-map
+                class="portal-map"
+                item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
+                theme="light"
+                portal-url="https://uwm.maps.arcgis.com"
+                center="-88.01501274592921,43.039734737956515"
+                scale="1155581.108577"
+                legend-enabled
+                layer-list-enabled
+                search-enabled>
+              </arcgis-embedded-map>
+            </div>
+          </div>
         </div>
-
-        <div class="portal-highlight-grid" role="list">
-          <article class="portal-highlight-card" role="listitem">
-            <h3>Data Sources Available</h3>
-            <p class="portal-highlight-count">8</p>
-          </article>
-          <article class="portal-highlight-card" role="listitem">
-            <h3>Research Tools You Can Run</h3>
-            <p class="portal-highlight-count">7</p>
-          </article>
-          <article class="portal-highlight-card" role="listitem">
-            <h3>Analysis Options</h3>
-            <p class="portal-highlight-count">3</p>
-          </article>
-        </div>
-
-        <div class="cta-wrap">
-          <a class="cta-explore" href="/explore/">Explore Available Datasets</a>
-          <a class="cta-secondary" href="/guide">Read the User Guide</a>
-
-          <!-- Tooltip + info icon -->
-          <span class="tooltip">
-            <button id="info-button" class="info-button" aria-label="Show instructions" title="Show instructions">i</button>
-            <span class="tooltip-panel" role="tooltip">Click for quick instructions</span>
-          </span>
-        </div>
-
-        <h2 class="portal-map-heading">State wide non-driver activity &amp; safety view</h2>
-        <arcgis-embedded-map
-          class="portal-map"
-          item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
-          theme="light"
-          portal-url="https://uwm.maps.arcgis.com"
-          center="-88.01501274592921,43.039734737956515"
-          scale="1155581.108577"
-          legend-enabled
-          layer-list-enabled
-          search-enabled>
-        </arcgis-embedded-map>
       </section>
     </main>
   </div>

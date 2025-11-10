@@ -246,18 +246,24 @@ body {
   outline: none;
 }
 
-.portal-hero {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  align-items: flex-start;
+
+.portal-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 420px);
+  gap: 28px;
+  align-items: start;
+}
+
+.portal-primary {
+  display: grid;
+  gap: 20px;
+  align-content: start;
 }
 
 .portal-hero-text {
-  flex: 1 1 320px;
-  min-width: min(100%, 280px);
   display: grid;
-  gap: 16px;
+  gap: 14px;
+  min-width: min(100%, 280px);
 }
 
 .portal-hero-text h1 {
@@ -271,8 +277,25 @@ body {
   font-size: 1rem;
 }
 
+.portal-highlight-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+
+.portal-highlight-row .portal-highlight-card {
+  flex: 1 1 160px;
+  min-width: 160px;
+}
+
+.portal-visual {
+  display: grid;
+  gap: 18px;
+  align-content: start;
+}
+
 .portal-quick-card {
-  flex: 0 1 320px;
   background: linear-gradient(135deg, rgba(11, 102, 195, 0.08), rgba(14, 165, 233, 0.04));
   border: 1px solid rgba(11, 102, 195, 0.18);
   border-radius: 18px;
@@ -315,20 +338,46 @@ body {
   text-decoration: underline;
 }
 
+.portal-map-card {
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+  padding: 18px 18px 14px;
+  display: grid;
+  gap: 12px;
+}
+
 .portal-map-heading {
-  margin: 36px 0 12px;
-  font-size: 1.25rem;
+  margin: 0;
+  font-size: 1.2rem;
   color: var(--brand-dark);
 }
 
 .portal-map {
   display: block;
   width: 100%;
-  min-height: 68vh;
-  height: clamp(420px, 70vh, 900px);
-  border-radius: 18px;
+  min-height: 320px;
+  height: clamp(320px, 48vh, 540px);
+  border-radius: 14px;
   border: 1px solid rgba(15, 23, 42, 0.12);
-  box-shadow: 0 20px 42px rgba(15, 23, 42, 0.18);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
+}
+
+@media (max-width: 1080px) {
+  .portal-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .portal-visual {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .portal-highlight-row {
+    gap: 12px;
+  }
 }
 
 .table-wrap {
