@@ -272,9 +272,6 @@ def create_server():
   <title>AccSafety Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/theme.css">
-  <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css">
-  <script type="module" src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"></script>
-  <script nomodule src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.js"></script>
   <style>
     .cta-explore {
       display:inline-flex;align-items:center;gap:10px;
@@ -284,29 +281,27 @@ def create_server():
       box-shadow:0 12px 26px rgba(11,102,195,0.28);
       position:relative;z-index:2;
     }
-    .cta-wrap {margin:8px 0 16px;position:relative;z-index:2;display:flex;align-items:center;gap:12px;}
-    .desc {color:#0b1736;margin:10px 0 20px;line-height:1.55;font-size:1rem;max-width:820px;}
+    .cta-wrap {margin:8px 0 12px;position:relative;z-index:2;display:flex;align-items:center;gap:12px;}
+    .desc {color:#0b1736;margin:10px 0 16px;line-height:1.55;font-size:1rem;max-width:820px;}
 
-    .portal-quick-links {margin:16px 0 8px;display:grid;gap:10px;}
+    .portal-overview {display:grid;gap:24px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
+    .portal-primary {display:grid;gap:18px;align-content:start;}
+    .portal-secondary {display:flex;align-items:stretch;justify-content:flex-end;}
+    .portal-highlight-row {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}
+    .portal-highlight-card {background:#f8fafc;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:14px 16px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:grid;gap:6px;justify-items:center;text-align:center;min-height:110px;}
+    .portal-highlight-card h3 {margin:0;font-size:0.95rem;font-weight:700;color:#0b1736;}
+    .portal-highlight-count {margin:0;font-size:1.5rem;font-weight:700;color:var(--brand-primary);}
+    .portal-map-card {background:rgba(255,255,255,0.92);border:1px solid rgba(148,163,184,0.26);border-radius:18px;box-shadow:0 16px 28px rgba(15,23,42,0.1);padding:16px 18px;display:flex;flex-direction:column;gap:12px;width:100%;height:100%;}
+    .portal-map-heading {margin:0;font-size:1.05rem;font-weight:700;color:#0b1736;}
+    .portal-map-image {flex:1;width:100%;display:block;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);object-fit:contain;background:#e2e8f0;min-height:0;}
+    .portal-quick-card {padding:18px 20px;gap:10px;max-width:520px;}
+    .portal-quick-links {margin:12px 0 0;display:grid;gap:8px;}
     .portal-quick-links a {text-decoration:none;}
-    .portal-section-title {margin:8px 0 12px;font-size:1.3rem;font-weight:700;color:#0b1736;}
-
-    .portal-highlight-grid {
-      display:grid;gap:16px;margin:24px 0;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
-    }
-    .portal-highlight-card {
-      background:#f8fafc;border:1px solid rgba(148,163,184,0.35);
-      border-radius:14px;padding:20px 22px;box-shadow:0 18px 36px rgba(15,23,42,0.12);
-      display:flex;flex-direction:column;gap:10px;color:#0b1736;
-    }
-    .portal-highlight-card h3 {
-      margin:0;font-size:1.1rem;font-weight:700;color:#0b1736;
-    }
-    .portal-highlight-count {
-      margin:0;font-size:1.4rem;font-weight:700;color:var(--brand-primary);
-    }
-    @media (max-width: 640px) {
-      .portal-highlight-card {padding:18px 20px;}
+    @media (max-width: 960px) {
+      .portal-overview {grid-template-columns:1fr;gap:20px;}
+      .portal-secondary {display:grid;}
+      .portal-map-card {order:-1;height:auto;}
+      .portal-map-image {flex:0;max-height:220px;}
     }
 
     /* Info tooltip beside the CTA */
@@ -383,23 +378,17 @@ def create_server():
               </span>
             </div>
 
-            <div class="portal-map-card">
-              <h2 class="portal-map-heading">State wide non-driver activity &amp; safety view</h2>
-              <arcgis-embedded-map
-                class="portal-map"
-                item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
-                theme="light"
-                portal-url="https://uwm.maps.arcgis.com"
-                center="-88.01501274592921,43.039734737956515"
-                scale="1155581.108577"
-                legend-enabled
-                layer-list-enabled
-                search-enabled>
-              </arcgis-embedded-map>
+            <div class="portal-highlight-row" role="list">
+              <article class="portal-highlight-card" role="listitem">
+                <h3>Data Sources Available</h3>
+                <p class="portal-highlight-count">8</p>
+              </article>
+              <article class="portal-highlight-card" role="listitem">
+                <h3>Analysis Options</h3>
+                <p class="portal-highlight-count">3</p>
+              </article>
             </div>
-          </div>
 
-          <div class="portal-visual">
             <aside class="portal-quick-card" aria-labelledby="quick-access-title">
               <h2 id="quick-access-title">Quick Access</h2>
               <p class="portal-quick-card-section">Long Term Counts:</p>
@@ -408,20 +397,17 @@ def create_server():
                 <li><a href="/vivacity/">Vivacity Analytics</a></li>
               </ul>
             </aside>
+          </div>
 
-            <div class="portal-highlight-row" role="list">
-              <article class="portal-highlight-card" role="listitem">
-                <h3>Data Sources Available</h3>
-                <p class="portal-highlight-count">8</p>
-              </article>
-              <article class="portal-highlight-card" role="listitem">
-                <h3>Research Tools You Can Run</h3>
-                <p class="portal-highlight-count">7</p>
-              </article>
-              <article class="portal-highlight-card" role="listitem">
-                <h3>Analysis Options</h3>
-                <p class="portal-highlight-count">3</p>
-              </article>
+          <div class="portal-secondary">
+            <div class="portal-map-card">
+              <h2 class="portal-map-heading">Statewide non-driver activity &amp; safety view</h2>
+              <img
+                class="portal-map-image"
+                src="/static/img/home-map.png"
+                alt="Map of Wisconsin highlighting non-driver activity and safety"
+                loading="lazy"
+              >
             </div>
           </div>
         </div>
