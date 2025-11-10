@@ -300,6 +300,24 @@ def create_server():
     .cta-wrap {margin:8px 0 16px;position:relative;z-index:2;display:flex;align-items:center;gap:10px;}
     .desc {color:#0b1736;margin:10px 0 20px;line-height:1.55;font-size:1rem;max-width:820px;}
 
+    .portal-highlight-grid {
+      display:grid;gap:16px;margin:24px 0;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
+    }
+    .portal-highlight-card {
+      background:#f8fafc;border:1px solid rgba(148,163,184,0.35);
+      border-radius:14px;padding:20px 22px;box-shadow:0 18px 36px rgba(15,23,42,0.12);
+      display:flex;flex-direction:column;gap:10px;color:#0b1736;
+    }
+    .portal-highlight-card h3 {
+      margin:0;font-size:1.1rem;font-weight:700;color:#0b1736;
+    }
+    .portal-highlight-count {
+      margin:0;font-size:1.4rem;font-weight:700;color:var(--brand-primary);
+    }
+    @media (max-width: 640px) {
+      .portal-highlight-card {padding:18px 20px;}
+    }
+
     /* Info tooltip beside the CTA */
     .info-button {
       display:inline-flex;align-items:center;justify-content:center;
@@ -361,6 +379,21 @@ def create_server():
           Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking and biking.
           Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
         </p>
+
+        <div class="portal-highlight-grid" role="list">
+          <article class="portal-highlight-card" role="listitem">
+            <h3>Data Sources Available</h3>
+            <p class="portal-highlight-count">8</p>
+          </article>
+          <article class="portal-highlight-card" role="listitem">
+            <h3>Research Tools You Can Run</h3>
+            <p class="portal-highlight-count">7</p>
+          </article>
+          <article class="portal-highlight-card" role="listitem">
+            <h3>Analysis Options</h3>
+            <p class="portal-highlight-count">3</p>
+          </article>
+        </div>
 
         <div class="cta-wrap">
           <a class="cta-explore" href="/explore/">Explore Available Datasets</a>
