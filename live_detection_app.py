@@ -335,7 +335,7 @@ class VideoWorker:
             Tuple[str, str, Tuple[int, int], Tuple[int, int], Optional[Tuple[int, int]], float]
         ],
     ) -> None:
-        """Overlay virtual crosswalk lines and labels on the annotated frame."""
+        """Overlay virtual cross lines and labels on the annotated frame."""
         for _, name, p1, p2, label_px, _ in crosswalk_pixels:
             cv2.line(frame, p1, p2, (0, 0, 255), 2)
             if label_px:
@@ -600,8 +600,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         "rotate-right": "Rotate clockwise by 5 degrees",
     }
     scale_titles = {
-        "expand": "Lengthen this crosswalk line by 5%",
-        "shrink": "Shorten this crosswalk line by 5%",
+        "expand": "Lengthen this cross line by 5%",
+        "shrink": "Shorten this cross line by 5%",
     }
 
     control_items: List[dbc.AccordionItem] = []
@@ -614,7 +614,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             dbc.AccordionItem(
                 [
                     html.P(
-                        "Use the controls to nudge, rotate, or resize this crosswalk line. Move presses shift endpoints by 1%, rotation adjusts by 5°, and resize changes the line length by 5%.",
+                        "Use the controls to nudge, rotate, or resize this cross line. Move presses shift endpoints by 1%, rotation adjusts by 5°, and resize changes the line length by 5%.",
                         className="small text-muted",
                     ),
                     html.Div(
@@ -752,9 +752,9 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     crosswalk_line_controls = dbc.Card(
         dbc.CardBody(
             [
-                html.H5("Adjust Crosswalk Lines"),
+                html.H5("Adjust cross lines"),
                 html.P(
-                    "Use the controls below to move, rotate, or resize each crosswalk line in small increments.",
+                    "Use the controls below to move, rotate, or resize each cross line in small increments.",
                     className="text-muted",
                 ),
                 dbc.Accordion(
