@@ -369,10 +369,7 @@ def create_server():
           <div class="portal-primary">
             <div class="portal-hero-text">
               <h1>Explore Wisconsin's non-motorist data</h1>
-              <p class="desc">
-                Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking and biking.
-                Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
-              </p>
+              
             </div>
 
             <div class="cta-wrap">
@@ -402,7 +399,6 @@ def create_server():
           <div class="portal-visual">
             <aside class="portal-quick-card" aria-labelledby="quick-access-title">
               <h2 id="quick-access-title">Quick Access</h2>
-              <p class="portal-quick-card-section">Long Term Counts:</p>
               <ul class="portal-quick-links" aria-label="Long Term Counts">
                 <li><a href="/live/">Monitor Live Detection</a></li>
                 <li><a href="/vivacity/">Vivacity Analytics</a></li>
@@ -412,15 +408,15 @@ def create_server():
             <div class="portal-highlight-row" role="list">
               <article class="portal-highlight-card" role="listitem">
                 <h3>Data Sources Available</h3>
-                <p class="portal-highlight-count">8</p>
-              </article>
-              <article class="portal-highlight-card" role="listitem">
-                <h3>Research Tools You Can Run</h3>
                 <p class="portal-highlight-count">7</p>
               </article>
               <article class="portal-highlight-card" role="listitem">
+                <h3>Research Tools You Can Run</h3>
+                <p class="portal-highlight-count">8</p>
+              </article>
+              <article class="portal-highlight-card" role="listitem">
                 <h3>Analysis Options</h3>
-                <p class="portal-highlight-count">3</p>
+                <p class="portal-highlight-count">15</p>
               </article>
             </div>
           </div>
