@@ -8,7 +8,7 @@ from flask import Flask, render_template, render_template_string, redirect, requ
 
 from pbc_trail_app import create_trail_dash
 from pbc_eco_app import create_eco_dash
-from vivacity_app import create_vivacity_dash, API_BASE as VIVACITY_API_BASE
+from vivacity_app import create_vivacity_dash
 from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
@@ -19,9 +19,6 @@ BASE_DIR = Path(__file__).resolve().parent
 
 VALID_USERS = {"admin": "IPIT&uwm2024", "ipit": "IPIT&uwm2024"}
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
-
-VIVACITY_COUNT_ENDPOINT = f"{VIVACITY_API_BASE}/countline/counts"
-
 
 def load_whats_new_entries(limit: int = 15):
     """Load What's New entries from a manually curated JSON file."""
@@ -304,7 +301,7 @@ def create_server():
 
     .portal-quick-links {margin:16px 0 8px;display:flex;flex-wrap:wrap;gap:10px;}
     .portal-quick-links a {text-decoration:none;}
-    .portal-map-title {margin:8px 0 12px;font-size:1.3rem;font-weight:700;color:#0b1736;}
+    .portal-section-title {margin:8px 0 12px;font-size:1.3rem;font-weight:700;color:#0b1736;}
 
     .portal-highlight-grid {
       display:grid;gap:16px;margin:24px 0;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
@@ -412,12 +409,12 @@ def create_server():
           </span>
         </div>
 
-        <nav class="portal-quick-links" aria-label="Quick access links">
-          <a class="cta-secondary" href="{{ live_detection_url }}">Permanent Locations Live Detection</a>
-          <a class="cta-secondary" href="{{ vivacity_counts_url }}" target="_blank" rel="noopener noreferrer">Vivacity Counts API Data</a>
+        <h2 class="portal-section-title">Quick Access</h2>
+        <nav class="portal-quick-links" aria-label="Quick Access">
+          <a class="cta-secondary" href="/vivacity/">Vivacity Dashboard</a>
+          <a class="cta-secondary" href="/live/">Permanent Locations Live Detection</a>
         </nav>
 
-        <h2 class="portal-map-title">State wide non-driver activity &amp; safety view</h2>
         <arcgis-embedded-map
           class="portal-map"
           item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
@@ -497,8 +494,6 @@ def create_server():
 </html>
         """,
         user=session.get("user", "user"),
-        live_detection_url="/live/",
-        vivacity_counts_url=VIVACITY_COUNT_ENDPOINT,
     )
 
     # Convenience redirects
