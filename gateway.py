@@ -284,24 +284,24 @@ def create_server():
     .cta-wrap {margin:8px 0 12px;position:relative;z-index:2;display:flex;align-items:center;gap:12px;}
     .desc {color:#0b1736;margin:10px 0 16px;line-height:1.55;font-size:1rem;max-width:820px;}
 
-    .portal-overview {display:grid;gap:24px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;}
+    .portal-overview {display:grid;gap:24px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
     .portal-primary {display:grid;gap:18px;align-content:start;}
     .portal-secondary {display:flex;align-items:stretch;justify-content:flex-end;}
     .portal-highlight-row {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}
     .portal-highlight-card {background:#f8fafc;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:14px 16px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:grid;gap:6px;justify-items:center;text-align:center;min-height:110px;}
     .portal-highlight-card h3 {margin:0;font-size:0.95rem;font-weight:700;color:#0b1736;}
     .portal-highlight-count {margin:0;font-size:1.5rem;font-weight:700;color:var(--brand-primary);}
-    .portal-map-card {background:rgba(255,255,255,0.92);border:1px solid rgba(148,163,184,0.26);border-radius:18px;box-shadow:0 16px 28px rgba(15,23,42,0.1);padding:16px 18px;display:grid;gap:12px;align-content:start;width:100%;}
+    .portal-map-card {background:rgba(255,255,255,0.92);border:1px solid rgba(148,163,184,0.26);border-radius:18px;box-shadow:0 16px 28px rgba(15,23,42,0.1);padding:16px 18px;display:flex;flex-direction:column;gap:12px;width:100%;height:100%;}
     .portal-map-heading {margin:0;font-size:1.05rem;font-weight:700;color:#0b1736;}
-    .portal-map-image {width:100%;display:block;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);max-height:320px;object-fit:contain;background:#e2e8f0;}
+    .portal-map-image {flex:1;width:100%;display:block;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);object-fit:contain;background:#e2e8f0;min-height:0;}
     .portal-quick-card {padding:18px 20px;gap:10px;max-width:520px;}
     .portal-quick-links {margin:12px 0 0;display:grid;gap:8px;}
     .portal-quick-links a {text-decoration:none;}
     @media (max-width: 960px) {
       .portal-overview {grid-template-columns:1fr;gap:20px;}
       .portal-secondary {display:grid;}
-      .portal-map-card {order:-1;}
-      .portal-map-image {max-height:220px;}
+      .portal-map-card {order:-1;height:auto;}
+      .portal-map-image {flex:0;max-height:220px;}
     }
 
     /* Info tooltip beside the CTA */
@@ -382,10 +382,6 @@ def create_server():
               <article class="portal-highlight-card" role="listitem">
                 <h3>Data Sources Available</h3>
                 <p class="portal-highlight-count">8</p>
-              </article>
-              <article class="portal-highlight-card" role="listitem">
-                <h3>Research Tools You Can Run</h3>
-                <p class="portal-highlight-count">7</p>
               </article>
               <article class="portal-highlight-card" role="listitem">
                 <h3>Analysis Options</h3>
