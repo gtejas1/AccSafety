@@ -314,13 +314,6 @@ def create_server():
     .portal-highlight-count {
       margin:0;font-size:1.4rem;font-weight:700;color:var(--brand-primary);
     }
-    .portal-highlight-card p {
-      margin:0;font-size:0.95rem;color:var(--brand-muted);line-height:1.5;
-    }
-    .portal-highlight-card ul {
-      margin:0;padding-left:18px;color:#0b1736;font-size:0.9rem;line-height:1.45;
-    }
-
     @media (max-width: 640px) {
       .portal-highlight-card {padding:18px 20px;}
     }
@@ -390,22 +383,15 @@ def create_server():
         <div class="portal-highlight-grid" role="list">
           <article class="portal-highlight-card" role="listitem">
             <h3>Data Sources Available</h3>
-            <p class="portal-highlight-count">7 data sources</p>
-            <ul>
-              <li>Crash &amp; safety trend archives</li>
-              <li>People-first network inventories</li>
-              <li>Equity, health, &amp; transit overlays</li>
-            </ul>
+            <p class="portal-highlight-count">8</p>
           </article>
           <article class="portal-highlight-card" role="listitem">
             <h3>Research Tools You Can Run</h3>
-            <p class="portal-highlight-count">8 research tools</p>
-            <p>Launch corridor diagnostics, countermeasure lookups, high-injury network explorers, and more without leaving the portal.</p>
+            <p class="portal-highlight-count">7</p>
           </article>
           <article class="portal-highlight-card" role="listitem">
             <h3>Analysis Options</h3>
-            <p class="portal-highlight-count">15 analysis options</p>
-            <p>Mix-and-match filters, compare scenarios, export figures, and build shareable snapshots tailored to your project timelines.</p>
+            <p class="portal-highlight-count">3</p>
           </article>
         </div>
 
