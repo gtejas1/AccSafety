@@ -278,15 +278,12 @@ body {
 }
 
 .portal-highlight-row {
-  display: flex;
+  display: grid;
   gap: 16px;
-  flex-wrap: wrap;
-  align-items: stretch;
 }
 
 .portal-highlight-row .portal-highlight-card {
-  flex: 1 1 160px;
-  min-width: 160px;
+  min-width: 0;
 }
 
 .portal-visual {
