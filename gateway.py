@@ -343,8 +343,8 @@ def create_server():
     <header class="app-header">
       <img src="/static/img/accsafety-logo.png" alt="AccSafety logo" class="app-logo">
       <div class="app-header-title">
-        <span class="app-brand">AccSafety</span>
-        <span class="app-subtitle">Unified Mobility Analytics Portal</span>
+        <span class="app-brand">AccSafety – Bridging Research and Practice</span>
+        <span class="app-subtitle">Wisconsin Non-Driver Safety Portal</span>
       </div>
       <nav class="app-nav portal-nav" aria-label="Main navigation">
         <a class="app-link" href="/guide">User Guide</a>
@@ -356,10 +356,10 @@ def create_server():
 
     <main class="app-content">
       <section class="app-card">
-        <h1>Explore Wisconsin Pedestrian and Bicyclist Mobility Data</h1>
+        <h1>Advance Wisconsin’s Non-Driver Safety Decisions</h1>
         <p class="desc">
-          The AccSafety Dashboard visualizes statewide pedestrian and bicycle count data from real-time and historical sources to support data-driven safety and planning decisions.
-          It bridges research and implementation by integrating current and legacy datasets across Wisconsin.
+          Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking, biking, and rolling.
+          Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
         </p>
 
         <div class="cta-wrap">
