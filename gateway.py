@@ -17,7 +17,7 @@ from unified_explore import create_unified_explore
 
 BASE_DIR = Path(__file__).resolve().parent
 
-VALID_USERS = {"admin": "admin", "ipit": "ipit@2025!"}
+VALID_USERS = {"admin": "IPIT&uwm2024", "ipit": "IPIT&uwm2024"}
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
 
 
@@ -358,7 +358,7 @@ def create_server():
       <section class="app-card">
         <h1>Advance Wisconsin’s Non-Driver Safety Decisions</h1>
         <p class="desc">
-          Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking, biking, and rolling.
+          Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking and biking.
           Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
         </p>
 
