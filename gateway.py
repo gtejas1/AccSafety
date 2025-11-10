@@ -378,6 +378,18 @@ def create_server():
               </span>
             </div>
 
+            <div class="portal-map-card">
+              <h2 class="portal-map-heading">Statewide non-driver activity &amp; safety view</h2>
+              <img
+                class="portal-map-image"
+                src="/static/img/home-map.png"
+                alt="Map of Wisconsin highlighting non-driver activity and safety"
+                loading="lazy"
+              >
+            </div>
+          </div>
+
+          <div class="portal-secondary">
             <aside class="portal-quick-card" aria-labelledby="quick-access-title">
               <h2 id="quick-access-title">Quick Access</h2>
               <p class="portal-quick-card-section">Long Term Counts:</p>
@@ -396,18 +408,6 @@ def create_server():
                 <h3>Analysis Options</h3>
                 <p class="portal-highlight-count">3</p>
               </article>
-            </div>
-          </div>
-
-          <div class="portal-secondary">
-            <div class="portal-map-card">
-              <h2 class="portal-map-heading">Statewide non-driver activity &amp; safety view</h2>
-              <img
-                class="portal-map-image"
-                src="/static/img/home-map.png"
-                alt="Map of Wisconsin highlighting non-driver activity and safety"
-                loading="lazy"
-              >
             </div>
           </div>
         </div>
