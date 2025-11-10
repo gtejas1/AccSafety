@@ -272,9 +272,6 @@ def create_server():
   <title>AccSafety Portal</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/theme.css">
-  <link rel="stylesheet" href="https://js.arcgis.com/4.33/esri/themes/light/main.css">
-  <script type="module" src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.esm.js"></script>
-  <script nomodule src="https://js.arcgis.com/embeddable-components/4.33/arcgis-embeddable-components.js"></script>
   <style>
     .cta-explore {
       display:inline-flex;align-items:center;gap:10px;
@@ -305,6 +302,17 @@ def create_server():
     .portal-highlight-count {
       margin:0;font-size:1.4rem;font-weight:700;color:var(--brand-primary);
     }
+    .portal-map-card {
+      display:flex;flex-direction:column;gap:12px;
+    }
+
+    .portal-map-image {
+      width:100%;
+      border-radius:16px;
+      box-shadow:0 20px 40px rgba(15,23,42,0.12);
+      border:1px solid rgba(148,163,184,0.35);
+    }
+
     @media (max-width: 640px) {
       .portal-highlight-card {padding:18px 20px;}
     }
@@ -385,17 +393,12 @@ def create_server():
 
             <div class="portal-map-card">
               <h2 class="portal-map-heading">State wide non-driver activity &amp; safety view</h2>
-              <arcgis-embedded-map
-                class="portal-map"
-                item-id="317bd3ebf0874aa9b1b4ac55fdd5a095"
-                theme="light"
-                portal-url="https://uwm.maps.arcgis.com"
-                center="-88.01501274592921,43.039734737956515"
-                scale="1155581.108577"
-                legend-enabled
-                layer-list-enabled
-                search-enabled>
-              </arcgis-embedded-map>
+              <img
+                class="portal-map-image"
+                src="/static/img/home-map.png"
+                alt="Map of Wisconsin highlighting non-driver activity and safety"
+                loading="lazy"
+              >
             </div>
           </div>
 
