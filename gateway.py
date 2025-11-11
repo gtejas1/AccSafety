@@ -341,7 +341,7 @@ def create_server():
       text-align:center;
     }
     .footer-logos {display:flex;align-items:center;justify-content:center;gap:28px;flex-wrap:wrap;}
-    .footer-logo {display:block;max-width:260px;width:auto;height:auto;}
+    .footer-logo {display:block;max-width:860px;width:auto;height:auto;}
     .footer-logo--uwm {max-height:78px;}
     .footer-logo--wisdot {max-height:96px;}
     .footer-copyright {margin:0;color:#475569;font-size:0.95rem;}
