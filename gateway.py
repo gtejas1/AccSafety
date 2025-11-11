@@ -345,7 +345,7 @@ def create_server():
     .portal-footer .footer-copy {margin:0;color:#475569;max-width:460px;line-height:1.5;font-size:0.95rem;}
     .footer-logos {display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
     .footer-logo-placeholder {
-      width:220px;height:80px;
+      width:400px;height:80px;
       background:linear-gradient(145deg,#ffffff,#f1f5f9);
       border:1px dashed rgba(148,163,184,0.6);
       border-radius:12px;
@@ -416,11 +416,11 @@ def create_server():
             <div class="portal-highlight-row" role="list">
               <article class="portal-highlight-card" role="listitem">
                 <h3>Data Sources Available</h3>
-                <p class="portal-highlight-count">8</p>
+                <p class="portal-highlight-count">7</p>
               </article>
               <article class="portal-highlight-card" role="listitem">
                 <h3>Analysis Options</h3>
-                <p class="portal-highlight-count">3</p>
+                <p class="portal-highlight-count">15</p>
               </article>
             </div>
           </div>
@@ -445,8 +445,9 @@ def create_server():
         <p class="footer-copy">Collaborative insights delivered with the support of regional partners.</p>
       </div>
       <div class="footer-logos" aria-label="Partner logos">
-        <div class="footer-logo-placeholder">UWM_IPIT</div>
-        <div class="footer-logo-placeholder">WisDOT</div>
+        <img src="/static/img/UWM_IPIT.png" alt="UWM IPIT logo" class="footer-logo-placeholder">
+        <img src="/static/img/WisDOT.png" alt="WisDOT logo" class="footer-logo-placeholder">
+
       </div>
     </footer>
   </div>
