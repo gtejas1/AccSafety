@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.6",
+    "date": "2025-11-11",
+    "highlights": [
+      "Refined the portal home hero copy and heading size so the main message stays readable on large and small screens.",
+      "Adjusted the quick access card layout to span the available width, keeping shortcut links aligned with the hero content.",
+      "Introduced centered UWM IPIT and WisDOT logos in the footer with new styling that showcases program partners."
+    ]
+  },
+  {
     "version": "1.5",
     "date": "2025-11-06",
     "highlights": [
