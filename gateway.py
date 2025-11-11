@@ -334,6 +334,31 @@ def create_server():
       opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(-2px);
     }
 
+    .portal-footer {
+      margin-top:32px;padding:24px 32px;
+      background:#f8fafc;border-top:1px solid rgba(148,163,184,0.35);
+      display:flex;justify-content:space-between;align-items:center;
+      gap:32px;flex-wrap:wrap;
+    }
+    .portal-footer .footer-partners {display:flex;flex-direction:column;gap:18px;min-width:240px;}
+    .portal-footer .footer-partners h2 {margin:0;font-size:1.05rem;color:#0b1736;}
+    .portal-footer .footer-copy {margin:0;color:#475569;max-width:460px;line-height:1.5;font-size:0.95rem;}
+    .footer-logos {display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+    .footer-logo-placeholder {
+      width:220px;height:80px;
+      background:linear-gradient(145deg,#ffffff,#f1f5f9);
+      border:1px dashed rgba(148,163,184,0.6);
+      border-radius:12px;
+      display:flex;align-items:center;justify-content:center;
+      color:#475569;font-weight:600;text-transform:uppercase;font-size:0.85rem;
+      text-align:center;
+    }
+    @media (max-width: 720px) {
+      .portal-footer {flex-direction:column;align-items:flex-start;}
+      .footer-logos {width:100%;justify-content:flex-start;}
+      .footer-logo-placeholder {width:100%;max-width:320px;}
+    }
+
     /* Modal */
     .modal-backdrop {position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:2000;}
     .modal {background:white;border-radius:14px;max-width:600px;padding:24px 30px;box-shadow:0 24px 60px rgba(0,0,0,0.25);}
@@ -414,6 +439,16 @@ def create_server():
         </div>
       </section>
     </main>
+    <footer class="portal-footer">
+      <div class="footer-partners">
+        <h2>Program Partners</h2>
+        <p class="footer-copy">Collaborative insights delivered with the support of regional partners.</p>
+      </div>
+      <div class="footer-logos" aria-label="Partner logos">
+        <div class="footer-logo-placeholder">UWM_IPIT</div>
+        <div class="footer-logo-placeholder">WisDOT</div>
+      </div>
+    </footer>
   </div>
 
   <!-- Getting Started Modal -->
