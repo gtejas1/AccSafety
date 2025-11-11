@@ -295,7 +295,8 @@ def create_server():
     .portal-map-heading {margin:0;font-size:1.05rem;font-weight:700;color:#0b1736;}
     .portal-map-image {flex:1;width:100%;height:100%;display:block;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);object-fit:cover;background:#e2e8f0;min-height:320px;}
     .portal-hero-text {justify-self:start;}
-    .portal-quick-card {padding:18px 20px;gap:10px;max-width:520px;width:100%;}
+    .portal-hero-text h1 {margin:0;font-size:2.4rem;line-height:1.2;}
+    .portal-quick-card {padding:18px 20px;gap:10px;max-width:100%;width:100%;}
     .portal-quick-links {margin:12px 0 0;display:grid;gap:8px;}
     .portal-quick-links a {text-decoration:none;}
     @media (max-width: 960px) {
