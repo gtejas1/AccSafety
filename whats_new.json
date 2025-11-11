@@ -1,5 +1,14 @@
 [
   {
+    "version": "1.6",
+    "date": "2025-11-10",
+    "highlights": [
+      "Refined the portal home",
+      "Added quick access, data sources and analysis options cards.",
+      "Introduced  UWM IPIT and WisDOT logos in the footer with new styling that showcases program partners."
+    ]
+  },
+  {
     "version": "1.5",
     "date": "2025-11-06",
     "highlights": [
