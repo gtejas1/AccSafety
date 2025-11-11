@@ -335,28 +335,20 @@ def create_server():
     }
 
     .portal-footer {
-      margin-top:32px;padding:24px 32px;
+      margin-top:32px;padding:28px 32px;
       background:#f8fafc;border-top:1px solid rgba(148,163,184,0.35);
-      display:flex;justify-content:space-between;align-items:center;
-      gap:32px;flex-wrap:wrap;
-    }
-    .portal-footer .footer-partners {display:flex;flex-direction:column;gap:18px;min-width:240px;}
-    .portal-footer .footer-partners h2 {margin:0;font-size:1.05rem;color:#0b1736;}
-    .portal-footer .footer-copy {margin:0;color:#475569;max-width:460px;line-height:1.5;font-size:0.95rem;}
-    .footer-logos {display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
-    .footer-logo-placeholder {
-      width:400px;height:80px;
-      background:linear-gradient(145deg,#ffffff,#f1f5f9);
-      border:1px dashed rgba(148,163,184,0.6);
-      border-radius:12px;
-      display:flex;align-items:center;justify-content:center;
-      color:#475569;font-weight:600;text-transform:uppercase;font-size:0.85rem;
+      display:flex;flex-direction:column;align-items:center;gap:24px;
       text-align:center;
     }
+    .footer-logos {display:flex;align-items:center;justify-content:center;gap:28px;flex-wrap:wrap;}
+    .footer-logo {display:block;max-width:260px;width:auto;height:auto;}
+    .footer-logo--uwm {max-height:78px;}
+    .footer-logo--wisdot {max-height:96px;}
+    .footer-copyright {margin:0;color:#475569;font-size:0.95rem;}
     @media (max-width: 720px) {
-      .portal-footer {flex-direction:column;align-items:flex-start;}
-      .footer-logos {width:100%;justify-content:flex-start;}
-      .footer-logo-placeholder {width:100%;max-width:320px;}
+      .portal-footer {padding:24px 20px;}
+      .footer-logos {gap:20px;}
+      .footer-logo {max-width:220px;}
     }
 
     /* Modal */
@@ -440,15 +432,11 @@ def create_server():
       </section>
     </main>
     <footer class="portal-footer">
-      <div class="footer-partners">
-        <h2>Program Partners</h2>
-        <p class="footer-copy">Collaborative insights delivered with the support of regional partners.</p>
+      <div class="footer-logos" aria-label="Program logos">
+        <img src="/static/img/UWM_IPIT.png" alt="UWM IPIT logo" class="footer-logo footer-logo--uwm">
+        <img src="/static/img/WisDOT.png" alt="WisDOT logo" class="footer-logo footer-logo--wisdot">
       </div>
-      <div class="footer-logos" aria-label="Partner logos">
-        <img src="/static/img/UWM_IPIT.png" alt="UWM IPIT logo" class="footer-logo-placeholder">
-        <img src="/static/img/WisDOT.png" alt="WisDOT logo" class="footer-logo-placeholder">
-
-      </div>
+      <p class="footer-copyright">Copyright ©2025 All rights reserved.</p>
     </footer>
   </div>
 
