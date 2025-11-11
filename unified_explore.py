@@ -958,8 +958,17 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             map_children = embed_component
             map_style = {"display": "block"}
 
-        summary_children = _build_summary_dashboard_content(df)
-        summary_style = {"display": "block"}
+        source_types = pd.Series(dtype=str)
+        if "Source type" in df.columns:
+            source_types = df["Source type"].dropna().astype(str).str.strip()
+            source_types = source_types[source_types != ""].str.casefold()
+
+        if not source_types.empty and source_types.eq("modeled").all():
+            summary_children = []
+            summary_style = {"display": "none"}
+        else:
+            summary_children = _build_summary_dashboard_content(df)
+            summary_style = {"display": "block"}
 
         # --- Descriptions by source selection ---
         mode_val = (mode or "").strip().lower()
