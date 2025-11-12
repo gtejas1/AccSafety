@@ -185,12 +185,6 @@ def create_eco_dash(server, prefix="/eco/"):
             style_cell={"textAlign": "center", "padding": "8px"},
             style_header={"backgroundColor": "#f1f5f9", "fontWeight": "bold", "fontSize": "16px"},
             style_data_conditional=[{"if": {"row_index": "odd"}, "backgroundColor": "rgba(15,23,42,0.03)"}],
-            css=[
-                {
-                    "selector": ".dash-table-container button.column-toggle",
-                    "rule": "display: none !important;",
-                }
-            ],
             page_size=20,
         ),
     ])
