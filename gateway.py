@@ -412,8 +412,8 @@ def create_server():
               <article class="portal-highlight-card" role="listitem">
                 <h3>Projects Included (collected/generated data)</h3>
                 <ul class="portal-highlight-list" aria-label="Projects included counts">
-                  <li class="portal-highlight-item"><span>TRCC</span><strong>1</strong></li>
-                  <li class="portal-highlight-item"><span>Others</span><strong>2</strong></li>
+                  <li class="portal-highlight-item"><span>TRCC</span><strong>7</strong></li>
+                  <li class="portal-highlight-item"><span>Others</span><strong>3</strong></li>
                 </ul>
               </article>
             </div>
