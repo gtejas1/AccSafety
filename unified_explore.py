@@ -66,7 +66,7 @@ MKE_AAEC_FLAGS   = [
 MIDBLOCK_MODE       = "Pedestrian"
 MIDBLOCK_FACILITY   = "Mid-Block crossing"
 MIDBLOCK_SOURCE     = "Mid-Block pedestrian counts (Milwaukee County)"
-MIDBLOCK_ITEM_ID    = "4fb509de628b44ffba4ef5d26c5145d9"
+MIDBLOCK_ITEM_ID    = "01393b0b2eaf465bad2241228b403fae"
 MIDBLOCK_CENTER     = "-87.95344553737603,43.065172443412855"
 MIDBLOCK_SCALE      = "288895.277144"
 MIDBLOCK_THEME      = "light"
@@ -746,6 +746,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         id="pf-table",
                         columns=DISPLAY_COLUMNS,
                         data=[],
+                        hidden_columns=[],
                         markdown_options={"html": True, "link_target": "_self"},
                         page_size=25,
                         sort_action="native",
@@ -884,10 +885,11 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         Output("pf-summary", "children"), # 2 summary content
         Output("wrap-summary", "style"),  # 3 summary visibility
         Output("pf-table", "data"),       # 4 table rows
-        Output("wrap-table", "style"),    # 5 table card visibility
-        Output("wrap-results", "style"),  # 6 (sentinel) keep as block once ready
-        Output("pf-desc", "children"),    # 7 description content
-        Output("wrap-desc", "style"),     # 8 description visibility
+        Output("pf-table", "hidden_columns"),  # 5 hidden columns
+        Output("wrap-table", "style"),    # 6 table card visibility
+        Output("wrap-results", "style"),  # 7 (sentinel) keep as block once ready
+        Output("pf-desc", "children"),    # 8 description content
+        Output("wrap-desc", "style"),     # 9 description visibility
         Input("pf-mode", "value"),
         Input("pf-facility", "value"),
         Input("pf-source", "value"),
@@ -902,6 +904,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 {"display": "none"},
                 [],
                 {"display": "none"},
+                [],
                 [],
                 {"display": "none"},
                 {"display": "none"},
@@ -963,7 +966,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             source_types = df["Source type"].dropna().astype(str).str.strip()
             source_types = source_types[source_types != ""].str.casefold()
 
-        if not source_types.empty and source_types.eq("modeled").all():
+        all_modeled = not source_types.empty and source_types.eq("modeled").all()
+        hidden_columns = ["View"] if all_modeled else []
+
+        if df.empty or all_modeled:
             summary_children = []
             summary_style = {"display": "none"}
         else:
@@ -1050,7 +1056,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 summary_children,
                 summary_style,
                 [],
-                {"display": "block"},
+                hidden_columns,
+                {"display": "none"},
                 {"display": "block"},
                 description,
                 desc_style,
@@ -1065,6 +1072,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             summary_children,
             summary_style,
             rows,
+            hidden_columns,
             {"display": "block"},
             {"display": "block"},
             description,
