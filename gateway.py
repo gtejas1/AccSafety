@@ -421,7 +421,6 @@ def create_server():
 
           <div class="portal-secondary">
             <div class="portal-map-card">
-              <h2 class="portal-map-heading">Statewide non-driver activity &amp; safety view</h2>
               <img
                 class="portal-map-image"
                 src="/static/img/home-map.png"
