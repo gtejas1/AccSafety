@@ -74,7 +74,8 @@ def dash_page(
     )
 
     container = dbc.Container(body_children, fluid=fluid, className="app-content")
-    return html.Div([header, container], className="app-shell")
+    launcher = html.Div(className="assistant-launcher", **{"data-endpoint": "/assistant/chat"})
+    return html.Div([header, container, launcher], className="app-shell")
 
 
 def card(children, *, class_name: str | None = None):

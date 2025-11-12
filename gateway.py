@@ -4,7 +4,17 @@ import os
 from typing import Dict, List
 from pathlib import Path
 from urllib.parse import quote
-from flask import Flask, render_template, render_template_string, redirect, request, session
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    redirect,
+    render_template,
+    render_template_string,
+    request,
+    session,
+    stream_with_context,
+)
 
 from pbc_trail_app import create_trail_dash
 from pbc_eco_app import create_eco_dash
@@ -13,6 +23,8 @@ from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore
+
+import assistant_service
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -126,6 +138,7 @@ def create_server():
   <title>Sign in · AccSafety</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/theme.css">
+  <link rel="stylesheet" href="/static/assistant.css">
   <style>
     .login-card h1 { margin: 0 0 12px; font-size: 1.4rem; }
     .login-card p { margin: 0 0 20px; color: var(--brand-muted); }
@@ -260,6 +273,63 @@ def create_server():
     create_wisdot_files_app(server, prefix="/wisdot/")
     create_se_wi_trails_app(server, prefix="/se-wi-trails/")
     create_unified_explore(server, prefix="/explore/")
+
+    # ---- Assistant Endpoint ----
+    @server.route("/assistant/chat", methods=["POST"])
+    def assistant_chat():
+        if "user" not in session:
+            return jsonify({"error": "Unauthorized"}), 401
+
+        payload = request.get_json(silent=True) or {}
+        messages = payload.get("messages")
+        if not isinstance(messages, list):
+            return jsonify({"error": "messages must be a list"}), 400
+
+        session_user = session.get("user")
+        payload_user = payload.get("user")
+        if payload_user and payload_user != session_user:
+            return jsonify({"error": "User mismatch"}), 403
+
+        wants_stream = bool(payload.get("stream", True))
+        temperature = payload.get("temperature")
+        try:
+            temp_val = float(temperature) if temperature is not None else 0.2
+        except (TypeError, ValueError):
+            return jsonify({"error": "temperature must be numeric"}), 400
+
+        identity = f"{session_user}:{request.remote_addr or 'unknown'}"
+
+        try:
+            result = assistant_service.send_message(
+                messages,
+                stream=wants_stream,
+                temperature=temp_val,
+                system_prompt=payload.get("system_prompt"),
+                user_context={"user": session_user},
+                identity=identity,
+            )
+        except assistant_service.RateLimitError as exc:
+            return jsonify({"error": str(exc)}), 429
+        except assistant_service.AssistantServiceError as exc:
+            return jsonify({"error": str(exc)}), 502
+        except RuntimeError as exc:
+            return jsonify({"error": str(exc)}), 503
+
+        if wants_stream:
+            def generate():
+                for chunk in result:  # type: ignore[union-attr]
+                    message = json.dumps({"content": chunk})
+                    yield f"data: {message}\n\n"
+                yield "data: [DONE]\n\n"
+
+            return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+        data = result  # type: ignore[assignment]
+        choices = data.get("choices", []) if isinstance(data, dict) else []
+        content = "".join(
+            choice.get("message", {}).get("content", "") for choice in choices if isinstance(choice, dict)
+        )
+        return jsonify({"content": content, "raw": data})
 
     # ---- Portal Home ----
     @server.route("/")
@@ -441,6 +511,8 @@ def create_server():
     </footer>
   </div>
 
+  <div class="assistant-launcher" data-endpoint="/assistant/chat"></div>
+
   <!-- Getting Started Modal -->
   <div class="modal-backdrop" id="instructions-modal" hidden role="dialog" aria-modal="true" aria-labelledby="intro-title">
     <div class="modal">
@@ -454,6 +526,7 @@ def create_server():
     </div>
   </div>
 
+  <script defer src="/static/assistant.js"></script>
   <script>
     (function(){
       const LS_KEY = 'accsafetyIntroShown';
