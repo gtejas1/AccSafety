@@ -290,7 +290,9 @@ def create_server():
     .portal-highlight-row {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;width:100%;}
     .portal-highlight-card {background:#f8fafc;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:14px 16px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:grid;gap:6px;justify-items:center;text-align:center;min-height:110px;}
     .portal-highlight-card h3 {margin:0;font-size:0.95rem;font-weight:700;color:#0b1736;}
-    .portal-highlight-count {margin:0;font-size:1.5rem;font-weight:700;color:var(--brand-primary);}
+    .portal-highlight-list {margin:6px 0 0;padding:0;list-style:none;display:grid;gap:4px;width:100%;}
+    .portal-highlight-item {display:flex;justify-content:space-between;font-size:0.9rem;color:#0f172a;}
+    .portal-highlight-item strong {color:var(--brand-primary);font-weight:700;}
     .portal-map-card {background:rgba(255,255,255,0.92);border:1px solid rgba(148,163,184,0.26);border-radius:18px;box-shadow:0 16px 28px rgba(15,23,42,0.1);padding:18px 20px;display:flex;flex-direction:column;gap:14px;width:100%;height:100%;max-width:none;flex:1;}
     .portal-map-heading {margin:0;font-size:1.05rem;font-weight:700;color:#0b1736;}
     .portal-map-image {flex:1;width:100%;height:100%;display:block;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);object-fit:cover;background:#e2e8f0;min-height:320px;}
@@ -408,12 +410,11 @@ def create_server():
 
             <div class="portal-highlight-row" role="list">
               <article class="portal-highlight-card" role="listitem">
-                <h3>Data Sources Available</h3>
-                <p class="portal-highlight-count">7</p>
-              </article>
-              <article class="portal-highlight-card" role="listitem">
-                <h3>Analysis Options</h3>
-                <p class="portal-highlight-count">15</p>
+                <h3>Projects Included (collected/generated data)</h3>
+                <ul class="portal-highlight-list" aria-label="Projects included counts">
+                  <li class="portal-highlight-item"><span>TRCC</span><strong>1</strong></li>
+                  <li class="portal-highlight-item"><span>Others</span><strong>2</strong></li>
+                </ul>
               </article>
             </div>
           </div>
