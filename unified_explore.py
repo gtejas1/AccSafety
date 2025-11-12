@@ -966,9 +966,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             source_types = df["Source type"].dropna().astype(str).str.strip()
             source_types = source_types[source_types != ""].str.casefold()
 
-        hidden_columns = ["View"] if not source_types.empty and source_types.eq("modeled").all() else []
+        all_modeled = not source_types.empty and source_types.eq("modeled").all()
+        hidden_columns = ["View"] if all_modeled else []
 
-        if not source_types.empty and source_types.eq("modeled").all():
+        if df.empty or all_modeled:
             summary_children = []
             summary_style = {"display": "none"}
         else:
@@ -1056,7 +1057,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 summary_style,
                 [],
                 hidden_columns,
-                {"display": "block"},
+                {"display": "none"},
                 {"display": "block"},
                 description,
                 desc_style,
