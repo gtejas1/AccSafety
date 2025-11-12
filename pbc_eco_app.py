@@ -135,8 +135,16 @@ def create_eco_dash(server, prefix="/eco/"):
     """
     summary_df = pd.read_sql(summary_query, ENGINE)
     if not summary_df.empty:
-        summary_df["start_date"] = pd.to_datetime(summary_df["start_date"]).dt.date
-        summary_df["end_date"] = pd.to_datetime(summary_df["end_date"]).dt.date
+        summary_df["start_date"] = (
+            pd.to_datetime(summary_df["start_date"], utc=True)
+            .dt.tz_localize(None)
+            .dt.date
+        )
+        summary_df["end_date"] = (
+            pd.to_datetime(summary_df["end_date"], utc=True)
+            .dt.tz_localize(None)
+            .dt.date
+        )
         summary_df["average_hourly_count"] = summary_df["average_hourly_count"].round(0).astype(int)
         summary_df["View"] = summary_df.apply(
             lambda r: f"[View]({prefix}dashboard?location="
