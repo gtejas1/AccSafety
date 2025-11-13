@@ -323,20 +323,24 @@ def _build_summary_dashboard_content(df: pd.DataFrame) -> list:
         df_counts["Location"] = df_counts["Location"].fillna("Unknown location").astype(str)
 
     if df_counts.empty:
+        dedup_counts = df_counts
+    else:
+        dedup_counts = (
+            df_counts.sort_values("Total counts", ascending=False)
+            .drop_duplicates(subset="Location", keep="first")
+            .reset_index(drop=True)
+        )
+
+    if dedup_counts.empty:
         peak_day_volume = None
         average_daily = None
         total_volume = None
     else:
-        peak_day_volume = float(df_counts["Total counts"].max())
-        average_daily = float(df_counts["Total counts"].mean())
-        total_volume = float(df_counts["Total counts"].sum())
+        peak_day_volume = float(dedup_counts["Total counts"].max())
+        average_daily = float(dedup_counts["Total counts"].mean())
+        total_volume = float(dedup_counts["Total counts"].sum())
 
-    per_location = (
-        df_counts.groupby("Location", as_index=False)["Total counts"].sum()
-        if not df_counts.empty
-        else pd.DataFrame(columns=["Location", "Total counts"])
-    )
-    per_location = per_location.sort_values("Total counts", ascending=False)
+    per_location = dedup_counts.loc[:, ["Location", "Total counts"]]
     top_locations = per_location.head(5)
 
     def _fmt_int(value: float | int | None) -> str:
