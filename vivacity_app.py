@@ -275,7 +275,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
 
     # ── Layout: Left (filters) / Right (graph + table)
     app.layout = dash_page(
-        "Long Term Counts · Vivacity API",
+        "Long Term Counts · API",
         [
             dcc.Location(id="viv-url", refresh=False),
             dcc.Interval(id="viv-init", interval=200, n_intervals=0, max_intervals=1),
