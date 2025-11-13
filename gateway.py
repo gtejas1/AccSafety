@@ -404,10 +404,10 @@ def create_server():
 
             <aside class="portal-quick-card" aria-labelledby="quick-access-title">
               <h2 id="quick-access-title">Quick Access</h2>
-              <p class="portal-quick-card-section">Long Term Counts:</p>
+              <p class="portal-quick-card-section">Intersectional Counts (Real Time):</p>
               <ul class="portal-quick-links" aria-label="Long Term Counts">
-                <li><a href="/live/">Monitor Live Detection</a></li>
-                <li><a href="/vivacity/">Vivacity Analytics</a></li>
+                <li><a href="/live/">N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay </a>(Video Feed)</li>
+                <li><a href="/vivacity/">W Wells St & N 68th St Intersection </a>(API based)</li>
               </ul>
             </aside>
 
@@ -440,7 +440,7 @@ def create_server():
         <img src="/static/img/UWM_IPIT.png" alt="UWM IPIT logo" class="footer-logo footer-logo--uwm">
         <img src="/static/img/WisDOT.png" alt="WisDOT logo" class="footer-logo footer-logo--wisdot">
       </div>
-      <p class="footer-copyright">Copyright ©2025 All rights reserved.</p>
+      <p class="footer-copyright">Copyrights ©2025 All rights reserved.</p>
     </footer>
   </div>
 
