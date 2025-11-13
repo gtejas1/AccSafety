@@ -445,16 +445,23 @@ def create_server():
       position:relative;z-index:2;
     }
     .cta-wrap {margin:8px 0 12px;position:relative;z-index:2;display:flex;align-items:center;gap:12px;}
+    .portal-primary-cards {display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-items:stretch;}
+    .portal-metric {margin-top:0;display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:16px;width:100%;
+      background:#ffffff;border:1px solid rgba(148,163,184,0.25);box-shadow:0 18px 34px rgba(15,23,42,0.08);
+      font-feature-settings:"tnum" on;font-variant-numeric:tabular-nums;}
+    .portal-metric-icon {width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;
+      background:rgba(76,81,191,0.12);color:#4c51bf;}
+    .portal-metric-icon svg {width:24px;height:24px;fill:currentColor;}
+    .portal-metric-text {display:flex;flex-direction:column;line-height:1.1;}
+    .portal-metric-value {font-size:1.85rem;font-weight:700;color:#0b1736;margin:0;}
+    .portal-metric-label {font-size:0.95rem;color:#475569;}
     .desc {color:#0b1736;margin:10px 0 16px;line-height:1.55;font-size:1rem;max-width:820px;}
 
     .portal-overview {display:grid;gap:24px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
     .portal-primary {display:grid;gap:18px;align-content:start;justify-items:stretch;}
-    .portal-secondary {display:flex;flex-direction:column;align-self:stretch;align-items:stretch;}
+    .portal-secondary {display:flex;flex-direction:column;align-self:stretch;align-items:stretch;gap:18px;}
     .portal-highlight-row {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;width:100%;justify-content:flex-start;}
-    .portal-highlight-card {background:#f8fafc;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:14px 16px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:grid;gap:6px;justify-items:center;text-align:center;min-height:110px;justify-self:start;width:100%;}
-    @media (min-width: 961px) {
-      .portal-highlight-card {width:50%;}
-    }
+    .portal-highlight-card {background:#f8fafc;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:16px 18px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:grid;gap:6px;justify-items:center;text-align:center;min-height:110px;width:100%;}
     .portal-highlight-card h3 {margin:0;font-size:0.95rem;font-weight:700;color:#0b1736;}
     .portal-highlight-list {margin:6px 0 0;padding:0;list-style:none;display:grid;gap:4px;width:100%;}
     .portal-highlight-item {display:flex;justify-content:space-between;font-size:0.9rem;color:#0f172a;}
@@ -584,6 +591,7 @@ def create_server():
       .portal-footer {padding:24px 20px;}
       .footer-logos {gap:20px;}
       .footer-logo {max-width:220px;}
+      .portal-metric {width:100%;}
     }
 
     /* Modal */
@@ -631,69 +639,18 @@ def create_server():
               </span>
             </div>
 
-            <aside class="portal-status-card" aria-labelledby="status-card-title">
-              <div class="status-card-header">
-                <div>
-                  <h2 id="status-card-title" class="status-card-title">Real-time intersection counts</h2>
-                  <p class="status-card-subtitle">Live camera &amp; API feeds</p>
+            <div class="portal-primary-cards">
+              <div class="portal-metric" aria-label="Count sites available">
+                <span class="portal-metric-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.94 0-7.29 3.04-7.29 7.08 0 3.18 2.22 6.63 6.56 10.26.49.43 1.24.43 1.73 0 4.34-3.63 6.56-7.08 6.56-10.26 0-4.04-3.35-7.08-7.56-7.08Zm0 10.65a3.57 3.57 0 1 1 0-7.14 3.57 3.57 0 0 1 0 7.14Z"/></svg>
+                </span>
+                <div class="portal-metric-text">
+                  <span class="portal-metric-value">128</span>
+                  <span class="portal-metric-label">Count sites</span>
                 </div>
-                
               </div>
-              <ul class="status-feed-list" aria-label="Live intersection status">
-                <li class="status-feed-item">
-                  <div class="status-feed-main">
-                    <span class="status-feed-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.9 0-7.25 3-7.25 7.02 0 3.1 2.16 6.45 6.41 10.01.49.41 1.2.41 1.69 0 4.25-3.56 6.41-6.91 6.41-10.01 0-4.02-3.35-7.02-7.26-7.02Zm0 10.49a3.47 3.47 0 1 1 0-6.94 3.47 3.47 0 0 1 0 6.94Z"/></svg>
-                    </span>
-                    <div class="status-feed-body">
-                      <div class="status-feed-title">
-                        <span class="status-feed-location">
-                          <a class="status-feed-link" href="/live/" title="Open live detection dashboard">
-                            N Santa Monica Blvd &amp; Silver Spring Dr <span class="status-feed-area">– Whitefish Bay</span>
-                          </a>
-                        </span>
-                        <span class="status-feed-time">just now</span>
-                      </div>
-                      <div class="status-feed-meta">
-                        <span class="status-feed-badge">LIVE – Video</span>
-                        <span class="status-feed-updated">Updated just now</span>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-                <li class="status-feed-item status-feed-item--live" data-live-card>
-                  <div class="status-feed-main">
-                    <span class="status-feed-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.9 0-7.25 3-7.25 7.02 0 3.1 2.16 6.45 6.41 10.01.49.41 1.2.41 1.69 0 4.25-3.56 6.41-6.91 6.41-10.01 0-4.02-3.35-7.02-7.26-7.02Zm0 10.49a3.47 3.47 0 1 1 0-6.94 3.47 3.47 0 0 1 0 6.94Z"/></svg>
-                    </span>
-                    <div class="status-feed-body">
-                      <div class="status-feed-title">
-                        <span class="status-feed-location">
-                          <a class="status-feed-link" href="/vivacity/" title="Open live Vivacity dashboard">
-                            W Wells St &amp; N 68th St <span class="status-feed-area">– Milwaukee</span>
-                          </a>
-                        </span>
-                        <span class="status-feed-time" data-live-time data-live-static aria-live="polite">just now</span>
-                      </div>
-                      <div class="status-feed-meta">
-                        <span class="status-feed-badge">LIVE – API</span>
-                        <span class="status-feed-updated" data-live-updated data-live-static aria-live="polite">Updated just now</span>
-                      </div>
-                      <div class="status-feed-message" data-live-message aria-live="polite"></div>
-                    </div>
-                  </div>
-                  <div class="status-feed-extra" aria-hidden="true">
-                    <svg class="status-feed-sparkline" viewBox="0 0 120 40" preserveAspectRatio="none" data-sparkline>
-                      <path d="M4 30" />
-                      <circle cx="4" cy="30" r="3" />
-                    </svg>
-                  </div>
-                </li>
-              </ul>
-            </aside>
 
-            <div class="portal-highlight-row" role="list">
-              <article class="portal-highlight-card" role="listitem">
+              <article class="portal-highlight-card">
                 <h3>Projects Included (collected/generated data)</h3>
                 <ul class="portal-highlight-list" aria-label="Projects included counts">
                   <li class="portal-highlight-item"><span>TRCC</span><strong>7</strong></li>
@@ -701,6 +658,67 @@ def create_server():
                 </ul>
               </article>
             </div>
+
+            <aside class="portal-status-card" aria-labelledby="status-card-title">
+                <div class="status-card-header">
+                  <div>
+                    <h2 id="status-card-title" class="status-card-title">Real-time intersection counts</h2>
+                    <p class="status-card-subtitle">Live camera &amp; API feeds</p>
+                  </div>
+
+                </div>
+                <ul class="status-feed-list" aria-label="Live intersection status">
+                  <li class="status-feed-item">
+                    <div class="status-feed-main">
+                      <span class="status-feed-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.9 0-7.25 3-7.25 7.02 0 3.1 2.16 6.45 6.41 10.01.49.41 1.2.41 1.69 0 4.25-3.56 6.41-6.91 6.41-10.01 0-4.02-3.35-7.02-7.26-7.02Zm0 10.49a3.47 3.47 0 1 1 0-6.94 3.47 3.47 0 0 1 0 6.94Z"/></svg>
+                      </span>
+                      <div class="status-feed-body">
+                        <div class="status-feed-title">
+                          <span class="status-feed-location">
+                            <a class="status-feed-link" href="/live/" title="Open live detection dashboard">
+                              N Santa Monica Blvd &amp; Silver Spring Dr <span class="status-feed-area">– Whitefish Bay</span>
+                            </a>
+                          </span>
+                          <span class="status-feed-time">just now</span>
+                        </div>
+                        <div class="status-feed-meta">
+                          <span class="status-feed-badge">LIVE – Video</span>
+                          <span class="status-feed-updated">Updated just now</span>
+                        </div>
+                      </div>
+                    </div>
+                  </li>
+                  <li class="status-feed-item status-feed-item--live" data-live-card>
+                    <div class="status-feed-main">
+                      <span class="status-feed-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.9 0-7.25 3-7.25 7.02 0 3.1 2.16 6.45 6.41 10.01.49.41 1.2.41 1.69 0 4.25-3.56 6.41-6.91 6.41-10.01 0-4.02-3.35-7.02-7.26-7.02Zm0 10.49a3.47 3.47 0 1 1 0-6.94 3.47 3.47 0 0 1 0 6.94Z"/></svg>
+                      </span>
+                      <div class="status-feed-body">
+                        <div class="status-feed-title">
+                          <span class="status-feed-location">
+                            <a class="status-feed-link" href="/vivacity/" title="Open live Vivacity dashboard">
+                              W Wells St &amp; N 68th St <span class="status-feed-area">– Milwaukee</span>
+                            </a>
+                          </span>
+                          <span class="status-feed-time" data-live-time data-live-static aria-live="polite">just now</span>
+                        </div>
+                        <div class="status-feed-meta">
+                          <span class="status-feed-badge">LIVE – API</span>
+                          <span class="status-feed-updated" data-live-updated data-live-static aria-live="polite">Updated just now</span>
+                        </div>
+                        <div class="status-feed-message" data-live-message aria-live="polite"></div>
+                      </div>
+                    </div>
+                    <div class="status-feed-extra" aria-hidden="true">
+                      <svg class="status-feed-sparkline" viewBox="0 0 120 40" preserveAspectRatio="none" data-sparkline>
+                        <path d="M4 30" />
+                        <circle cx="4" cy="30" r="3" />
+                      </svg>
+                    </div>
+                  </li>
+                </ul>
+              </aside>
           </div>
 
           <div class="portal-secondary">
