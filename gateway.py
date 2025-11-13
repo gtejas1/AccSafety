@@ -647,7 +647,11 @@ def create_server():
                     </span>
                     <div class="status-feed-body">
                       <div class="status-feed-title">
-                        <span class="status-feed-location">N Santa Monica Blvd &amp; Silver Spring Dr <span class="status-feed-area">– Whitefish Bay</span></span>
+                        <span class="status-feed-location">
+                          <a class="status-feed-link" href="/live/" title="Open live detection dashboard">
+                            N Santa Monica Blvd &amp; Silver Spring Dr <span class="status-feed-area">– Whitefish Bay</span>
+                          </a>
+                        </span>
                         <span class="status-feed-time">just now</span>
                       </div>
                       <div class="status-feed-meta">
