@@ -1,14 +1,20 @@
 # gateway.py
 import json
 import os
-from typing import Dict, List
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional, Sequence, Tuple
 from pathlib import Path
 from urllib.parse import quote
 from flask import Flask, render_template, render_template_string, redirect, request, session
 
 from pbc_trail_app import create_trail_dash
 from pbc_eco_app import create_eco_dash
-from vivacity_app import create_vivacity_dash
+from vivacity_app import (
+    DEFAULT_CLASSES,
+    LOCAL_TZ,
+    create_vivacity_dash,
+    get_countline_counts,
+)
 from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
@@ -19,6 +25,230 @@ BASE_DIR = Path(__file__).resolve().parent
 
 VALID_USERS = {"admin": "IPIT&uwm2024", "ipit": "IPIT&uwm2024"}
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
+
+PLACEHOLDER_SPARKLINE_LINE = (
+    "M0 60 L40 50 L80 55 L120 30 L160 34 L200 22 L240 26 L280 18 L320 24"
+)
+PLACEHOLDER_SPARKLINE_FILL = (
+    "M0 60 L40 50 L80 55 L120 30 L160 34 L200 22 L240 26 L280 18 L320 24 L320 80 L0 80 Z"
+)
+
+
+def _parse_env_list(raw: Optional[str]) -> List[str]:
+    if not raw:
+        return []
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+def _humanize_timestamp(dt: datetime, include_zone: bool = True) -> str:
+    date_part = dt.strftime("%B %d, %Y").replace(" 0", " ")
+    time_part = dt.strftime("%I:%M %p")
+    time_part = time_part.lstrip("0")
+    zone = dt.tzname() if include_zone else ""
+    if zone:
+        time_part = f"{time_part} {zone}"
+    return f"{date_part} · {time_part}" if time_part else date_part
+
+
+def _humanize_range(start: datetime, end: datetime) -> str:
+    if start.date() == end.date():
+        date_part = start.strftime("%B %d, %Y").replace(" 0", " ")
+        start_time = start.strftime("%I:%M %p").lstrip("0")
+        end_time = end.strftime("%I:%M %p").lstrip("0")
+        zone = end.tzname() or ""
+        if zone:
+            end_time = f"{end_time} {zone}"
+        return f"{date_part} {start_time}–{end_time}"
+    return f"{_humanize_timestamp(start)} – {_humanize_timestamp(end)}"
+
+
+def _build_sparkline_paths(
+    values: Sequence[float],
+    width: float = 320.0,
+    height: float = 80.0,
+    padding: float = 10.0,
+) -> Optional[Tuple[str, str]]:
+    points = [max(float(v), 0.0) for v in values if v is not None]
+    if not points:
+        return None
+    max_val = max(points)
+    if max_val <= 0:
+        max_val = 1.0
+    usable_height = max(height - (2 * padding), 1)
+    coords: List[Tuple[float, float]] = []
+    denom = max(len(points) - 1, 1)
+    for idx, val in enumerate(points):
+        x = (width * idx) / denom
+        scaled = (val / max_val) if max_val else 0.0
+        y = height - padding - (scaled * usable_height)
+        y = min(max(y, padding), height - padding)
+        coords.append((x, y))
+    if len(coords) == 1:
+        coords.append((width, coords[0][1]))
+    line_parts = [f"M{coords[0][0]:.2f} {coords[0][1]:.2f}"]
+    for x, y in coords[1:]:
+        line_parts.append(f"L{x:.2f} {y:.2f}")
+    fill_parts = [f"M{coords[0][0]:.2f} {height - padding:.2f}"]
+    for x, y in coords:
+        fill_parts.append(f"L{x:.2f} {y:.2f}")
+    fill_parts.append(f"L{coords[-1][0]:.2f} {height - padding:.2f}")
+    fill_parts.append("Z")
+    return " ".join(line_parts), " ".join(fill_parts)
+
+
+def _default_status_card() -> Dict[str, object]:
+    location = os.getenv(
+        "PORTAL_STATUS_LOCATION",
+        "Whitefish Bay · N Santa Monica Blvd & Silver Spring Dr",
+    )
+    return {
+        "title": os.getenv("PORTAL_STATUS_TITLE", "Network Status"),
+        "location": location,
+        "badges": [
+            {"label": "LIVE", "kind": "live"},
+            {"label": "Video", "kind": "video"},
+            {"label": "API", "kind": "api"},
+        ],
+        "last_updated_display": "June 1, 2024 · 09:30 AM CDT (placeholder)",
+        "last_updated_iso": "2024-06-01T09:30:00-05:00",
+        "sparkline_label": "Placeholder sparkline showing pedestrian counts for the last 12 hours",
+        "sparkline_line_path": PLACEHOLDER_SPARKLINE_LINE,
+        "sparkline_fill_path": PLACEHOLDER_SPARKLINE_FILL,
+        "links": [
+            {
+                "href": "/live/",
+                "label": "View live video feed",
+                "description": "N Santa Monica Blvd & Silver Spring Dr",
+            },
+            {
+                "href": "/vivacity/",
+                "label": "Open API dashboard",
+                "description": "W Wells St & N 68th St Intersection",
+            },
+        ],
+        "note": None,
+    }
+
+
+def _build_portal_status_card(logger) -> Dict[str, object]:
+    card = _default_status_card()
+    countline_ids = _parse_env_list(os.getenv("PORTAL_STATUS_COUNTLINES"))
+    if not countline_ids:
+        return card
+    classes = _parse_env_list(os.getenv("PORTAL_STATUS_CLASSES")) or list(DEFAULT_CLASSES)
+    try:
+        lookback_hours = int(os.getenv("PORTAL_STATUS_LOOKBACK_HOURS", "12"))
+    except ValueError:
+        lookback_hours = 12
+    lookback_hours = max(1, min(lookback_hours, 72))
+    bucket = os.getenv("PORTAL_STATUS_BUCKET", "15m").strip() or "15m"
+    try:
+        live_threshold = int(os.getenv("PORTAL_STATUS_LIVE_THRESHOLD_MINUTES", "20"))
+    except ValueError:
+        live_threshold = 20
+
+    now_local = datetime.now(tz=LOCAL_TZ)
+    window_start_local = now_local - timedelta(hours=lookback_hours)
+    t_from = window_start_local.astimezone(timezone.utc)
+    t_to = now_local.astimezone(timezone.utc)
+
+    try:
+        df = get_countline_counts(
+            countline_ids,
+            t_from,
+            t_to,
+            time_bucket=bucket,
+            classes=classes,
+            fill_zeros=True,
+        )
+    except Exception as exc:  # pragma: no cover - runtime fallback
+        if logger:
+            logger.warning("Vivacity API request failed: %s", exc)
+        card["note"] = "Live API data is temporarily unavailable; displaying placeholder activity."
+        card["badges"] = [
+            {"label": "Offline", "kind": "error"},
+            {"label": "Video", "kind": "video"},
+            {"label": "API", "kind": "api"},
+        ]
+        return card
+
+    if df.empty:
+        card["note"] = "No recent detections were returned for the monitored approaches."
+        card["badges"] = [
+            {"label": "Stale", "kind": "stale"},
+            {"label": "Video", "kind": "video"},
+            {"label": "API", "kind": "api"},
+        ]
+        return card
+
+    df = df[df["count"].notna()]
+    if df.empty:
+        card["note"] = "Live detections are currently zero across the selected feeds."
+        card["badges"] = [
+            {"label": "Stale", "kind": "stale"},
+            {"label": "Video", "kind": "video"},
+            {"label": "API", "kind": "api"},
+        ]
+        return card
+
+    grouped = (
+        df.groupby("timestamp", as_index=False)["count"].sum().sort_values("timestamp")
+    )
+    if grouped.empty:
+        card["note"] = "No summarized detections available for the selected window."
+        return card
+
+    series: List[Tuple[datetime, float]] = []
+    for ts, value in zip(grouped["timestamp"], grouped["count"]):
+        ts_value = ts
+        tzinfo = getattr(ts_value, "tzinfo", None)
+        if hasattr(ts_value, "tz_localize") and tzinfo is None:
+            ts_value = ts_value.tz_localize(timezone.utc)
+        if hasattr(ts_value, "tz_convert"):
+            ts_local = ts_value.tz_convert(LOCAL_TZ)
+            ts_local_py = ts_local.to_pydatetime()
+        else:
+            if tzinfo is None:
+                ts_value = ts_value.replace(tzinfo=timezone.utc)
+            ts_local_py = ts_value.astimezone(LOCAL_TZ)
+        series.append((ts_local_py, float(value) if value is not None else 0.0))
+
+    if not series:
+        card["note"] = "Counts could not be transformed for sparkline rendering."
+        return card
+
+    values = [val for _, val in series]
+    sparkline_paths = _build_sparkline_paths(values)
+    if sparkline_paths:
+        line_path, fill_path = sparkline_paths
+        card["sparkline_line_path"] = line_path
+        card["sparkline_fill_path"] = fill_path
+
+    start_local, last_local = series[0][0], series[-1][0]
+    total_counts = sum(values)
+    card["sparkline_label"] = (
+        f"{' + '.join(cls.title() for cls in classes)} detections "
+        f"{_humanize_range(start_local, last_local)} (total {int(round(total_counts)):,})."
+    )
+    card["last_updated_display"] = _humanize_timestamp(last_local)
+    card["last_updated_iso"] = last_local.isoformat()
+    card["note"] = (
+        f"{int(round(total_counts)):,} detections across {len(countline_ids)} approaches "
+        f"in the past {lookback_hours} hours."
+    )
+
+    freshness_minutes = max(
+        (now_local - last_local).total_seconds() / 60.0,
+        0.0,
+    )
+    is_live = freshness_minutes <= max(live_threshold, 1)
+    status_badge = {"label": "LIVE" if is_live else "Stale", "kind": "live" if is_live else "stale"}
+    card["badges"] = [
+        status_badge,
+        {"label": "Video", "kind": "video"},
+        {"label": "API", "kind": "api"},
+    ]
+    return card
 
 def load_whats_new_entries(limit: int = 15):
     """Load What's New entries from a manually curated JSON file."""
@@ -264,6 +494,8 @@ def create_server():
     # ---- Portal Home ----
     @server.route("/")
     def home():
+        status_card = _build_portal_status_card(server.logger)
+
         return render_template_string("""
 <!doctype html>
 <html lang="en">
@@ -301,9 +533,27 @@ def create_server():
     .portal-map-image {flex:1;width:100%;height:100%;display:block;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);object-fit:cover;background:#e2e8f0;min-height:320px;}
     .portal-hero-text {justify-self:start;}
     .portal-hero-text h1 {margin:0;font-size:2.4rem;line-height:1.2;}
-    .portal-quick-card {padding:18px 20px;gap:10px;max-width:100%;width:100%;}
-    .portal-quick-links {margin:12px 0 0;display:grid;gap:8px;}
-    .portal-quick-links a {text-decoration:none;}
+    .portal-quick-card {display:flex;flex-direction:column;gap:16px;padding:22px 24px;background:linear-gradient(135deg,rgba(11,102,195,0.08),rgba(14,165,233,0.04));border:1px solid rgba(11,102,195,0.18);border-radius:18px;box-shadow:0 18px 36px rgba(15,23,42,0.14);max-width:100%;width:100%;}
+    .status-card-header {display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;}
+    .portal-quick-card h2 {margin:0;font-size:1.05rem;color:#0b1736;}
+    .status-card-location {margin:4px 0 0;font-size:0.95rem;color:#0f172a;}
+    .status-card-badges {display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+    .status-badge {display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-size:0.8rem;font-weight:700;letter-spacing:0.02em;text-transform:uppercase;background:rgba(11,102,195,0.16);color:#0b1736;}
+    .status-badge--live {background:#16a34a;color:#fff;box-shadow:0 8px 18px rgba(22,163,74,0.26);}
+    .status-badge--stale {background:rgba(234,179,8,0.22);color:#92400e;}
+    .status-badge--error {background:rgba(248,113,113,0.22);color:#b91c1c;}
+    .status-badge--video {background:rgba(59,130,246,0.16);color:#1d4ed8;}
+    .status-badge--api {background:rgba(56,189,248,0.16);color:#0284c7;}
+    .status-card-updated {margin:0;font-size:0.85rem;color:#475569;}
+    .status-card-updated time {font-weight:600;color:#0b1736;}
+    .status-card-sparkline {position:relative;display:flex;align-items:center;justify-content:center;height:84px;border-radius:12px;background:rgba(148,163,184,0.12);border:1px dashed rgba(100,116,139,0.4);}
+    .status-card-sparkline svg {width:100%;height:100%;}
+    .status-card-note {margin:4px 0 0;font-size:0.85rem;color:#0b1736;opacity:0.85;}
+    .status-card-links {display:grid;gap:8px;margin:0;}
+    .status-card-links a {display:flex;flex-direction:column;padding:10px 14px;border-radius:12px;background:#fff;border:1px solid rgba(148,163,184,0.28);text-decoration:none;color:#0f172a;transition:transform 0.12s ease, box-shadow 0.12s ease;}
+    .status-card-links a strong {font-size:0.95rem;}
+    .status-card-links a span {font-size:0.85rem;color:#475569;}
+    .status-card-links a:hover,.status-card-links a:focus {transform:translateY(-1px);box-shadow:0 12px 24px rgba(15,23,42,0.12);text-decoration:none;}
     @media (max-width: 960px) {
       .portal-overview {grid-template-columns:1fr;gap:20px;}
       .portal-secondary {display:grid;align-self:auto;}
@@ -403,12 +653,41 @@ def create_server():
             </div>
 
             <aside class="portal-quick-card" aria-labelledby="quick-access-title">
-              <h2 id="quick-access-title">Quick Access</h2>
-              <p class="portal-quick-card-section">Intersectional Counts (Real Time):</p>
-              <ul class="portal-quick-links" aria-label="Long Term Counts">
-                <li><a href="/live/">N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay </a>(Video Feed)</li>
-                <li><a href="/vivacity/">W Wells St & N 68th St Intersection </a>(API based)</li>
-              </ul>
+              <div class="status-card-header">
+                <div class="status-card-heading">
+                  <h2 id="quick-access-title">{{ status_card.title }}</h2>
+                  <p class="status-card-location">{{ status_card.location }}</p>
+                </div>
+                <div class="status-card-badges" role="list" aria-label="Feed status">
+                  {% for badge in status_card.badges %}
+                  <span class="status-badge status-badge--{{ badge.kind }}" role="listitem">{{ badge.label }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+              <p class="status-card-updated">Last updated <time datetime="{{ status_card.last_updated_iso }}">{{ status_card.last_updated_display }}</time></p>
+              <div class="status-card-sparkline" role="img" aria-label="{{ status_card.sparkline_label }}">
+                <svg viewBox="0 0 320 80" preserveAspectRatio="none" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="sparklineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="rgba(14,165,233,0.6)" />
+                      <stop offset="100%" stop-color="rgba(14,165,233,0.05)" />
+                    </linearGradient>
+                  </defs>
+                  <path d="{{ status_card.sparkline_line_path }}" fill="none" stroke="rgba(14,165,233,0.85)" stroke-width="4" stroke-linecap="round" />
+                  <path d="{{ status_card.sparkline_fill_path }}" fill="url(#sparklineGradient)" opacity="0.35" />
+                </svg>
+              </div>
+              {% if status_card.note %}
+              <p class="status-card-note">{{ status_card.note }}</p>
+              {% endif %}
+              <div class="status-card-links" aria-label="Quick links">
+                {% for link in status_card.links %}
+                <a href="{{ link.href }}">
+                  <strong>{{ link.label }}</strong>
+                  <span>{{ link.description }}</span>
+                </a>
+                {% endfor %}
+              </div>
             </aside>
 
             <div class="portal-highlight-row" role="list">
@@ -508,6 +787,7 @@ def create_server():
 </html>
         """,
         user=session.get("user", "user"),
+        status_card=status_card,
     )
 
     # Convenience redirects
