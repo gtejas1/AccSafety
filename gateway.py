@@ -287,8 +287,11 @@ def create_server():
     .portal-overview {display:grid;gap:24px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
     .portal-primary {display:grid;gap:18px;align-content:start;justify-items:stretch;}
     .portal-secondary {display:flex;flex-direction:column;align-self:stretch;align-items:stretch;}
-    .portal-highlight-row {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;width:100%;}
-    .portal-highlight-card {background:#f8fafc;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:14px 16px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:grid;gap:6px;justify-items:center;text-align:center;min-height:110px;}
+    .portal-highlight-row {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;width:100%;justify-content:flex-start;}
+    .portal-highlight-card {background:#f8fafc;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:14px 16px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:grid;gap:6px;justify-items:center;text-align:center;min-height:110px;justify-self:start;width:100%;}
+    @media (min-width: 961px) {
+      .portal-highlight-card {width:50%;}
+    }
     .portal-highlight-card h3 {margin:0;font-size:0.95rem;font-weight:700;color:#0b1736;}
     .portal-highlight-list {margin:6px 0 0;padding:0;list-style:none;display:grid;gap:4px;width:100%;}
     .portal-highlight-item {display:flex;justify-content:space-between;font-size:0.9rem;color:#0f172a;}
@@ -401,10 +404,10 @@ def create_server():
 
             <aside class="portal-quick-card" aria-labelledby="quick-access-title">
               <h2 id="quick-access-title">Quick Access</h2>
-              <p class="portal-quick-card-section">Long Term Counts:</p>
+              <p class="portal-quick-card-section">Intersectional Counts (Real Time):</p>
               <ul class="portal-quick-links" aria-label="Long Term Counts">
-                <li><a href="/live/">Monitor Live Detection</a></li>
-                <li><a href="/vivacity/">Vivacity Analytics</a></li>
+                <li><a href="/live/">N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay </a>(Video Feed)</li>
+                <li><a href="/vivacity/">W Wells St & N 68th St Intersection </a>(API based)</li>
               </ul>
             </aside>
 
@@ -437,7 +440,7 @@ def create_server():
         <img src="/static/img/UWM_IPIT.png" alt="UWM IPIT logo" class="footer-logo footer-logo--uwm">
         <img src="/static/img/WisDOT.png" alt="WisDOT logo" class="footer-logo footer-logo--wisdot">
       </div>
-      <p class="footer-copyright">Copyright ©2025 All rights reserved.</p>
+      <p class="footer-copyright">Copyrights ©2025 All rights reserved.</p>
     </footer>
   </div>
 
