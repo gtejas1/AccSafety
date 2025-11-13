@@ -637,7 +637,7 @@ def create_server():
                   <h2 id="status-card-title" class="status-card-title">Real-time intersection counts</h2>
                   <p class="status-card-subtitle">Live camera &amp; API feeds</p>
                 </div>
-                <p class="status-card-updated">Last updated: <span data-live-global="updated">Loading…</span></p>
+                
               </div>
               <ul class="status-feed-list" aria-label="Live intersection status">
                 <li class="status-feed-item">
