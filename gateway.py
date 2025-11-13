@@ -445,7 +445,8 @@ def create_server():
       position:relative;z-index:2;
     }
     .cta-wrap {margin:8px 0 12px;position:relative;z-index:2;display:flex;align-items:center;gap:12px;}
-    .portal-metric {margin-top:4px;display:inline-flex;align-items:center;gap:14px;padding:12px 18px;border-radius:16px;
+    .portal-primary-cards {display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-items:stretch;}
+    .portal-metric {margin-top:0;display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:16px;width:100%;
       background:#ffffff;border:1px solid rgba(148,163,184,0.25);box-shadow:0 18px 34px rgba(15,23,42,0.08);
       font-feature-settings:"tnum" on;font-variant-numeric:tabular-nums;}
     .portal-metric-icon {width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;
@@ -459,12 +460,8 @@ def create_server():
     .portal-overview {display:grid;gap:24px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
     .portal-primary {display:grid;gap:18px;align-content:start;justify-items:stretch;}
     .portal-secondary {display:flex;flex-direction:column;align-self:stretch;align-items:stretch;gap:18px;}
-    .portal-side-stack {display:flex;flex-direction:column;gap:16px;}
     .portal-highlight-row {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;width:100%;justify-content:flex-start;}
-    .portal-highlight-card {background:#f8fafc;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:14px 16px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:grid;gap:6px;justify-items:center;text-align:center;min-height:110px;justify-self:start;width:100%;}
-    @media (min-width: 961px) {
-      .portal-highlight-card {width:50%;}
-    }
+    .portal-highlight-card {background:#f8fafc;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:16px 18px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:grid;gap:6px;justify-items:center;text-align:center;min-height:110px;width:100%;}
     .portal-highlight-card h3 {margin:0;font-size:0.95rem;font-weight:700;color:#0b1736;}
     .portal-highlight-list {margin:6px 0 0;padding:0;list-style:none;display:grid;gap:4px;width:100%;}
     .portal-highlight-item {display:flex;justify-content:space-between;font-size:0.9rem;color:#0f172a;}
@@ -642,28 +639,27 @@ def create_server():
               </span>
             </div>
 
-            <div class="portal-metric" aria-label="Count sites available">
-              <span class="portal-metric-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.94 0-7.29 3.04-7.29 7.08 0 3.18 2.22 6.63 6.56 10.26.49.43 1.24.43 1.73 0 4.34-3.63 6.56-7.08 6.56-10.26 0-4.04-3.35-7.08-7.56-7.08Zm0 10.65a3.57 3.57 0 1 1 0-7.14 3.57 3.57 0 0 1 0 7.14Z"/></svg>
-              </span>
-              <div class="portal-metric-text">
-                <span class="portal-metric-value">128</span>
-                <span class="portal-metric-label">Count sites</span>
+            <div class="portal-primary-cards">
+              <div class="portal-metric" aria-label="Count sites available">
+                <span class="portal-metric-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.94 0-7.29 3.04-7.29 7.08 0 3.18 2.22 6.63 6.56 10.26.49.43 1.24.43 1.73 0 4.34-3.63 6.56-7.08 6.56-10.26 0-4.04-3.35-7.08-7.56-7.08Zm0 10.65a3.57 3.57 0 1 1 0-7.14 3.57 3.57 0 0 1 0 7.14Z"/></svg>
+                </span>
+                <div class="portal-metric-text">
+                  <span class="portal-metric-value">128</span>
+                  <span class="portal-metric-label">Count sites</span>
+                </div>
               </div>
-            </div>
-          </div>
 
-          <div class="portal-secondary">
-            <div class="portal-side-stack" role="list">
-              <article class="portal-highlight-card" role="listitem">
+              <article class="portal-highlight-card">
                 <h3>Projects Included (collected/generated data)</h3>
                 <ul class="portal-highlight-list" aria-label="Projects included counts">
                   <li class="portal-highlight-item"><span>TRCC</span><strong>7</strong></li>
                   <li class="portal-highlight-item"><span>Others</span><strong>3</strong></li>
                 </ul>
               </article>
+            </div>
 
-              <aside class="portal-status-card" aria-labelledby="status-card-title" role="listitem">
+            <aside class="portal-status-card" aria-labelledby="status-card-title">
                 <div class="status-card-header">
                   <div>
                     <h2 id="status-card-title" class="status-card-title">Real-time intersection counts</h2>
@@ -723,8 +719,9 @@ def create_server():
                   </li>
                 </ul>
               </aside>
-            </div>
+          </div>
 
+          <div class="portal-secondary">
             <div class="portal-map-card">
               <img
                 class="portal-map-image"
