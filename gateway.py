@@ -18,11 +18,12 @@ from flask import (
 
 from pbc_trail_app import create_trail_dash
 from pbc_eco_app import create_eco_dash
-from vivacity_app import create_vivacity_dash, get_countline_counts
+from vivacity_app import create_vivacity_dash, get_countline_counts, _align_range_to_bucket
 from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore
+from flask import current_app
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -33,7 +34,7 @@ PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/
 
 SPARKLINE_CACHE_TTL = timedelta(seconds=55)
 _SPARKLINE_CACHE: Dict[str, object] = {"expires": None, "payload": None}
-DEFAULT_PORTAL_VIVACITY_IDS = ["54315", "54316"]
+DEFAULT_PORTAL_VIVACITY_IDS = ["54315", "54316", "54317", "54318"]
 
 
 def _portal_vivacity_ids() -> List[str]:
@@ -71,19 +72,30 @@ def _sparkline_payload(now_utc: datetime) -> Dict[str, object]:
             "last_updated": now_utc.isoformat().replace("+00:00", "Z"),
         }
 
+    # Use a 15-minute bucket and align the time range so Vivacity accepts it
+    bucket = "15m"
+    raw_from = now_utc - timedelta(hours=24)
+    aligned_from, aligned_to = _align_range_to_bucket(raw_from, now_utc, bucket)
+
     try:
         df = get_countline_counts(
             ids,
-            now_utc - timedelta(hours=24),
-            now_utc,
-            time_bucket="15m",
+            aligned_from,
+            aligned_to,
+            time_bucket=bucket,
             classes=["pedestrian", "cyclist"],
             fill_zeros=True,
         )
-    except Exception as exc:  # pragma: no cover - defensive against API failures
+    except Exception as exc:  # defensive against API failures
+        # Log full error on server, but only show a friendly message to users
+        try:
+            current_app.logger.warning("Vivacity sparkline fetch failed", exc_info=exc)
+        except Exception:
+            pass
+
         return {
             "status": "fallback",
-            "message": f"Vivacity API request failed: {exc}",
+            "message": "Live counts are temporarily unavailable. Showing a simulated 24-hour trend instead.",
             "points": _placeholder_series(now_utc),
             "last_updated": now_utc.isoformat().replace("+00:00", "Z"),
         }
@@ -97,33 +109,46 @@ def _sparkline_payload(now_utc: datetime) -> Dict[str, object]:
         }
 
     try:
+        # Clean and aggregate
         df = df.dropna(subset=["count"])
         if df.empty:
             raise ValueError("Vivacity counts contained no numeric values")
+
         df = df.groupby("timestamp", as_index=False)["count"].sum()
         df = df.sort_values("timestamp")
-    except Exception as exc:  # pragma: no cover - pandas defensive branch
+    except Exception as exc:  # pandas defensive branch
+        try:
+            current_app.logger.warning("Vivacity sparkline processing failed", exc_info=exc)
+        except Exception:
+            pass
+
         return {
             "status": "fallback",
-            "message": f"Unable to process Vivacity data: {exc}",
+            "message": "Unable to process live data. Showing a simulated 24-hour trend instead.",
             "points": _placeholder_series(now_utc),
             "last_updated": now_utc.isoformat().replace("+00:00", "Z"),
         }
 
     points: List[Dict[str, object]] = []
     last_ts: datetime | None = None
+
     for _, row in df.iterrows():
         ts = row["timestamp"]
+
+        # Normalise to timezone-aware UTC datetime
         if hasattr(ts, "to_pydatetime"):
             ts = ts.to_pydatetime()
         if ts.tzinfo is None:
             ts = ts.replace(tzinfo=timezone.utc)
         else:
             ts = ts.astimezone(timezone.utc)
+
         last_ts = ts
+
         count_val = float(row["count"]) if row["count"] is not None else None
         if count_val is None:
             continue
+
         points.append(
             {
                 "timestamp": ts.isoformat().replace("+00:00", "Z"),
