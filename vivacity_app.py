@@ -12,6 +12,8 @@ from dash import dcc, html, Input, Output, State, dash_table
 from dash.exceptions import PreventUpdate
 import dash_bootstrap_components as dbc
 
+from datetime import timezone
+
 from theme import card, dash_page
 
 # ── Config ─────────────────────────────────────────────────────
@@ -47,22 +49,34 @@ def http_get(path: str, params: Dict[str, str] | None = None) -> requests.Respon
     for attempt in range(1, MAX_RETRIES + 1):
         try:
             resp = session.get(url, headers=_headers(), params=params, timeout=REQUEST_TIMEOUT)
+
             if resp.status_code == 429:
                 ra = resp.headers.get("Retry-After")
                 wait = float(ra) if ra else (1.5 ** attempt)
                 time.sleep(wait + random.uniform(0, 0.5))
                 last_err = Exception(f"429: {resp.text[:300]}")
                 continue
+
             if resp.status_code >= 500:
                 time.sleep((1.5 ** attempt) + random.uniform(0, 0.5))
                 last_err = Exception(f"{resp.status_code}: {resp.text[:300]}")
                 continue
+
+            if 400 <= resp.status_code < 500:
+                # 👇 include response text so we can see Vivacity’s explanation
+                raise RuntimeError(
+                    f"{resp.status_code} {resp.reason}: {resp.text[:500]}"
+                )
+
             resp.raise_for_status()
             return resp
+
         except requests.RequestException as e:
             last_err = e
             time.sleep((1.5 ** attempt) + random.uniform(0, 0.5))
+
     raise RuntimeError(f"GET {path} failed after {MAX_RETRIES} retries: {last_err}")
+
 
 def _bucket_seconds(bucket: str) -> int:
     bucket = (bucket or "").strip().lower()
@@ -135,9 +149,11 @@ def get_countline_metadata() -> pd.DataFrame:
     df = df.sort_values("direction_label", kind="stable").reset_index(drop=True)
     return df
 
+
 def _iso_z(dt: datetime) -> str:
-    s = dt.astimezone(timezone.utc).isoformat()
-    return s if s.endswith("Z") else s.replace("+00:00", "Z")
+    # Force UTC & strip microseconds → 'YYYY-MM-DDTHH:MM:SSZ'
+    dt_utc = dt.astimezone(timezone.utc).replace(microsecond=0)
+    return dt_utc.isoformat().replace("+00:00", "Z")
 
 def get_countline_counts(
     countline_ids: List[str],
@@ -149,15 +165,20 @@ def get_countline_counts(
 ) -> pd.DataFrame:
     if not countline_ids:
         return pd.DataFrame(columns=["timestamp", "countline_id", "cls", "count"])
+
     params = {
-        "countline_ids": ",".join(map(str, countline_ids)),
+        # ✅ single comma-separated parameter instead of repeated keys
+        "countline_ids": ",".join(str(cid) for cid in countline_ids),
         "from": _iso_z(t_from),
         "to": _iso_z(t_to),
         "time_bucket": time_bucket,
-        "fill_zeros": str(bool(fill_zeros)).lower(),
+        "fill_zeros": "true" if fill_zeros else "false",
     }
+
     if classes:
-        params["classes"] = ",".join(classes)
+        # ✅ same idea for classes
+        params["classes"] = ",".join(str(c) for c in classes)
+
     payload = http_get("/countline/counts", params=params).json()
     rows = []
     for cid, arr in (payload or {}).items():
@@ -173,14 +194,22 @@ def get_countline_counts(
                             v = float(val)
                         except Exception:
                             v = None
-                        rows.append({"timestamp": ts, "countline_id": str(cid), "cls": str(cls), "count": v})
+                        rows.append({
+                            "timestamp": ts,
+                            "countline_id": str(cid),
+                            "cls": str(cls),
+                            "count": v,
+                        })
+
     df = pd.DataFrame(rows)
     if df.empty:
         return df
+
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
     df = df.groupby(["countline_id", "timestamp", "cls"], as_index=False)["count"].sum()
     df = df.sort_values(["countline_id", "timestamp", "cls"]).reset_index(drop=True)
     return df
+
 
 def _classes_for_mode(mode_value: str | None) -> List[str] | None:
     mode = str(mode_value or "").strip().lower()
@@ -246,7 +275,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
 
     # ── Layout: Left (filters) / Right (graph + table)
     app.layout = dash_page(
-        "Long Term Counts · Vivacity API",
+        "Long Term Counts · API",
         [
             dcc.Location(id="viv-url", refresh=False),
             dcc.Interval(id="viv-init", interval=200, n_intervals=0, max_intervals=1),

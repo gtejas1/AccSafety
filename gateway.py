@@ -1,24 +1,187 @@
 # gateway.py
 import json
+import math
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 from pathlib import Path
 from urllib.parse import quote
-from flask import Flask, render_template, render_template_string, redirect, request, session
+from flask import (
+    Flask,
+    jsonify,
+    render_template,
+    render_template_string,
+    redirect,
+    request,
+    session,
+)
 
 from pbc_trail_app import create_trail_dash
 from pbc_eco_app import create_eco_dash
-from vivacity_app import create_vivacity_dash
+from vivacity_app import create_vivacity_dash, get_countline_counts, _align_range_to_bucket
 from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore
+from flask import current_app
 
 
 BASE_DIR = Path(__file__).resolve().parent
 
 VALID_USERS = {"admin": "IPIT&uwm2024", "ipit": "IPIT&uwm2024"}
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
+
+
+SPARKLINE_CACHE_TTL = timedelta(seconds=55)
+_SPARKLINE_CACHE: Dict[str, object] = {"expires": None, "payload": None}
+DEFAULT_PORTAL_VIVACITY_IDS = ["54315", "54316", "54317", "54318"]
+
+
+def _portal_vivacity_ids() -> List[str]:
+    raw = os.environ.get("PORTAL_VIVACITY_IDS") or os.environ.get("VIVACITY_DEFAULT_IDS") or ""
+    ids = [item.strip() for item in raw.split(",") if item.strip()]
+    return ids or DEFAULT_PORTAL_VIVACITY_IDS
+
+
+def _placeholder_series(now_utc: datetime, points: int = 24) -> List[Dict[str, object]]:
+    series: List[Dict[str, object]] = []
+    if points <= 0:
+        return series
+    step = timedelta(hours=24) / points
+    for idx in range(points):
+        ts = now_utc - timedelta(hours=24) + step * (idx + 1)
+        angle = (idx / max(points - 1, 1)) * math.tau
+        baseline = 18 + 4 * math.sin(angle) + 2 * math.cos(angle * 2)
+        value = max(0.0, round(baseline, 2))
+        series.append(
+            {
+                "timestamp": ts.isoformat().replace("+00:00", "Z"),
+                "count": value,
+            }
+        )
+    return series
+
+
+def _sparkline_payload(now_utc: datetime) -> Dict[str, object]:
+    ids = _portal_vivacity_ids()
+    if not ids:
+        return {
+            "status": "error",
+            "message": "No Vivacity countline IDs configured. Set PORTAL_VIVACITY_IDS or VIVACITY_DEFAULT_IDS.",
+            "points": [],
+            "last_updated": now_utc.isoformat().replace("+00:00", "Z"),
+        }
+
+    # Use a 15-minute bucket and align the time range so Vivacity accepts it
+    bucket = "15m"
+    raw_from = now_utc - timedelta(hours=24)
+    aligned_from, aligned_to = _align_range_to_bucket(raw_from, now_utc, bucket)
+
+    try:
+        df = get_countline_counts(
+            ids,
+            aligned_from,
+            aligned_to,
+            time_bucket=bucket,
+            classes=["pedestrian", "cyclist"],
+            fill_zeros=True,
+        )
+    except Exception as exc:  # defensive against API failures
+        # Log full error on server, but only show a friendly message to users
+        try:
+            current_app.logger.warning("Vivacity sparkline fetch failed", exc_info=exc)
+        except Exception:
+            pass
+
+        return {
+            "status": "fallback",
+            "message": "Live counts are temporarily unavailable. Showing a simulated 24-hour trend instead.",
+            "points": _placeholder_series(now_utc),
+            "last_updated": now_utc.isoformat().replace("+00:00", "Z"),
+        }
+
+    if df.empty:
+        return {
+            "status": "fallback",
+            "message": "Vivacity API returned no data in the last 24 hours.",
+            "points": _placeholder_series(now_utc),
+            "last_updated": now_utc.isoformat().replace("+00:00", "Z"),
+        }
+
+    try:
+        # Clean and aggregate
+        df = df.dropna(subset=["count"])
+        if df.empty:
+            raise ValueError("Vivacity counts contained no numeric values")
+
+        df = df.groupby("timestamp", as_index=False)["count"].sum()
+        df = df.sort_values("timestamp")
+    except Exception as exc:  # pandas defensive branch
+        try:
+            current_app.logger.warning("Vivacity sparkline processing failed", exc_info=exc)
+        except Exception:
+            pass
+
+        return {
+            "status": "fallback",
+            "message": "Unable to process live data. Showing a simulated 24-hour trend instead.",
+            "points": _placeholder_series(now_utc),
+            "last_updated": now_utc.isoformat().replace("+00:00", "Z"),
+        }
+
+    points: List[Dict[str, object]] = []
+    last_ts: datetime | None = None
+
+    for _, row in df.iterrows():
+        ts = row["timestamp"]
+
+        # Normalise to timezone-aware UTC datetime
+        if hasattr(ts, "to_pydatetime"):
+            ts = ts.to_pydatetime()
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        else:
+            ts = ts.astimezone(timezone.utc)
+
+        last_ts = ts
+
+        count_val = float(row["count"]) if row["count"] is not None else None
+        if count_val is None:
+            continue
+
+        points.append(
+            {
+                "timestamp": ts.isoformat().replace("+00:00", "Z"),
+                "count": round(count_val, 2),
+            }
+        )
+
+    if not points:
+        return {
+            "status": "fallback",
+            "message": "Vivacity data was empty after processing.",
+            "points": _placeholder_series(now_utc),
+            "last_updated": now_utc.isoformat().replace("+00:00", "Z"),
+        }
+
+    return {
+        "status": "ok",
+        "points": points,
+        "last_updated": (last_ts or now_utc).isoformat().replace("+00:00", "Z"),
+    }
+
+
+def _get_cached_sparkline() -> Dict[str, object]:
+    now_utc = datetime.now(timezone.utc)
+    expires = _SPARKLINE_CACHE.get("expires")
+    payload = _SPARKLINE_CACHE.get("payload")
+    if isinstance(expires, datetime) and expires > now_utc and isinstance(payload, dict):
+        return payload
+
+    payload = _sparkline_payload(now_utc)
+    _SPARKLINE_CACHE["payload"] = payload
+    _SPARKLINE_CACHE["expires"] = now_utc + SPARKLINE_CACHE_TTL
+    return payload
 
 def load_whats_new_entries(limit: int = 15):
     """Load What's New entries from a manually curated JSON file."""
@@ -301,9 +464,75 @@ def create_server():
     .portal-map-image {flex:1;width:100%;height:100%;display:block;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);object-fit:cover;background:#e2e8f0;min-height:320px;}
     .portal-hero-text {justify-self:start;}
     .portal-hero-text h1 {margin:0;font-size:2.4rem;line-height:1.2;}
-    .portal-quick-card {padding:18px 20px;gap:10px;max-width:100%;width:100%;}
-    .portal-quick-links {margin:12px 0 0;display:grid;gap:8px;}
-    .portal-quick-links a {text-decoration:none;}
+    .portal-status-card {
+      background:#fff;
+      border-radius:20px;
+      border:1px solid rgba(15,23,42,0.12);
+      box-shadow:0 22px 40px rgba(15,23,42,0.12);
+      padding:22px 24px;
+      display:grid;
+      gap:18px;
+      align-content:start;
+      max-width:100%;
+      width:100%;
+    }
+    .status-card-header {
+      display:flex;
+      justify-content:space-between;
+      gap:16px;
+      align-items:flex-start;
+    }
+    .status-card-title {margin:0;font-size:1.15rem;font-weight:700;color:#0b1736;}
+    .status-card-subtitle {margin:4px 0 0;color:#475569;font-size:0.95rem;}
+    .status-card-updated {margin:0;margin-top:4px;font-size:0.85rem;color:#64748b;white-space:nowrap;}
+    .status-feed-list {list-style:none;margin:0;padding:0;display:grid;gap:12px;}
+    .status-feed-item {
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:16px;
+      align-items:center;
+      padding:16px 18px;
+      border-radius:18px;
+      background:linear-gradient(135deg,rgba(14,165,233,0.08),rgba(15,118,110,0.04));
+      border:1px solid rgba(148,163,184,0.22);
+    }
+    .status-feed-main {display:flex;align-items:center;gap:14px;min-width:0;}
+    .status-feed-icon {
+      width:42px;height:42px;border-radius:50%;
+      background:rgba(37,99,235,0.16);
+      display:flex;align-items:center;justify-content:center;
+      color:rgba(37,99,235,1);
+      flex-shrink:0;
+    }
+    .status-feed-icon svg {width:22px;height:22px;fill:currentColor;}
+    .status-feed-body {display:grid;gap:6px;min-width:0;}
+    .status-feed-title {display:flex;justify-content:space-between;gap:12px;align-items:flex-start;}
+    .status-feed-location {font-weight:650;font-size:1rem;color:#0b1736;line-height:1.3;}
+    .status-feed-area {color:#475569;font-weight:500;}
+    .status-feed-time {font-size:0.95rem;font-weight:600;color:var(--brand-primary);white-space:nowrap;}
+    .status-feed-meta {display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;color:#475569;font-size:0.9rem;}
+    .status-feed-badge {
+      background:rgba(37,99,235,0.12);
+      color:rgba(37,99,235,1);
+      font-weight:600;
+      padding:4px 10px;
+      border-radius:999px;
+      font-size:0.85rem;
+      letter-spacing:0.01em;
+    }
+    .status-feed-updated {font-size:0.85rem;color:#475569;}
+    .status-feed-extra {width:120px;display:flex;justify-content:flex-end;}
+    .status-feed-sparkline {width:120px;height:40px;display:block;}
+    .status-feed-sparkline path {stroke:rgba(37,99,235,1);stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;opacity:0.9;}
+    .status-feed-sparkline circle {fill:rgba(37,99,235,1);}
+    @media (max-width:720px) {
+      .status-card-header {flex-direction:column;align-items:flex-start;}
+      .status-card-updated {white-space:normal;}
+      .status-feed-item {grid-template-columns:1fr;}
+      .status-feed-extra {width:100%;justify-content:flex-start;}
+      .status-feed-sparkline {width:100%;max-width:180px;}
+      .status-feed-time {font-size:0.9rem;}
+    }
     @media (max-width: 960px) {
       .portal-overview {grid-template-columns:1fr;gap:20px;}
       .portal-secondary {display:grid;align-self:auto;}
@@ -402,12 +631,60 @@ def create_server():
               </span>
             </div>
 
-            <aside class="portal-quick-card" aria-labelledby="quick-access-title">
-              <h2 id="quick-access-title">Quick Access</h2>
-              <p class="portal-quick-card-section">Intersectional Counts (Real Time):</p>
-              <ul class="portal-quick-links" aria-label="Long Term Counts">
-                <li><a href="/live/">N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay </a>(Video Feed)</li>
-                <li><a href="/vivacity/">W Wells St & N 68th St Intersection </a>(API based)</li>
+            <aside class="portal-status-card" aria-labelledby="status-card-title">
+              <div class="status-card-header">
+                <div>
+                  <h2 id="status-card-title" class="status-card-title">Real-time intersection counts</h2>
+                  <p class="status-card-subtitle">Live camera &amp; API feeds</p>
+                </div>
+                <p class="status-card-updated">Last updated: <span data-live-global="updated">Loading…</span></p>
+              </div>
+              <ul class="status-feed-list" aria-label="Live intersection status">
+                <li class="status-feed-item">
+                  <div class="status-feed-main">
+                    <span class="status-feed-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.9 0-7.25 3-7.25 7.02 0 3.1 2.16 6.45 6.41 10.01.49.41 1.2.41 1.69 0 4.25-3.56 6.41-6.91 6.41-10.01 0-4.02-3.35-7.02-7.26-7.02Zm0 10.49a3.47 3.47 0 1 1 0-6.94 3.47 3.47 0 0 1 0 6.94Z"/></svg>
+                    </span>
+                    <div class="status-feed-body">
+                      <div class="status-feed-title">
+                        <span class="status-feed-location">N Santa Monica Blvd &amp; Silver Spring Dr <span class="status-feed-area">– Whitefish Bay</span></span>
+                        <span class="status-feed-time">just now</span>
+                      </div>
+                      <div class="status-feed-meta">
+                        <span class="status-feed-badge">LIVE – Video</span>
+                        <span class="status-feed-updated">Updated just now</span>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+                <li class="status-feed-item status-feed-item--live" data-live-card>
+                  <div class="status-feed-main">
+                    <span class="status-feed-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.9 0-7.25 3-7.25 7.02 0 3.1 2.16 6.45 6.41 10.01.49.41 1.2.41 1.69 0 4.25-3.56 6.41-6.91 6.41-10.01 0-4.02-3.35-7.02-7.26-7.02Zm0 10.49a3.47 3.47 0 1 1 0-6.94 3.47 3.47 0 0 1 0 6.94Z"/></svg>
+                    </span>
+                    <div class="status-feed-body">
+                      <div class="status-feed-title">
+                        <span class="status-feed-location">
+                          <a class="status-feed-link" href="/vivacity/" title="Open live Vivacity dashboard">
+                            W Wells St &amp; N 68th St <span class="status-feed-area">– Milwaukee</span>
+                          </a>
+                        </span>
+                        <span class="status-feed-time" data-live-time aria-live="polite">Fetching…</span>
+                      </div>
+                      <div class="status-feed-meta">
+                        <span class="status-feed-badge">LIVE – API</span>
+                        <span class="status-feed-updated" data-live-updated aria-live="polite">Fetching live counts…</span>
+                      </div>
+                      <div class="status-feed-message" data-live-message aria-live="polite"></div>
+                    </div>
+                  </div>
+                  <div class="status-feed-extra" aria-hidden="true">
+                    <svg class="status-feed-sparkline" viewBox="0 0 120 40" preserveAspectRatio="none" data-sparkline>
+                      <path d="M4 30" />
+                      <circle cx="4" cy="30" r="3" />
+                    </svg>
+                  </div>
+                </li>
               </ul>
             </aside>
 
@@ -456,6 +733,136 @@ def create_server():
       </div>
     </div>
   </div>
+
+  <script>
+    (function(){
+      const card = document.querySelector('[data-live-card]');
+      if (!card) { return; }
+
+      const API_URL = '/api/v1/vivacity/sparkline';
+      const REFRESH_MS = 60_000;
+      const UPDATE_MS = 30_000;
+
+      const sparkline = card.querySelector('[data-sparkline]');
+      const pathEl = sparkline ? sparkline.querySelector('path') : null;
+      const dotEl = sparkline ? sparkline.querySelector('circle') : null;
+      const timeEl = card.querySelector('[data-live-time]');
+      const updatedEl = card.querySelector('[data-live-updated]');
+      const messageEl = card.querySelector('[data-live-message]');
+      const globalUpdatedEl = document.querySelector('[data-live-global="updated"]');
+
+      let lastTimestampIso = null;
+
+      function isoToDate(iso){
+        if (!iso) { return null; }
+        const d = new Date(iso);
+        return Number.isNaN(d.getTime()) ? null : d;
+      }
+
+      function formatRelative(date){
+        if (!date) { return '—'; }
+        const now = new Date();
+        const diffMs = Math.max(0, now.getTime() - date.getTime());
+        const seconds = diffMs / 1000;
+        if (seconds < 45) { return 'just now'; }
+        if (seconds < 90) { return '1 min ago'; }
+        const minutes = seconds / 60;
+        if (minutes < 60) { return `${Math.round(minutes)} min ago`; }
+        const hours = minutes / 60;
+        if (hours < 24) {
+          const rounded = Math.round(hours);
+          return `${rounded} hr${rounded === 1 ? '' : 's'} ago`;
+        }
+        const days = Math.round(hours / 24);
+        return `${days} day${days === 1 ? '' : 's'} ago`;
+      }
+
+      function updateRelativeLabels(){
+        const tsDate = isoToDate(lastTimestampIso);
+        if (timeEl) {
+          timeEl.textContent = formatRelative(tsDate);
+        }
+        if (updatedEl) {
+          const rel = formatRelative(tsDate);
+          updatedEl.textContent = rel === '—' ? 'Awaiting live update…' : `Updated ${rel}`;
+        }
+        if (globalUpdatedEl) {
+          globalUpdatedEl.textContent = formatRelative(tsDate);
+        }
+      }
+
+      function drawSparkline(points){
+        if (!sparkline || !pathEl || !dotEl || !points.length) { return; }
+        const width = 120;
+        const height = 40;
+        const padding = 4;
+        const usableWidth = width - padding * 2;
+        const usableHeight = height - padding * 2;
+        const counts = points.map((p) => {
+          const val = typeof p.count === 'number' ? p.count : Number(p.count);
+          return Number.isFinite(val) ? val : 0;
+        });
+        const min = Math.min(...counts);
+        const max = Math.max(...counts);
+        const spread = max - min || 1;
+        const step = points.length > 1 ? usableWidth / (points.length - 1) : 0;
+        const coords = points.map((point, idx) => {
+          const val = counts[idx];
+          const x = padding + idx * step;
+          const normalized = spread === 0 ? 0.5 : (val - min) / spread;
+          const y = padding + (1 - normalized) * usableHeight;
+          return [x, y];
+        });
+        const pathData = coords
+          .map((coord, idx) => `${idx === 0 ? 'M' : 'L'}${coord[0].toFixed(2)} ${coord[1].toFixed(2)}`)
+          .join(' ');
+        pathEl.setAttribute('d', pathData || '');
+        const last = coords[coords.length - 1];
+        if (last) {
+          dotEl.setAttribute('cx', last[0].toFixed(2));
+          dotEl.setAttribute('cy', last[1].toFixed(2));
+          dotEl.setAttribute('r', 3.2);
+        }
+      }
+
+      async function fetchData(){
+        card.setAttribute('data-live-loading', '1');
+        try {
+          const response = await fetch(API_URL, { cache: 'no-store' });
+          const payload = await response.json();
+          lastTimestampIso = payload.last_updated || null;
+          if (Array.isArray(payload.points) && payload.points.length) {
+            drawSparkline(payload.points);
+          }
+
+          const state = payload.status || 'error';
+          card.dataset.liveState = state;
+
+          if (messageEl) {
+            const hasMessage = Boolean(payload.message);
+            messageEl.textContent = hasMessage ? payload.message : '';
+            messageEl.classList.toggle('status-feed-message--visible', hasMessage);
+            messageEl.classList.toggle('status-feed-message--error', state === 'error');
+          }
+        } catch (err) {
+          lastTimestampIso = null;
+          card.dataset.liveState = 'error';
+          if (messageEl) {
+            messageEl.textContent = 'Unable to reach live data feed.';
+            messageEl.classList.add('status-feed-message--visible', 'status-feed-message--error');
+          }
+        } finally {
+          card.removeAttribute('data-live-loading');
+          updateRelativeLabels();
+        }
+      }
+
+      updateRelativeLabels();
+      fetchData();
+      setInterval(fetchData, REFRESH_MS);
+      setInterval(updateRelativeLabels, UPDATE_MS);
+    })();
+  </script>
 
   <script>
     (function(){
@@ -509,6 +916,13 @@ def create_server():
         """,
         user=session.get("user", "user"),
     )
+
+    @server.get("/api/v1/vivacity/sparkline")
+    def api_vivacity_sparkline():
+        payload = _get_cached_sparkline()
+        status = payload.get("status")
+        http_code = 200 if status in {"ok", "fallback"} else 503
+        return jsonify(payload), http_code
 
     # Convenience redirects
     for p in ["trail","eco","vivacity","live","wisdot","se-wi-trails"]:
