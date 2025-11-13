@@ -149,10 +149,11 @@ def get_countline_counts(
 ) -> pd.DataFrame:
     if not countline_ids:
         return pd.DataFrame(columns=["timestamp", "countline_id", "cls", "count"])
+    aligned_from, aligned_to = _align_range_to_bucket(t_from, t_to, time_bucket)
     params = {
         "countline_ids": ",".join(map(str, countline_ids)),
-        "from": _iso_z(t_from),
-        "to": _iso_z(t_to),
+        "from": _iso_z(aligned_from),
+        "to": _iso_z(aligned_to),
         "time_bucket": time_bucket,
         "fill_zeros": str(bool(fill_zeros)).lower(),
     }
