@@ -301,9 +301,75 @@ def create_server():
     .portal-map-image {flex:1;width:100%;height:100%;display:block;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);object-fit:cover;background:#e2e8f0;min-height:320px;}
     .portal-hero-text {justify-self:start;}
     .portal-hero-text h1 {margin:0;font-size:2.4rem;line-height:1.2;}
-    .portal-quick-card {padding:18px 20px;gap:10px;max-width:100%;width:100%;}
-    .portal-quick-links {margin:12px 0 0;display:grid;gap:8px;}
-    .portal-quick-links a {text-decoration:none;}
+    .portal-status-card {
+      background:#fff;
+      border-radius:20px;
+      border:1px solid rgba(15,23,42,0.12);
+      box-shadow:0 22px 40px rgba(15,23,42,0.12);
+      padding:22px 24px;
+      display:grid;
+      gap:18px;
+      align-content:start;
+      max-width:100%;
+      width:100%;
+    }
+    .status-card-header {
+      display:flex;
+      justify-content:space-between;
+      gap:16px;
+      align-items:flex-start;
+    }
+    .status-card-title {margin:0;font-size:1.15rem;font-weight:700;color:#0b1736;}
+    .status-card-subtitle {margin:4px 0 0;color:#475569;font-size:0.95rem;}
+    .status-card-updated {margin:0;margin-top:4px;font-size:0.85rem;color:#64748b;white-space:nowrap;}
+    .status-feed-list {list-style:none;margin:0;padding:0;display:grid;gap:12px;}
+    .status-feed-item {
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:16px;
+      align-items:center;
+      padding:16px 18px;
+      border-radius:18px;
+      background:linear-gradient(135deg,rgba(14,165,233,0.08),rgba(15,118,110,0.04));
+      border:1px solid rgba(148,163,184,0.22);
+    }
+    .status-feed-main {display:flex;align-items:center;gap:14px;min-width:0;}
+    .status-feed-icon {
+      width:42px;height:42px;border-radius:50%;
+      background:rgba(37,99,235,0.16);
+      display:flex;align-items:center;justify-content:center;
+      color:rgba(37,99,235,1);
+      flex-shrink:0;
+    }
+    .status-feed-icon svg {width:22px;height:22px;fill:currentColor;}
+    .status-feed-body {display:grid;gap:6px;min-width:0;}
+    .status-feed-title {display:flex;justify-content:space-between;gap:12px;align-items:flex-start;}
+    .status-feed-location {font-weight:650;font-size:1rem;color:#0b1736;line-height:1.3;}
+    .status-feed-area {color:#475569;font-weight:500;}
+    .status-feed-time {font-size:0.95rem;font-weight:600;color:var(--brand-primary);white-space:nowrap;}
+    .status-feed-meta {display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;color:#475569;font-size:0.9rem;}
+    .status-feed-badge {
+      background:rgba(37,99,235,0.12);
+      color:rgba(37,99,235,1);
+      font-weight:600;
+      padding:4px 10px;
+      border-radius:999px;
+      font-size:0.85rem;
+      letter-spacing:0.01em;
+    }
+    .status-feed-updated {font-size:0.85rem;color:#475569;}
+    .status-feed-extra {width:120px;display:flex;justify-content:flex-end;}
+    .status-feed-sparkline {width:120px;height:40px;display:block;}
+    .status-feed-sparkline path {stroke:rgba(37,99,235,1);stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;opacity:0.9;}
+    .status-feed-sparkline circle {fill:rgba(37,99,235,1);}
+    @media (max-width:720px) {
+      .status-card-header {flex-direction:column;align-items:flex-start;}
+      .status-card-updated {white-space:normal;}
+      .status-feed-item {grid-template-columns:1fr;}
+      .status-feed-extra {width:100%;justify-content:flex-start;}
+      .status-feed-sparkline {width:100%;max-width:180px;}
+      .status-feed-time {font-size:0.9rem;}
+    }
     @media (max-width: 960px) {
       .portal-overview {grid-template-columns:1fr;gap:20px;}
       .portal-secondary {display:grid;align-self:auto;}
@@ -402,12 +468,55 @@ def create_server():
               </span>
             </div>
 
-            <aside class="portal-quick-card" aria-labelledby="quick-access-title">
-              <h2 id="quick-access-title">Quick Access</h2>
-              <p class="portal-quick-card-section">Intersectional Counts (Real Time):</p>
-              <ul class="portal-quick-links" aria-label="Long Term Counts">
-                <li><a href="/live/">N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay </a>(Video Feed)</li>
-                <li><a href="/vivacity/">W Wells St & N 68th St Intersection </a>(API based)</li>
+            <aside class="portal-status-card" aria-labelledby="status-card-title">
+              <div class="status-card-header">
+                <div>
+                  <h2 id="status-card-title" class="status-card-title">Real-time intersection counts</h2>
+                  <p class="status-card-subtitle">Live camera &amp; API feeds</p>
+                </div>
+                <p class="status-card-updated">Last updated: 2 min ago</p>
+              </div>
+              <ul class="status-feed-list" aria-label="Live intersection status">
+                <li class="status-feed-item">
+                  <div class="status-feed-main">
+                    <span class="status-feed-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.9 0-7.25 3-7.25 7.02 0 3.1 2.16 6.45 6.41 10.01.49.41 1.2.41 1.69 0 4.25-3.56 6.41-6.91 6.41-10.01 0-4.02-3.35-7.02-7.26-7.02Zm0 10.49a3.47 3.47 0 1 1 0-6.94 3.47 3.47 0 0 1 0 6.94Z"/></svg>
+                    </span>
+                    <div class="status-feed-body">
+                      <div class="status-feed-title">
+                        <span class="status-feed-location">N Santa Monica Blvd &amp; Silver Spring Dr <span class="status-feed-area">– Whitefish Bay</span></span>
+                        <span class="status-feed-time">just now</span>
+                      </div>
+                      <div class="status-feed-meta">
+                        <span class="status-feed-badge">LIVE – Video</span>
+                        <span class="status-feed-updated">Updated just now</span>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+                <li class="status-feed-item">
+                  <div class="status-feed-main">
+                    <span class="status-feed-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.9 0-7.25 3-7.25 7.02 0 3.1 2.16 6.45 6.41 10.01.49.41 1.2.41 1.69 0 4.25-3.56 6.41-6.91 6.41-10.01 0-4.02-3.35-7.02-7.26-7.02Zm0 10.49a3.47 3.47 0 1 1 0-6.94 3.47 3.47 0 0 1 0 6.94Z"/></svg>
+                    </span>
+                    <div class="status-feed-body">
+                      <div class="status-feed-title">
+                        <span class="status-feed-location">W Wells St &amp; N 68th St <span class="status-feed-area">– Milwaukee</span></span>
+                        <span class="status-feed-time">30 sec. ago</span>
+                      </div>
+                      <div class="status-feed-meta">
+                        <span class="status-feed-badge">LIVE – API</span>
+                        <span class="status-feed-updated">Updated 30 sec. ago</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="status-feed-extra" aria-hidden="true">
+                    <svg class="status-feed-sparkline" viewBox="0 0 120 40" preserveAspectRatio="none">
+                      <path d="M4 30 L24 18 L44 26 L64 12 L84 20 L104 8" />
+                      <circle cx="104" cy="8" r="4" />
+                    </svg>
+                  </div>
+                </li>
               </ul>
             </aside>
 
