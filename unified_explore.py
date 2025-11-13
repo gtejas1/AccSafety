@@ -313,141 +313,6 @@ def _build_view_link(row: pd.Series) -> str:
     return "[Open](https://uwm.edu/ipit/wisconsin-pedestrian-volume-model/)"
 
 
-def _build_summary_dashboard_content(df: pd.DataFrame) -> list:
-    df_counts = df.copy()
-    if "Total counts" not in df_counts.columns or df_counts.empty:
-        df_counts = pd.DataFrame(columns=["Location", "Total counts"])
-    else:
-        df_counts["Total counts"] = pd.to_numeric(df_counts["Total counts"], errors="coerce")
-        df_counts = df_counts.dropna(subset=["Total counts"])
-        df_counts["Location"] = df_counts["Location"].fillna("Unknown location").astype(str)
-
-    if df_counts.empty:
-        peak_day_volume = None
-        average_daily = None
-        total_volume = None
-    else:
-        peak_day_volume = float(df_counts["Total counts"].max())
-        average_daily = float(df_counts["Total counts"].mean())
-        total_volume = float(df_counts["Total counts"].sum())
-
-    per_location = (
-        df_counts.groupby("Location", as_index=False)["Total counts"].sum()
-        if not df_counts.empty
-        else pd.DataFrame(columns=["Location", "Total counts"])
-    )
-    per_location = per_location.sort_values("Total counts", ascending=False)
-    top_locations = per_location.head(5)
-
-    def _fmt_int(value: float | int | None) -> str:
-        if value is None or pd.isna(value):
-            return "—"
-        return f"{int(round(float(value))):,}"
-
-    def _fmt_float(value: float | int | None) -> str:
-        if value is None or pd.isna(value):
-            return "—"
-        return f"{float(value):,.1f}"
-
-    metrics = [
-        ("Peak day volume", _fmt_int(peak_day_volume)),
-        ("Average daily count", _fmt_float(average_daily)),
-        ("Total recorded volume", _fmt_int(total_volume)),
-    ]
-
-    metrics_row = dbc.Row(
-        [
-            dbc.Col(
-                html.Div(
-                    [
-                        html.Div(label, className="app-muted small text-uppercase"),
-                        html.Div(value, className="fw-semibold fs-4"),
-                    ],
-                    className="p-3 bg-light border rounded h-100",
-                ),
-                xs=12,
-                md=4,
-            )
-            for label, value in metrics
-        ],
-        className="g-3",
-    )
-
-    pie_fig = go.Figure()
-    if not per_location.empty:
-        pie_fig.add_trace(
-            go.Pie(
-                labels=per_location["Location"],
-                values=per_location["Total counts"],
-                hole=0.55,
-                sort=False,
-                hovertemplate="%{label}: %{value:,} (%{percent:.1%})<extra></extra>",
-                textinfo="percent",
-                textposition="inside",
-            )
-        )
-    pie_fig.update_layout(
-        margin=dict(t=10, b=10, l=10, r=10),
-        showlegend=False,
-        height=340,
-    )
-    if per_location.empty:
-        pie_fig.add_annotation(
-            text="No data available",
-            showarrow=False,
-            font=dict(color="#94a3b8", size=16),
-            x=0.5,
-            y=0.5,
-        )
-
-    if top_locations.empty:
-        top_list_items = [
-            html.Li("No locations available", className="app-muted mb-0"),
-        ]
-    else:
-        top_list_items = [
-            html.Li(
-                [
-                    html.Span(row["Location"], className="me-2"),
-                    html.Span(_fmt_int(row["Total counts"]), className="fw-semibold"),
-                ],
-                className="d-flex justify-content-between align-items-center mb-2",
-            )
-            for _, row in top_locations.iterrows()
-        ]
-
-    summary_content = [
-        html.H3("Dataset Snapshot", className="mb-3"),
-        metrics_row,
-        dbc.Row(
-            [
-                dbc.Col(
-                    [
-                        html.H5("Location distribution", className="mb-3"),
-                        dcc.Graph(
-                            figure=pie_fig,
-                            config={"displayModeBar": False},
-                            style={"minHeight": "340px"},
-                        ),
-                    ],
-                    xs=12,
-                    lg=7,
-                ),
-                dbc.Col(
-                    [
-                        html.H5("Top locations", className="mb-3"),
-                        html.Ul(top_list_items, className="list-unstyled mb-0"),
-                    ],
-                    xs=12,
-                    lg=5,
-                ),
-            ],
-            className="g-4 align-items-start",
-        ),
-    ]
-
-    return summary_content
-
 def _opts(vals) -> list[dict]:
     uniq = sorted({v for v in vals if isinstance(v, str) and v.strip()})
     return [{"label": v, "value": v} for v in uniq]
@@ -732,9 +597,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
     # Map (right, top)
     map_card = card([html.Div(id="pf-map", children=[])], class_name="mb-3")
-
-    summary_block = card([html.Div(id="pf-summary")], class_name="mb-3")
-
     # Table (right, bottom)
     table_block = card(
         [
@@ -778,11 +640,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     dbc.Col(
                         [
                             html.Div(id="wrap-map", children=[map_card], style={"display": "none"}),
-                            html.Div(
-                                id="wrap-summary",
-                                children=[summary_block],
-                                style={"display": "none"},
-                            ),
                             dcc.Loading(
                                 id="pf-wrap-loader",
                                 type="default",
@@ -882,14 +739,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     @app.callback(
         Output("pf-map", "children"),     # 0 map content
         Output("wrap-map", "style"),      # 1 map card visibility
-        Output("pf-summary", "children"), # 2 summary content
-        Output("wrap-summary", "style"),  # 3 summary visibility
-        Output("pf-table", "data"),       # 4 table rows
-        Output("pf-table", "hidden_columns"),  # 5 hidden columns
-        Output("wrap-table", "style"),    # 6 table card visibility
-        Output("wrap-results", "style"),  # 7 (sentinel) keep as block once ready
-        Output("pf-desc", "children"),    # 8 description content
-        Output("wrap-desc", "style"),     # 9 description visibility
+        Output("pf-table", "data"),       # 2 table rows
+        Output("pf-table", "hidden_columns"),  # 3 hidden columns
+        Output("wrap-table", "style"),    # 4 table card visibility
+        Output("wrap-results", "style"),  # 5 (sentinel) keep as block once ready
+        Output("pf-desc", "children"),    # 6 description content
+        Output("wrap-desc", "style"),     # 7 description visibility
         Input("pf-mode", "value"),
         Input("pf-facility", "value"),
         Input("pf-source", "value"),
@@ -900,8 +755,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         has_all = all([mode, facility, source])
         if not has_all:
             return (
-                [],
-                {"display": "none"},
                 [],
                 {"display": "none"},
                 [],
@@ -968,13 +821,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
         all_modeled = not source_types.empty and source_types.eq("modeled").all()
         hidden_columns = ["View"] if all_modeled else []
-
-        if df.empty or all_modeled:
-            summary_children = []
-            summary_style = {"display": "none"}
-        else:
-            summary_children = _build_summary_dashboard_content(df)
-            summary_style = {"display": "block"}
 
         # --- Descriptions by source selection ---
         mode_val = (mode or "").strip().lower()
@@ -1053,8 +899,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             return (
                 map_children,
                 map_style,
-                summary_children,
-                summary_style,
                 [],
                 hidden_columns,
                 {"display": "none"},
@@ -1069,8 +913,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         return (
             map_children,
             map_style,
-            summary_children,
-            summary_style,
             rows,
             hidden_columns,
             {"display": "block"},
