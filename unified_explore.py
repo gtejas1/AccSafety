@@ -1041,10 +1041,16 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             [
                 html.P(
                     [
-                        "The Pilot Pedestrian and Bicycle Count Program, led by UWM in collaboration with WisDOT, is a regional effort focused on Southeast Wisconsin to establish the foundation for a future statewide non-motorist counting network. ",
-                        "It integrates new and historical data to improve the accuracy and availability of pedestrian and bicycle volume information. ",
+                        "The Pilot Pedestrian and Bicycle Count Program, led by UWM IPIT in collaboration with WisDOT, is a regional effort focused on Southeast Wisconsin to establish the foundation for a future statewide non-motorist counting network. ",
                         "Using technologies like Axis radar-video cameras, Viva V2 sensors, and Eco-Counter units, the program gathers data from diverse environments. ",
-                        "This dashboard visualizes the results to support safer, more equitable, and sustainable transportation planning across Wisconsin."
+                        "For information regarding the source of the data, please refer to the project page ",
+                        html.A(
+                            "“Pilot Wisconsin Pedestrian and Bicycle Count Program”",
+                            href="https://uwm.edu/ipit/projects/pilot-wisconsin-pedestrian-and-bicycle-count-program/",
+                            target="_blank",
+                            rel="noopener noreferrer",
+                        ),
+                        ".",
                     ],
                     className="app-muted",
                     style={"margin": "0"},
