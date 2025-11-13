@@ -637,7 +637,7 @@ def create_server():
                   <h2 id="status-card-title" class="status-card-title">Real-time intersection counts</h2>
                   <p class="status-card-subtitle">Live camera &amp; API feeds</p>
                 </div>
-                <p class="status-card-updated">Last updated: <span data-live-global="updated">Loading…</span></p>
+                
               </div>
               <ul class="status-feed-list" aria-label="Live intersection status">
                 <li class="status-feed-item">
@@ -647,7 +647,11 @@ def create_server():
                     </span>
                     <div class="status-feed-body">
                       <div class="status-feed-title">
-                        <span class="status-feed-location">N Santa Monica Blvd &amp; Silver Spring Dr <span class="status-feed-area">– Whitefish Bay</span></span>
+                        <span class="status-feed-location">
+                          <a class="status-feed-link" href="/live/" title="Open live detection dashboard">
+                            N Santa Monica Blvd &amp; Silver Spring Dr <span class="status-feed-area">– Whitefish Bay</span>
+                          </a>
+                        </span>
                         <span class="status-feed-time">just now</span>
                       </div>
                       <div class="status-feed-meta">
@@ -669,11 +673,11 @@ def create_server():
                             W Wells St &amp; N 68th St <span class="status-feed-area">– Milwaukee</span>
                           </a>
                         </span>
-                        <span class="status-feed-time" data-live-time aria-live="polite">Fetching…</span>
+                        <span class="status-feed-time" data-live-time data-live-static aria-live="polite">just now</span>
                       </div>
                       <div class="status-feed-meta">
                         <span class="status-feed-badge">LIVE – API</span>
-                        <span class="status-feed-updated" data-live-updated aria-live="polite">Fetching live counts…</span>
+                        <span class="status-feed-updated" data-live-updated data-live-static aria-live="polite">Updated just now</span>
                       </div>
                       <div class="status-feed-message" data-live-message aria-live="polite"></div>
                     </div>
@@ -750,6 +754,8 @@ def create_server():
       const updatedEl = card.querySelector('[data-live-updated]');
       const messageEl = card.querySelector('[data-live-message]');
       const globalUpdatedEl = document.querySelector('[data-live-global="updated"]');
+      const timeIsStatic = timeEl ? timeEl.hasAttribute('data-live-static') : false;
+      const updatedIsStatic = updatedEl ? updatedEl.hasAttribute('data-live-static') : false;
 
       let lastTimestampIso = null;
 
@@ -780,11 +786,15 @@ def create_server():
       function updateRelativeLabels(){
         const tsDate = isoToDate(lastTimestampIso);
         if (timeEl) {
-          timeEl.textContent = formatRelative(tsDate);
+          timeEl.textContent = timeIsStatic ? 'just now' : formatRelative(tsDate);
         }
         if (updatedEl) {
-          const rel = formatRelative(tsDate);
-          updatedEl.textContent = rel === '—' ? 'Awaiting live update…' : `Updated ${rel}`;
+          if (updatedIsStatic) {
+            updatedEl.textContent = 'Updated just now';
+          } else {
+            const rel = formatRelative(tsDate);
+            updatedEl.textContent = rel === '—' ? 'Awaiting live update…' : `Updated ${rel}`;
+          }
         }
         if (globalUpdatedEl) {
           globalUpdatedEl.textContent = formatRelative(tsDate);
