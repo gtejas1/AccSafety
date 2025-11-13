@@ -327,43 +327,128 @@ body {
   border: 1px solid rgba(11, 102, 195, 0.18);
   border-radius: 18px;
   box-shadow: 0 18px 36px rgba(15, 23, 42, 0.14);
-  padding: 20px 24px;
-  display: grid;
-  gap: 12px;
-  align-content: start;
+  padding: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.status-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
 }
 
 .portal-quick-card h2 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   color: var(--brand-dark);
 }
 
-.portal-quick-card-section {
-  margin: 0;
+.status-card-location {
+  margin: 4px 0 0;
   font-size: 0.95rem;
-  font-weight: 600;
   color: var(--brand-dark);
 }
 
-.portal-quick-links {
-  list-style: none;
-  padding: 0;
+.status-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: rgba(11, 102, 195, 0.16);
+  color: #0b1736;
+}
+
+.status-badge--live {
+  background: #16a34a;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(22, 163, 74, 0.26);
+}
+
+.status-badge--video {
+  background: rgba(59, 130, 246, 0.16);
+  color: #1d4ed8;
+}
+
+.status-badge--api {
+  background: rgba(56, 189, 248, 0.16);
+  color: #0284c7;
+}
+
+.status-card-updated {
   margin: 0;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.status-card-updated time {
+  font-weight: 600;
+  color: #0b1736;
+}
+
+.status-card-sparkline {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 84px;
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px dashed rgba(100, 116, 139, 0.4);
+}
+
+.status-card-sparkline svg {
+  width: 100%;
+  height: 100%;
+}
+
+.status-card-links {
   display: grid;
   gap: 8px;
+  margin: 0;
 }
 
-.portal-quick-links a {
-  color: var(--brand-primary);
+.status-card-links a {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(148, 163, 184, 0.28);
   text-decoration: none;
-  font-weight: 600;
+  color: #0f172a;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+.status-card-links a strong {
   font-size: 0.95rem;
 }
 
-.portal-quick-links a:hover,
-.portal-quick-links a:focus {
-  text-decoration: underline;
+.status-card-links a span {
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.status-card-links a:hover,
+.status-card-links a:focus {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+  text-decoration: none;
 }
 
 .portal-map-card {

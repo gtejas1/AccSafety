@@ -264,6 +264,31 @@ def create_server():
     # ---- Portal Home ----
     @server.route("/")
     def home():
+        status_card = {
+            "title": "Network Status",
+            "location": "Whitefish Bay · N Santa Monica Blvd & Silver Spring Dr",
+            "badges": [
+                {"label": "LIVE", "kind": "live"},
+                {"label": "Video", "kind": "video"},
+                {"label": "API", "kind": "api"},
+            ],
+            "last_updated_display": "June 1, 2024 · 09:30 AM CDT (placeholder)",
+            "last_updated_iso": "2024-06-01T09:30:00-05:00",
+            "sparkline_label": "Placeholder sparkline showing pedestrian counts for the last 12 hours",
+            "links": [
+                {
+                    "href": "/live/",
+                    "label": "View live video feed",
+                    "description": "N Santa Monica Blvd & Silver Spring Dr",
+                },
+                {
+                    "href": "/vivacity/",
+                    "label": "Open API dashboard",
+                    "description": "W Wells St & N 68th St Intersection",
+                },
+            ],
+        }
+
         return render_template_string("""
 <!doctype html>
 <html lang="en">
@@ -301,9 +326,24 @@ def create_server():
     .portal-map-image {flex:1;width:100%;height:100%;display:block;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);object-fit:cover;background:#e2e8f0;min-height:320px;}
     .portal-hero-text {justify-self:start;}
     .portal-hero-text h1 {margin:0;font-size:2.4rem;line-height:1.2;}
-    .portal-quick-card {padding:18px 20px;gap:10px;max-width:100%;width:100%;}
-    .portal-quick-links {margin:12px 0 0;display:grid;gap:8px;}
-    .portal-quick-links a {text-decoration:none;}
+    .portal-quick-card {display:flex;flex-direction:column;gap:16px;padding:22px 24px;background:linear-gradient(135deg,rgba(11,102,195,0.08),rgba(14,165,233,0.04));border:1px solid rgba(11,102,195,0.18);border-radius:18px;box-shadow:0 18px 36px rgba(15,23,42,0.14);max-width:100%;width:100%;}
+    .status-card-header {display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap;}
+    .portal-quick-card h2 {margin:0;font-size:1.05rem;color:#0b1736;}
+    .status-card-location {margin:4px 0 0;font-size:0.95rem;color:#0f172a;}
+    .status-card-badges {display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+    .status-badge {display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-size:0.8rem;font-weight:700;letter-spacing:0.02em;text-transform:uppercase;background:rgba(11,102,195,0.16);color:#0b1736;}
+    .status-badge--live {background:#16a34a;color:#fff;box-shadow:0 8px 18px rgba(22,163,74,0.26);}
+    .status-badge--video {background:rgba(59,130,246,0.16);color:#1d4ed8;}
+    .status-badge--api {background:rgba(56,189,248,0.16);color:#0284c7;}
+    .status-card-updated {margin:0;font-size:0.85rem;color:#475569;}
+    .status-card-updated time {font-weight:600;color:#0b1736;}
+    .status-card-sparkline {position:relative;display:flex;align-items:center;justify-content:center;height:84px;border-radius:12px;background:rgba(148,163,184,0.12);border:1px dashed rgba(100,116,139,0.4);}
+    .status-card-sparkline svg {width:100%;height:100%;}
+    .status-card-links {display:grid;gap:8px;margin:0;}
+    .status-card-links a {display:flex;flex-direction:column;padding:10px 14px;border-radius:12px;background:#fff;border:1px solid rgba(148,163,184,0.28);text-decoration:none;color:#0f172a;transition:transform 0.12s ease, box-shadow 0.12s ease;}
+    .status-card-links a strong {font-size:0.95rem;}
+    .status-card-links a span {font-size:0.85rem;color:#475569;}
+    .status-card-links a:hover,.status-card-links a:focus {transform:translateY(-1px);box-shadow:0 12px 24px rgba(15,23,42,0.12);text-decoration:none;}
     @media (max-width: 960px) {
       .portal-overview {grid-template-columns:1fr;gap:20px;}
       .portal-secondary {display:grid;align-self:auto;}
@@ -403,12 +443,38 @@ def create_server():
             </div>
 
             <aside class="portal-quick-card" aria-labelledby="quick-access-title">
-              <h2 id="quick-access-title">Quick Access</h2>
-              <p class="portal-quick-card-section">Intersectional Counts (Real Time):</p>
-              <ul class="portal-quick-links" aria-label="Long Term Counts">
-                <li><a href="/live/">N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay </a>(Video Feed)</li>
-                <li><a href="/vivacity/">W Wells St & N 68th St Intersection </a>(API based)</li>
-              </ul>
+              <div class="status-card-header">
+                <div class="status-card-heading">
+                  <h2 id="quick-access-title">{{ status_card.title }}</h2>
+                  <p class="status-card-location">{{ status_card.location }}</p>
+                </div>
+                <div class="status-card-badges" role="list" aria-label="Feed status">
+                  {% for badge in status_card.badges %}
+                  <span class="status-badge status-badge--{{ badge.kind }}" role="listitem">{{ badge.label }}</span>
+                  {% endfor %}
+                </div>
+              </div>
+              <p class="status-card-updated">Last updated <time datetime="{{ status_card.last_updated_iso }}">{{ status_card.last_updated_display }}</time></p>
+              <div class="status-card-sparkline" role="img" aria-label="{{ status_card.sparkline_label }}">
+                <svg viewBox="0 0 320 80" preserveAspectRatio="none" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="sparklineGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                      <stop offset="0%" stop-color="rgba(14,165,233,0.6)" />
+                      <stop offset="100%" stop-color="rgba(14,165,233,0.05)" />
+                    </linearGradient>
+                  </defs>
+                  <path d="M0 60 L40 50 L80 55 L120 30 L160 34 L200 22 L240 26 L280 18 L320 24" fill="none" stroke="rgba(14,165,233,0.85)" stroke-width="4" stroke-linecap="round" />
+                  <path d="M0 60 L40 50 L80 55 L120 30 L160 34 L200 22 L240 26 L280 18 L320 24 V80 H0 Z" fill="url(#sparklineGradient)" opacity="0.35" />
+                </svg>
+              </div>
+              <div class="status-card-links" aria-label="Quick links">
+                {% for link in status_card.links %}
+                <a href="{{ link.href }}">
+                  <strong>{{ link.label }}</strong>
+                  <span>{{ link.description }}</span>
+                </a>
+                {% endfor %}
+              </div>
             </aside>
 
             <div class="portal-highlight-row" role="list">
@@ -508,6 +574,7 @@ def create_server():
 </html>
         """,
         user=session.get("user", "user"),
+        status_card=status_card,
     )
 
     # Convenience redirects
