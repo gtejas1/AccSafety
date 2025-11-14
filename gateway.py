@@ -445,7 +445,7 @@ def create_server():
       position:relative;z-index:2;
     }
     .cta-wrap {margin:8px 0 12px;position:relative;z-index:2;display:flex;align-items:center;gap:12px;}
-    .portal-primary-cards {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch;}
+    .portal-primary-cards {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:stretch;}
     .portal-metric {margin-top:0;display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:16px;width:100%;height:100%;
       background:#ffffff;border:1px solid rgba(148,163,184,0.25);box-shadow:0 18px 34px rgba(15,23,42,0.08);
       font-feature-settings:"tnum" on;font-variant-numeric:tabular-nums;}
