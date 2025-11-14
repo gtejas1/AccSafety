@@ -700,12 +700,12 @@ def create_server():
                           </span>
                         </div>
                         <div class="status-feed-meta">
-                          <a class="status-feed-badge" href="/vivacity/" title="Open live Vivacity dashboard">LIVE-Counts</a>
+                          <a class="status-feed-badge" href="/vivacity/" title="Open live counts dashboard">LIVE-Counts</a>
                         </div>
                         <div class="status-feed-message" data-live-message aria-live="polite"></div>
                       </div>
                     </div>
-                    <div class="status-feed-extra" aria-hidden="true">
+                    <div class="status-feed-extra" aria-hidden="true" title="last 24-hour trend">
                       <svg class="status-feed-sparkline" viewBox="0 0 120 40" preserveAspectRatio="none" data-sparkline title="last 24-hour trend">
                         <path d="M4 30" />
                         <circle cx="4" cy="30" r="3" />
