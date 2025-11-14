@@ -154,6 +154,16 @@ DISPLAY_COLUMNS = [
     {"name": "View", "id": "View", "presentation": "markdown"},
 ]
 
+
+def _get_display_columns(counts_name: str = "Total counts") -> list[dict]:
+    columns: list[dict] = []
+    for col in DISPLAY_COLUMNS:
+        new_col = dict(col)
+        if new_col.get("id") == "Total counts":
+            new_col = {**new_col, "name": counts_name}
+        columns.append(new_col)
+    return columns
+
 UNIFIED_SQL = """
   SELECT
     "Location",
@@ -648,9 +658,9 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 children=[
                     dash_table.DataTable(
                         id="pf-table",
-                        columns=DISPLAY_COLUMNS,
+                        columns=_get_display_columns(),
                         data=[],
-                        hidden_columns=[],
+                        hidden_columns=["Source type"],
                         markdown_options={"html": True, "link_target": "_self"},
                         page_size=25,
                         sort_action="native",
@@ -782,11 +792,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         Output("pf-map", "children"),     # 0 map content
         Output("wrap-map", "style"),      # 1 map card visibility
         Output("pf-table", "data"),       # 2 table rows
-        Output("pf-table", "hidden_columns"),  # 3 hidden columns
-        Output("wrap-table", "style"),    # 4 table card visibility
-        Output("wrap-results", "style"),  # 5 (sentinel) keep as block once ready
-        Output("pf-desc", "children"),    # 6 description content
-        Output("wrap-desc", "style"),     # 7 description visibility
+        Output("pf-table", "columns"),    # 3 column definitions
+        Output("pf-table", "hidden_columns"),  # 4 hidden columns
+        Output("wrap-table", "style"),    # 5 table card visibility
+        Output("wrap-results", "style"),  # 6 (sentinel) keep as block once ready
+        Output("pf-desc", "children"),    # 7 description content
+        Output("wrap-desc", "style"),     # 8 description visibility
         Input("pf-mode", "value"),
         Input("pf-facility", "value"),
         Input("pf-source", "value"),
@@ -800,7 +811,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 [],
                 {"display": "none"},
                 [],
-                [],
+                _get_display_columns(),
+                ["Source type"],
                 {"display": "none"},
                 {"display": "none"},
                 [],
@@ -862,7 +874,19 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             source_types = source_types[source_types != ""].str.casefold()
 
         all_modeled = not source_types.empty and source_types.eq("modeled").all()
-        hidden_columns = ["View"] if all_modeled else []
+        hidden_columns = ["Source type"]
+        if all_modeled:
+            hidden_columns.append("View")
+
+        counts_column_name = "Total counts"
+        if not source_types.empty and source_types.nunique() == 1:
+            source_type_value = source_types.iloc[0]
+            if source_type_value == "modeled":
+                counts_column_name = "Estimated Counts"
+            elif source_type_value == "actual":
+                counts_column_name = "Actual Counts"
+
+        columns = _get_display_columns(counts_column_name)
 
         # --- Descriptions by source selection ---
         mode_val = (mode or "").strip().lower()
@@ -942,6 +966,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 map_children,
                 map_style,
                 [],
+                columns,
                 hidden_columns,
                 {"display": "none"},
                 {"display": "block"},
@@ -956,6 +981,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             map_children,
             map_style,
             rows,
+            columns,
             hidden_columns,
             {"display": "block"},
             {"display": "block"},
