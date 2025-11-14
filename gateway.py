@@ -321,10 +321,10 @@ def create_server():
   <!-- Policy gate modal -->
   <div id="policy-modal" class="notice-backdrop" role="dialog" aria-modal="true" aria-labelledby="policy-title" aria-describedby="policy-copy">
     <div class="notice-card">
-      <h2 id="policy-title">Data Use &amp; Liability Notice</h2>
+      <h2 id="policy-title">User Agreement:</h2>
       <div id="policy-copy">
-        <p>By proceeding, you confirm that you are an authorized AccSafety partner and that you will use this portal solely for official program analysis. All insights and downloadable data are confidential and may contain sensitive roadway safety information.</p>
-        <p>You acknowledge that AccSafety and its data providers are not liable for decisions made using this information and that you will comply with all applicable privacy and data handling obligations.</p>
+        <p>By continuing, you confirm that you are an authorized AccSafety user and will use this portal only for official program analysis or research purposes. All insights and downloadable data may be confidential and may include sensitive roadway safety information.</p>
+        <p>You acknowledge that AccSafety and its data providers are not liable for any decisions or actions taken based on this information, and you agree to comply with all applicable privacy, security, and data handling requirements.</p>
       </div>
       <div class="notice-actions">
         <button type="button" class="primary" id="policy-accept">I Understand &amp; Agree</button>
@@ -337,7 +337,7 @@ def create_server():
       <img src="/static/img/accsafety-logo.png" alt="AccSafety logo" class="app-logo">
       <div class="app-header-title">
         <span class="app-brand">AccSafety</span>
-        <span class="app-subtitle">Secure Portal Access</span>
+        <span class="app-subtitle">Wisconsin Pedestrian & Bicycle Activity and Safety Portal</span>
       </div>
       <nav class="app-nav">
         <a class="app-link" href="/">Back to Portal</a>
@@ -347,8 +347,8 @@ def create_server():
     <main class="app-content">
       <div class="app-main-centered">
         <form class="app-card app-card--narrow login-card" method="post" autocomplete="off">
-          <h1>Welcome back</h1>
-          <p>Enter your credentials to continue to the unified dashboards.</p>
+          <h1>Welcome Back</h1>
+          <p>Enter your credentials to continue to the AccSafety Data Portal and Dashboards</p>
 
           <input type="hidden" name="next" value="{{ nxt }}"/>
 
@@ -609,7 +609,7 @@ def create_server():
       <img src="/static/img/accsafety-logo.png" alt="AccSafety logo" class="app-logo">
       <div class="app-header-title">
         <span class="app-brand">AccSafety – Bridging Research and Practice</span>
-        <span class="app-subtitle">Wisconsin Non-Driver Safety Portal</span>
+        <span class="app-subtitle">Wisconsin Pedestrian & Bicycle Activity and Safety Portal</span>
       </div>
       <nav class="app-nav portal-nav" aria-label="Main navigation">
         <a class="app-link" href="/guide">User Guide</a>
@@ -624,7 +624,7 @@ def create_server():
         <div class="portal-overview">
           <div class="portal-primary">
             <div class="portal-hero-text">
-              <h1>Explore Wisconsin's non-motorist data</h1>
+              <h2>Explore Wisconsin's Pedestrian & Bicycle Activity Data</h2>
               <p class="desc">
                 Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking and biking.
                 Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
@@ -677,7 +677,7 @@ def create_server():
                         <div class="status-feed-title">
                           <span class="status-feed-location">
                             <a class="status-feed-link" href="/live/" title="Open live detection dashboard">
-                              N Santa Monica Blvd &amp; Silver Spring Dr <span class="status-feed-area">– Whitefish Bay</span>
+                              N Santa Monica Blvd &amp; Silver Spring Drive <span class="status-feed-area">– Whitefish Bay, WI</span>
                             </a>
                           </span>
                           <span class="status-feed-time">just now</span>
