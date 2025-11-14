@@ -92,15 +92,21 @@ TRAIL_CROSS_FLAGS           = [
 TRAIL_CROSS_PORTAL_URL      = "https://uwm.maps.arcgis.com"
 TRAIL_CROSS_SCRIPT_SRC      = "https://js.arcgis.com/4.34/embeddable-components/"
 
+MODE_LABEL_OVERRIDES = {
+    "Pedestrian": "Pedestrian Only",
+    "Bicyclist": "Bicyclist Only",
+    "Both": "Ped/Bike (Not Separated)",
+}
+
 # ---- Special rows (Intersection) ----
 SP_LOCATION     = "W Wells St & N 68th St Intersection"
 SP_FACILITY     = "Intersection"
-SP_SOURCE       = "Wisconsin Pilot Counting Counts"
+SP_SOURCE       = "Wisconsin Pilot Counting Program Counts"
 SP_SOURCE_TYPE  = "Actual"
 
 SP2_LOCATION     = "N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay"
 SP2_FACILITY     = "Intersection"
-SP2_SOURCE       = "Wisconsin Pilot Counting Counts"
+SP2_SOURCE       = "Wisconsin Pilot Counting Program Counts"
 SP2_SOURCE_TYPE  = "Actual"
 SP2_VIEW_ROUTE   = "/live/"
 
@@ -185,6 +191,12 @@ def _fetch_all() -> pd.DataFrame:
     for col in text_cols:
         if col in df.columns:
             df[col] = df[col].fillna("").astype(str).str.strip()
+
+    if "Source" in df.columns:
+        df["Source"] = df["Source"].replace(
+            "Wisconsin Pilot Counting Counts",
+            "Wisconsin Pilot Counting Program Counts",
+        )
 
     for coord_col in ("Longitude", "Latitude"):
         if coord_col in df.columns:
@@ -302,7 +314,7 @@ def _build_view_link(row: pd.Series) -> str:
             return f"[Open](/vivacity/?location={loc_q}&mode={mode_q})"
         return f"[Open](/vivacity/?location={loc_q})"
     loc_q = _encode_location_for_href(loc)
-    if src == "Wisconsin Pilot Counting Counts":
+    if src == "Wisconsin Pilot Counting Program Counts":
         mode = (row.get("Mode") or "").strip()
         if mode and mode in ECO_MODE_TABLE:
             mode_q = _encode_location_for_href(mode)
@@ -311,6 +323,14 @@ def _build_view_link(row: pd.Series) -> str:
     if src == "Off-Street Trail (SEWRPC Trail User Counts)":
         return f"[Open](/trail/dashboard?location={loc_q})"
     return "[Open](https://uwm.edu/ipit/wisconsin-pedestrian-volume-model/)"
+
+
+def _mode_opts(vals) -> list[dict]:
+    uniq = sorted({v for v in vals if isinstance(v, str) and v.strip()})
+    return [
+        {"label": MODE_LABEL_OVERRIDES.get(v, v), "value": v}
+        for v in uniq
+    ]
 
 
 def _opts(vals) -> list[dict]:
@@ -436,7 +456,7 @@ DEFAULT_IFRAME_STYLE = {
 
 
 SOURCE_EMBEDS: dict[str, dict] = {
-    "wisconsin pilot counting counts": {
+    "wisconsin pilot counting program counts": {
         "kind": "arcgis",
         "container_id": "pilot-map-container",
         "item_id": ARCGIS_ITEM_ID,
@@ -568,7 +588,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     html.Label("Mode"),
                     dcc.Dropdown(
                         id="pf-mode",
-                        options=_opts(base_df["Mode"].unique().tolist() or ["Pedestrian", "Bicyclist", "Both"]),
+                        options=_mode_opts(
+                            base_df["Mode"].unique().tolist()
+                            or ["Pedestrian", "Bicyclist", "Both"]
+                        ),
                         placeholder="Select mode",
                         clearable=True,
                     ),
@@ -596,7 +619,26 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     desc_block = card([html.Div(id="pf-desc", children=[])], class_name="mb-3")
 
     # Map (right, top)
-    map_card = card([html.Div(id="pf-map", children=[])], class_name="mb-3")
+    map_card = card(
+        [
+            html.Div(
+                [
+                    html.Img(
+                        src=dash.get_asset_url("map-info-icon.svg"),
+                        alt="Information icon",
+                        style={"width": "24px", "height": "24px"},
+                    ),
+                    html.Span(
+                        "shows the legend; click highlighted features for details.",
+                        className="mb-0",
+                    ),
+                ],
+                className="d-flex align-items-center gap-2 mb-2",
+            ),
+            html.Div(id="pf-map", children=[]),
+        ],
+        class_name="mb-3",
+    )
     # Table (right, bottom)
     table_block = card(
         [
@@ -850,7 +892,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         else:
             bicyclist_combo = (
                 mode_val == "bicyclist"
-                and fac_val == "intersection" and source_val == "wisconsin pilot counting counts"
+                and fac_val == "intersection" and source_val == "wisconsin pilot counting program counts"
             ) or (
                 mode_val == "bicyclist"
                 and fac_val == "on-street (sidewalk/bike lane)"
@@ -878,9 +920,9 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 description = _ped_statewide_desc()
             elif (mode_val == "pedestrian"
                   and fac_val == "intersection"
-                  and source_val == "wisconsin pilot counting counts"):
+                  and source_val == "wisconsin pilot counting program counts"):
                 description = _pilot_counts_desc()
-            elif source_val == "wisconsin pilot counting counts":
+            elif source_val == "wisconsin pilot counting program counts":
                 description = _pilot_counts_desc()
             elif source_val in {
                 "sewrpc trail user counts",
@@ -1141,3 +1183,4 @@ if __name__ == "__main__":
     _server = dash.Dash(__name__).server
     _app = create_unified_explore(_server, prefix="/")
     _app.run_server(host="127.0.0.1", port=8068, debug=True)
+
