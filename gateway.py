@@ -445,8 +445,8 @@ def create_server():
       position:relative;z-index:2;
     }
     .cta-wrap {margin:8px 0 12px;position:relative;z-index:2;display:flex;align-items:center;gap:12px;}
-    .portal-primary-cards {display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;align-items:stretch;}
-    .portal-metric {margin-top:0;display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:16px;width:100%;
+    .portal-primary-cards {display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:16px;align-items:stretch;}
+    .portal-metric {margin-top:0;display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:16px;width:100%;max-width:280px;
       background:#ffffff;border:1px solid rgba(148,163,184,0.25);box-shadow:0 18px 34px rgba(15,23,42,0.08);
       font-feature-settings:"tnum" on;font-variant-numeric:tabular-nums;}
     .portal-metric-icon {width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;
@@ -455,17 +455,16 @@ def create_server():
     .portal-metric-text {display:flex;flex-direction:column;line-height:1.1;}
     .portal-metric-value {font-size:1.85rem;font-weight:700;color:#0b1736;margin:0;}
     .portal-metric-label {font-size:0.95rem;color:#475569;}
-    .desc {color:#000;margin:10px 0 16px;line-height:1.55;font-size:1.15rem;max-width:820px;}
+    .desc {color:#000;margin:10px 0 16px;line-height:1.55;font-size:1.3rem;max-width:820px;}
 
     .portal-overview {display:grid;gap:24px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
     .portal-primary {display:grid;gap:18px;align-content:start;justify-items:stretch;}
     .portal-secondary {display:flex;flex-direction:column;align-self:stretch;align-items:stretch;gap:18px;}
-    .portal-highlight-row {display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;width:100%;justify-content:flex-start;}
-    .portal-highlight-card {background:#f8fafc;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:16px 18px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:grid;gap:6px;justify-items:center;text-align:center;min-height:110px;width:100%;}
-    .portal-highlight-card h3 {margin:0;font-size:0.95rem;font-weight:700;color:#0b1736;}
-    .portal-highlight-list {margin:6px 0 0;padding:0;list-style:none;display:grid;gap:4px;width:100%;}
-    .portal-highlight-item {display:flex;justify-content:space-between;font-size:0.9rem;color:#0f172a;}
-    .portal-highlight-item strong {color:var(--brand-primary);font-weight:700;}
+    .portal-data-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;width:100%;}
+    .portal-data-card {background:#fff;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:18px 20px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:grid;gap:8px;align-content:start;text-align:left;}
+    .portal-data-card h3 {margin:0;font-size:0.85rem;font-weight:700;color:#0b1736;letter-spacing:0.04em;text-transform:uppercase;}
+    .portal-data-value {font-size:2rem;font-weight:700;color:#0b1736;line-height:1;}
+    .portal-data-note {margin:0;font-size:0.9rem;color:#475569;line-height:1.35;}
     .portal-map-card {background:rgba(255,255,255,0.92);border:1px solid rgba(148,163,184,0.26);border-radius:18px;box-shadow:0 16px 28px rgba(15,23,42,0.1);padding:18px 20px;display:flex;flex-direction:column;gap:14px;width:100%;height:100%;max-width:none;flex:1;}
     .portal-map-heading {margin:0;font-size:1.05rem;font-weight:700;color:#0b1736;}
     .portal-map-image {flex:1;width:100%;height:100%;display:block;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);object-fit:cover;background:#e2e8f0;min-height:320px;}
@@ -591,10 +590,12 @@ def create_server():
     .footer-logo--wisdot {max-height:96px;}
     .footer-copyright {margin:0;color:#475569;font-size:0.95rem;}
     @media (max-width: 720px) {
+      .portal-primary-cards {grid-template-columns:1fr;}
+      .portal-metric {max-width:none;width:100%;}
+      .portal-data-grid {grid-template-columns:1fr;}
       .portal-footer {padding:24px 20px;}
       .footer-logos {gap:20px;}
       .footer-logo {max-width:220px;}
-      .portal-metric {width:100%;}
     }
 
     /* Modal */
@@ -627,8 +628,8 @@ def create_server():
         <div class="portal-overview">
           <div class="portal-primary">
             <div class="portal-hero-text">
-              <h2>Explore Wisconsin's Pedestrian & Bicycle Activity Data</h2>
-              <p class="desc">
+              <h1>Explore Wisconsin's Pedestrian & Bicycle Activity Data</h1>
+              <p>
                 Use research-backed insights, statewide counts, and planning tools tailored for researchers and practitioners focused on people walking and biking.
                 Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
               </p>
@@ -653,13 +654,23 @@ def create_server():
                 </div>
               </div>
 
-              <article class="portal-highlight-card">
-                <h3>Projects Included (collected/generated data)</h3>
-                <ul class="portal-highlight-list" aria-label="Projects included counts">
-                  <li class="portal-highlight-item"><span>TRCC</span><strong>7</strong></li>
-                  <li class="portal-highlight-item"><span>Others</span><strong>3</strong></li>
-                </ul>
-              </article>
+              <div class="portal-data-grid" aria-label="Portal data and tools overview">
+                <article class="portal-data-card">
+                  <h3>Data Sources Available</h3>
+                  <span class="portal-data-value">7</span>
+                  <p class="portal-data-note">short-term & long-term counts, intersection/midblock and trails, crowdsourced data</p>
+                </article>
+                <article class="portal-data-card">
+                  <h3>Research Tools You Can Run</h3>
+                  <span class="portal-data-value">6</span>
+                  <p class="portal-data-note">Model-based Demand Estimates, Hourly Expansion Factors, Ped/bike Crash Prediction Models</p>
+                </article>
+                <article class="portal-data-card">
+                  <h3>Analysis Options</h3>
+                  <span class="portal-data-value">13</span>
+                  <p class="portal-data-note">Filter by mode, facility, source</p>
+                </article>
+              </div>
             </div>
 
             <aside class="portal-status-card" aria-labelledby="status-card-title">
