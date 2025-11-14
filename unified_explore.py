@@ -164,6 +164,67 @@ def _get_display_columns(counts_name: str = "Total counts") -> list[dict]:
         columns.append(new_col)
     return columns
 
+
+def _format_snapshot_value(value) -> str:
+    """Format snapshot metric values without decimals, with thousands separators."""
+
+    if value is None:
+        return "—"
+    try:
+        if pd.isna(value):
+            return "—"
+    except Exception:
+        pass
+    try:
+        number = int(round(float(value)))
+    except (TypeError, ValueError):
+        return "—"
+    return f"{number:,}"
+
+
+def _snapshot_metric(label: str, value) -> html.Div:
+    """Build a formatted metric block for the dataset snapshot card."""
+
+    return html.Div(
+        [
+            html.Span(label, className="pf-snapshot-label"),
+            html.Span(_format_snapshot_value(value), className="pf-snapshot-value"),
+        ],
+        className="pf-snapshot-item",
+    )
+
+
+def _build_actual_snapshot(df: pd.DataFrame) -> list[html.Component]:
+    """Return children for the dataset snapshot card when viewing actual data."""
+
+    if df.empty:
+        return []
+
+    counts = pd.to_numeric(df.get("Total counts"), errors="coerce")
+    counts = counts.dropna()
+    observation_count = int(counts.count())
+    total_counts = counts.sum() if not counts.empty else None
+    average_counts = counts.mean() if not counts.empty else None
+
+    unique_locations = 0
+    if "Location" in df.columns:
+        unique_locations = int(df["Location"].dropna().astype(str).nunique())
+
+    metrics = [
+        _snapshot_metric("Observation periods", observation_count),
+        _snapshot_metric("Total actual counts", total_counts),
+        _snapshot_metric("Average actual counts", average_counts),
+        _snapshot_metric("Locations measured", unique_locations),
+    ]
+
+    plural = "observation" if observation_count == 1 else "observations"
+    note_text = f"Based on {observation_count:,} {plural} with reported counts."
+    return [
+        html.H3("Dataset snapshot", className="mb-3"),
+        html.Div(metrics, className="pf-snapshot-grid"),
+        html.Span(note_text, className="pf-snapshot-note app-muted"),
+    ]
+
 UNIFIED_SQL = """
   SELECT
     "Location",
@@ -628,6 +689,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     # Description (left under filters)
     desc_block = card([html.Div(id="pf-desc", children=[])], class_name="mb-3")
 
+    snapshot_block = card([html.Div(id="pf-snapshot", children=[])], class_name="mb-3")
+
     # Map (right, top)
     map_card = card(
         [
@@ -691,6 +754,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     ),
                     dbc.Col(
                         [
+                            html.Div(id="wrap-snapshot", children=[snapshot_block], style={"display": "none"}),
                             html.Div(id="wrap-map", children=[map_card], style={"display": "none"}),
                             dcc.Loading(
                                 id="pf-wrap-loader",
@@ -798,6 +862,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         Output("wrap-results", "style"),  # 6 (sentinel) keep as block once ready
         Output("pf-desc", "children"),    # 7 description content
         Output("wrap-desc", "style"),     # 8 description visibility
+        Output("pf-snapshot", "children"),  # 9 snapshot content
+        Output("wrap-snapshot", "style"),   # 10 snapshot visibility
         Input("pf-mode", "value"),
         Input("pf-facility", "value"),
         Input("pf-source", "value"),
@@ -814,6 +880,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 _get_display_columns(),
                 ["Source type"],
                 {"display": "none"},
+                {"display": "none"},
+                [],
                 {"display": "none"},
                 [],
                 {"display": "none"},
@@ -887,6 +955,13 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 counts_column_name = "Actual Counts"
 
         columns = _get_display_columns(counts_column_name)
+
+        snapshot_children: list[html.Component] = []
+        snapshot_style = {"display": "none"}
+        if not df.empty and not source_types.empty and source_types.eq("actual").all():
+            snapshot_children = _build_actual_snapshot(df)
+            if snapshot_children:
+                snapshot_style = {"display": "block"}
 
         # --- Descriptions by source selection ---
         mode_val = (mode or "").strip().lower()
@@ -972,6 +1047,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 {"display": "block"},
                 description,
                 desc_style,
+                snapshot_children,
+                snapshot_style,
             )
 
         df = df.copy()
@@ -987,6 +1064,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             {"display": "block"},
             description,
             desc_style,
+            snapshot_children,
+            snapshot_style,
         )
 
     def _trail_crossing_desc():

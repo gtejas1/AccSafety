@@ -780,6 +780,45 @@ body {
   color: var(--brand-muted);
 }
 
+/* Dataset snapshot */
+.pf-snapshot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
+.pf-snapshot-item {
+  padding: 16px;
+  border-radius: 12px;
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 110px;
+}
+
+.pf-snapshot-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--brand-muted);
+}
+
+.pf-snapshot-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--brand-dark);
+}
+
+.pf-snapshot-note {
+  display: block;
+  margin-top: 18px;
+  font-size: 0.9rem;
+}
+
 @media (max-width: 768px) {
   .app-content {
     padding: 24px 18px 32px;
