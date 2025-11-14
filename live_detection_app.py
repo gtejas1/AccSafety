@@ -666,6 +666,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
 
     # ── UI Layout: Video + cumulative stats ───────────────────────────────────
     crosswalk_cards: List[dbc.Col] = []
+    crosswalk_name_style = {"fontSize": "0.85rem"}
+    crosswalk_value_style = {"fontSize": "1.15rem"}
     for cw in initial_crosswalks:
         key = cw["key"]
         crosswalk_cards.append(
@@ -673,7 +675,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 dbc.Card(
                     dbc.CardBody(
                         [
-                            html.Div(cw["name"], className="text-muted"),
+                            html.Div(cw["name"], className="text-muted", style=crosswalk_name_style),
                             html.Div(
                                 [
                                     html.Span(
@@ -683,7 +685,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                                     html.Span(
                                         "0",
                                         id=f"crosswalk-{key}-ped",
-                                        className="fs-4 fw-bold text-primary",
+                                        className="fw-bold text-primary",
+                                        style=crosswalk_value_style,
                                     ),
                                 ],
                                 className="d-flex justify-content-between align-items-baseline mt-2",
@@ -697,7 +700,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                                     html.Span(
                                         "0",
                                         id=f"crosswalk-{key}-cyc",
-                                        className="fs-4 fw-bold text-success",
+                                        className="fw-bold text-success",
+                                        style=crosswalk_value_style,
                                     ),
                                 ],
                                 className="d-flex justify-content-between align-items-baseline",
@@ -706,10 +710,6 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     ),
                     className="shadow-sm h-100",
                 ),
-                xs=12,
-                sm=6,
-                md=6,
-                lg=3,
                 className="d-flex",
             )
         )
@@ -881,6 +881,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         for cw in initial_crosswalks
     ]
 
+    panel_height = "72vh"
+
     crosswalk_line_controls = dbc.Card(
         dbc.CardBody(
             [
@@ -898,15 +900,29 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 dcc.Store(id="crosswalk-config-store", data=crosswalk_store_payload),
             ]
         ),
-        className="shadow-sm",
+        className="shadow-sm h-100 w-100",
+        style={"height": panel_height, "overflowY": "auto"},
     )
+
+    metric_body_class = "d-flex flex-column gap-2"
+    metric_title_style = {"fontSize": "0.7rem", "letterSpacing": "0.04em"}
+    metric_value_style = {"fontSize": "1.45rem"}
 
     start_time_card = dbc.Card(
         dbc.CardBody(
             [
-                html.Div("Detection Started", className="text-muted"),
-                html.H5(id="start-time", className="mb-0"),
-            ]
+                html.Small(
+                    "Detection Started",
+                    className="text-muted text-uppercase",
+                    style=metric_title_style,
+                ),
+                html.H5(
+                    id="start-time",
+                    className="mb-0 fw-semibold",
+                    style={"fontSize": "1.05rem"},
+                ),
+            ],
+            className=metric_body_class,
         ),
         className="shadow-sm h-100",
     )
@@ -914,9 +930,18 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     ped_card = dbc.Card(
         dbc.CardBody(
             [
-                html.Div("Pedestrians Detected", className="text-muted"),
-                html.H2(id="ped-count", className="mb-0 text-primary"),
-            ]
+                html.Small(
+                    "Pedestrians Detected",
+                    className="text-muted text-uppercase",
+                    style=metric_title_style,
+                ),
+                html.H4(
+                    id="ped-count",
+                    className="mb-0 text-primary fw-bold",
+                    style=metric_value_style,
+                ),
+            ],
+            className=metric_body_class,
         ),
         className="shadow-sm h-100",
     )
@@ -924,31 +949,66 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     cyc_card = dbc.Card(
         dbc.CardBody(
             [
-                html.Div("Cyclists Detected", className="text-muted"),
-                html.H2(id="cyc-count", className="mb-0 text-success"),
-            ]
+                html.Small(
+                    "Cyclists Detected",
+                    className="text-muted text-uppercase",
+                    style=metric_title_style,
+                ),
+                html.H4(
+                    id="cyc-count",
+                    className="mb-0 text-success fw-bold",
+                    style=metric_value_style,
+                ),
+            ],
+            className=metric_body_class,
         ),
         className="shadow-sm h-100",
     )
 
-    counts_panel = html.Div(
-        [
-            dbc.Row(
-                [
-                    dbc.Col(start_time_card, xs=12, md=4),
-                    dbc.Col(ped_card, xs=6, md=4),
-                    dbc.Col(cyc_card, xs=6, md=4),
-                ],
-                class_name="g-3",
+    counts_panel = dbc.Card(
+        dbc.CardBody(
+            [
+                dbc.Row(
+                    [
+                        dbc.Col(start_time_card, xs=12, md=4),
+                        dbc.Col(ped_card, xs=6, md=4),
+                        dbc.Col(cyc_card, xs=6, md=4),
+                    ],
+                    class_name="g-3",
+                ),
+                html.Div(
+                    "Crosswalk Counts (both directions)",
+                    className="text-muted fw-semibold",
+                    style={"fontSize": "0.9rem"},
+                ),
+                dbc.Row(
+                    crosswalk_cards,
+                    class_name="g-3 row-cols-1 row-cols-sm-2",
+                ),
+                dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
+            ],
+            className="d-flex flex-column gap-3",
+        ),
+        className="shadow-sm h-100 w-100",
+        style={"height": panel_height, "overflowY": "auto"},
+    )
+
+    video_panel = dbc.Card(
+        html.Div(
+            html.Img(
+                src=route_path,
+                className="w-100 h-100",
+                style={
+                    "width": "100%",
+                    "height": "100%",
+                    "objectFit": "cover",
+                    "objectPosition": "center",
+                },
             ),
-            html.Div(
-                "Crosswalk Counts (both directions)",
-                className="text-muted mt-4 mb-2",
-            ),
-            dbc.Row(crosswalk_cards, class_name="g-3"),
-            dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
-        ],
-        className="mt-3",
+            className="w-100 h-100 overflow-hidden",
+        ),
+        className="shadow-sm h-100 w-100 overflow-hidden",
+        style={"height": panel_height},
     )
 
     app.layout = dash_page(
@@ -957,27 +1017,16 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             card(
                 [
                     html.H3("N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay, WI"),
-                    html.P("NOTE: Only pedestrians and cyclists are counted when they cross the virtual countline."),
+                    html.P(
+                        "NOTE: Only pedestrians and cyclists are counted when they cross the virtual countline.",
+                    ),
                     dbc.Row(
                         [
-                            dbc.Col(
-                                [
-                                    html.Img(
-                                        src=route_path,
-                                        style={"width": "100%", "borderRadius": "12px"},
-                                    ),
-                                    counts_panel,
-                                ],
-                                md=8,
-                            ),
-                            dbc.Col(
-                                [
-                                    crosswalk_line_controls,
-                                ],
-                                md=4,
-                            ),
+                            dbc.Col(video_panel, lg=5, className="d-flex"),
+                            dbc.Col(counts_panel, lg=4, className="d-flex"),
+                            dbc.Col(crosswalk_line_controls, lg=3, className="d-flex"),
                         ],
-                        class_name="mt-2",
+                        class_name="g-3 gy-4 gy-lg-0 align-items-stretch",
                     ),
                 ],
                 class_name="app-card--wide",
