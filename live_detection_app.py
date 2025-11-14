@@ -666,6 +666,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
 
     # ── UI Layout: Video + cumulative stats ───────────────────────────────────
     crosswalk_cards: List[dbc.Col] = []
+    crosswalk_name_style = {"fontSize": "0.85rem"}
+    crosswalk_value_style = {"fontSize": "1.15rem"}
     for cw in initial_crosswalks:
         key = cw["key"]
         crosswalk_cards.append(
@@ -673,7 +675,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 dbc.Card(
                     dbc.CardBody(
                         [
-                            html.Div(cw["name"], className="text-muted"),
+                            html.Div(cw["name"], className="text-muted", style=crosswalk_name_style),
                             html.Div(
                                 [
                                     html.Span(
@@ -683,7 +685,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                                     html.Span(
                                         "0",
                                         id=f"crosswalk-{key}-ped",
-                                        className="fs-4 fw-bold text-primary",
+                                        className="fw-bold text-primary",
+                                        style=crosswalk_value_style,
                                     ),
                                 ],
                                 className="d-flex justify-content-between align-items-baseline mt-2",
@@ -697,7 +700,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                                     html.Span(
                                         "0",
                                         id=f"crosswalk-{key}-cyc",
-                                        className="fs-4 fw-bold text-success",
+                                        className="fw-bold text-success",
+                                        style=crosswalk_value_style,
                                     ),
                                 ],
                                 className="d-flex justify-content-between align-items-baseline",
@@ -905,12 +909,22 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     )
 
     metric_body_class = "d-flex flex-column gap-2"
+    metric_title_style = {"fontSize": "0.7rem", "letterSpacing": "0.04em"}
+    metric_value_style = {"fontSize": "1.45rem"}
 
     start_time_card = dbc.Card(
         dbc.CardBody(
             [
-                html.Small("Detection Started", className="text-muted text-uppercase"),
-                html.H5(id="start-time", className="mb-0 fw-semibold"),
+                html.Small(
+                    "Detection Started",
+                    className="text-muted text-uppercase",
+                    style=metric_title_style,
+                ),
+                html.H5(
+                    id="start-time",
+                    className="mb-0 fw-semibold",
+                    style={"fontSize": "1.05rem"},
+                ),
             ],
             className=metric_body_class,
         ),
@@ -920,11 +934,15 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     ped_card = dbc.Card(
         dbc.CardBody(
             [
-                html.Small("Pedestrians Detected", className="text-muted text-uppercase"),
+                html.Small(
+                    "Pedestrians Detected",
+                    className="text-muted text-uppercase",
+                    style=metric_title_style,
+                ),
                 html.H4(
                     id="ped-count",
                     className="mb-0 text-primary fw-bold",
-                    style={"fontSize": "1.9rem"},
+                    style=metric_value_style,
                 ),
             ],
             className=metric_body_class,
@@ -935,11 +953,15 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     cyc_card = dbc.Card(
         dbc.CardBody(
             [
-                html.Small("Cyclists Detected", className="text-muted text-uppercase"),
+                html.Small(
+                    "Cyclists Detected",
+                    className="text-muted text-uppercase",
+                    style=metric_title_style,
+                ),
                 html.H4(
                     id="cyc-count",
                     className="mb-0 text-success fw-bold",
-                    style={"fontSize": "1.9rem"},
+                    style=metric_value_style,
                 ),
             ],
             className=metric_body_class,
@@ -961,6 +983,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 html.Div(
                     "Crosswalk Counts (both directions)",
                     className="text-muted fw-semibold",
+                    style={"fontSize": "0.9rem"},
                 ),
                 dbc.Row(crosswalk_cards, class_name="g-3"),
                 dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
@@ -975,15 +998,15 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         html.Div(
             html.Img(
                 src=route_path,
-                className="img-fluid",
+                className="w-100 h-100",
                 style={
-                    "maxHeight": "100%",
-                    "width": "auto",
-                    "height": "auto",
-                    "objectFit": "contain",
+                    "width": "100%",
+                    "height": "100%",
+                    "objectFit": "cover",
+                    "objectPosition": "center",
                 },
             ),
-            className="w-100 h-100 d-flex align-items-center justify-content-center bg-black",
+            className="w-100 h-100 overflow-hidden",
         ),
         className="shadow-sm h-100 w-100 overflow-hidden",
         style={"height": panel_height},
