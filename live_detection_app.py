@@ -710,10 +710,6 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     ),
                     className="shadow-sm h-100",
                 ),
-                xs=12,
-                sm=6,
-                md=6,
-                lg=3,
                 className="d-flex",
             )
         )
@@ -985,7 +981,10 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     className="text-muted fw-semibold",
                     style={"fontSize": "0.9rem"},
                 ),
-                dbc.Row(crosswalk_cards, class_name="g-3"),
+                dbc.Row(
+                    crosswalk_cards,
+                    class_name="g-3 row-cols-1 row-cols-sm-2 row-cols-lg-4",
+                ),
                 dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
             ],
             className="d-flex flex-column gap-3",
