@@ -204,17 +204,15 @@ def _build_actual_snapshot(df: pd.DataFrame) -> list[html.Component]:
     counts = counts.dropna()
     observation_count = int(counts.count())
     total_counts = counts.sum() if not counts.empty else None
-    average_counts = counts.mean() if not counts.empty else None
 
     unique_locations = 0
     if "Location" in df.columns:
         unique_locations = int(df["Location"].dropna().astype(str).nunique())
 
     metrics = [
+        _snapshot_metric("Locations", unique_locations),
         _snapshot_metric("Observation periods", observation_count),
         _snapshot_metric("Total actual counts", total_counts),
-        _snapshot_metric("Average actual counts", average_counts),
-        _snapshot_metric("Locations measured", unique_locations),
     ]
 
     plural = "observation" if observation_count == 1 else "observations"
