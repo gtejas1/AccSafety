@@ -445,8 +445,8 @@ def create_server():
       position:relative;z-index:2;
     }
     .cta-wrap {margin:8px 0 12px;position:relative;z-index:2;display:flex;align-items:center;gap:12px;}
-    .portal-primary-cards {display:grid;grid-template-columns:minmax(220px,280px) minmax(0,1fr);gap:16px;align-items:stretch;}
-    .portal-metric {margin-top:0;display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:16px;width:100%;max-width:280px;
+    .portal-primary-cards {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;align-items:stretch;}
+    .portal-metric {margin-top:0;display:flex;align-items:center;gap:14px;padding:16px 18px;border-radius:16px;width:100%;height:100%;
       background:#ffffff;border:1px solid rgba(148,163,184,0.25);box-shadow:0 18px 34px rgba(15,23,42,0.08);
       font-feature-settings:"tnum" on;font-variant-numeric:tabular-nums;}
     .portal-metric-icon {width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;
@@ -589,6 +589,9 @@ def create_server():
     .footer-logo--uwm {max-height:78px;}
     .footer-logo--wisdot {max-height:96px;}
     .footer-copyright {margin:0;color:#475569;font-size:0.95rem;}
+    @media (max-width: 1200px) {
+      .portal-primary-cards {grid-template-columns:repeat(2,minmax(0,1fr));}
+    }
     @media (max-width: 720px) {
       .portal-primary-cards {grid-template-columns:1fr;}
       .portal-metric {max-width:none;width:100%;}
@@ -643,7 +646,7 @@ def create_server():
               </span>
             </div>
 
-            <div class="portal-primary-cards">
+            <div class="portal-primary-cards" aria-label="Portal data and tools overview">
               <div class="portal-metric" aria-label="Count sites available">
                 <span class="portal-metric-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.94 0-7.29 3.04-7.29 7.08 0 3.18 2.22 6.63 6.56 10.26.49.43 1.24.43 1.73 0 4.34-3.63 6.56-7.08 6.56-10.26 0-4.04-3.35-7.08-7.56-7.08Zm0 10.65a3.57 3.57 0 1 1 0-7.14 3.57 3.57 0 0 1 0 7.14Z"/></svg>
@@ -653,24 +656,21 @@ def create_server():
                   <span class="portal-metric-label">Count sites</span>
                 </div>
               </div>
-
-              <div class="portal-data-grid" aria-label="Portal data and tools overview">
-                <article class="portal-data-card">
-                  <h3>Data Sources Available</h3>
-                  <span class="portal-data-value">7</span>
-                  <p class="portal-data-note">short-term & long-term counts, intersection/midblock and trails, crowdsourced data</p>
-                </article>
-                <article class="portal-data-card">
-                  <h3>Research Tools You Can Run</h3>
-                  <span class="portal-data-value">6</span>
-                  <p class="portal-data-note">Model-based Demand Estimates, Hourly Expansion Factors, Ped/bike Crash Prediction Models</p>
-                </article>
-                <article class="portal-data-card">
-                  <h3>Analysis Options</h3>
-                  <span class="portal-data-value">13</span>
-                  <p class="portal-data-note">Filter by mode, facility, source</p>
-                </article>
-              </div>
+              <article class="portal-data-card">
+                <h3>Data Sources Available</h3>
+                <span class="portal-data-value">7</span>
+                <p class="portal-data-note">short-term & long-term counts, intersection/midblock and trails, crowdsourced data</p>
+              </article>
+              <article class="portal-data-card">
+                <h3>Research Tools You Can Run</h3>
+                <span class="portal-data-value">6</span>
+                <p class="portal-data-note">Model-based Demand Estimates, Hourly Expansion Factors, Ped/bike Crash Prediction Models</p>
+              </article>
+              <article class="portal-data-card">
+                <h3>Analysis Options</h3>
+                <span class="portal-data-value">13</span>
+                <p class="portal-data-note">Filter by mode, facility, source</p>
+              </article>
             </div>
 
             <aside class="portal-status-card" aria-labelledby="status-card-title">
