@@ -192,6 +192,12 @@ def _fetch_all() -> pd.DataFrame:
         if col in df.columns:
             df[col] = df[col].fillna("").astype(str).str.strip()
 
+    if "Source" in df.columns:
+        df["Source"] = df["Source"].replace(
+            "Wisconsin Pilot Counting Counts",
+            "Wisconsin Pilot Counting Program Counts",
+        )
+
     for coord_col in ("Longitude", "Latitude"):
         if coord_col in df.columns:
             df[coord_col] = pd.to_numeric(df[coord_col], errors="coerce")
@@ -450,7 +456,7 @@ DEFAULT_IFRAME_STYLE = {
 
 
 SOURCE_EMBEDS: dict[str, dict] = {
-    "wisconsin pilot counting counts": {
+    "wisconsin pilot counting program counts": {
         "kind": "arcgis",
         "container_id": "pilot-map-container",
         "item_id": ARCGIS_ITEM_ID,
@@ -886,7 +892,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         else:
             bicyclist_combo = (
                 mode_val == "bicyclist"
-                and fac_val == "intersection" and source_val == "wisconsin pilot counting counts"
+                and fac_val == "intersection" and source_val == "wisconsin pilot counting program counts"
             ) or (
                 mode_val == "bicyclist"
                 and fac_val == "on-street (sidewalk/bike lane)"
@@ -914,9 +920,9 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 description = _ped_statewide_desc()
             elif (mode_val == "pedestrian"
                   and fac_val == "intersection"
-                  and source_val == "wisconsin pilot counting counts"):
+                  and source_val == "wisconsin pilot counting program counts"):
                 description = _pilot_counts_desc()
-            elif source_val == "wisconsin pilot counting counts":
+            elif source_val == "wisconsin pilot counting program counts":
                 description = _pilot_counts_desc()
             elif source_val in {
                 "sewrpc trail user counts",
