@@ -785,7 +785,7 @@ def create_server():
         const now = new Date();
         const diffMs = Math.max(0, now.getTime() - date.getTime());
         const seconds = diffMs / 1000;
-        if (seconds < 45) { return 'just now'; }
+        if (seconds < 60) { return 'less than a minute ago'; }
         if (seconds < 90) { return '1 min ago'; }
         const minutes = seconds / 60;
         if (minutes < 60) { return `${Math.round(minutes)} min ago`; }
@@ -801,11 +801,11 @@ def create_server():
       function updateRelativeLabels(){
         const tsDate = isoToDate(lastTimestampIso);
         if (timeEl) {
-          timeEl.textContent = timeIsStatic ? 'just now' : formatRelative(tsDate);
+          timeEl.textContent = timeIsStatic ? 'less than a minute ago' : formatRelative(tsDate);
         }
         if (updatedEl) {
           if (updatedIsStatic) {
-            updatedEl.textContent = 'Updated just now';
+            updatedEl.textContent = 'Updated less than a minute ago';
           } else {
             const rel = formatRelative(tsDate);
             updatedEl.textContent = rel === '—' ? 'Awaiting live update…' : `Updated ${rel}`;
