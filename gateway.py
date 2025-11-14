@@ -455,7 +455,7 @@ def create_server():
     .portal-metric-text {display:flex;flex-direction:column;line-height:1.1;}
     .portal-metric-value {font-size:1.85rem;font-weight:700;color:#0b1736;margin:0;}
     .portal-metric-label {font-size:0.95rem;color:#475569;}
-    .desc {color:#0b1736;margin:10px 0 16px;line-height:1.55;font-size:1rem;max-width:820px;}
+    .desc {color:#000;margin:10px 0 16px;line-height:1.55;font-size:1.15rem;max-width:820px;}
 
     .portal-overview {display:grid;gap:24px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
     .portal-primary {display:grid;gap:18px;align-content:start;justify-items:stretch;}
@@ -526,6 +526,9 @@ def create_server():
       border-radius:999px;
       font-size:0.85rem;
       letter-spacing:0.01em;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
     }
     .status-feed-updated {font-size:0.85rem;color:#475569;}
     .status-feed-extra {width:120px;display:flex;justify-content:flex-end;}
@@ -626,7 +629,7 @@ def create_server():
             <div class="portal-hero-text">
               <h2>Explore Wisconsin's Pedestrian & Bicycle Activity Data</h2>
               <p class="desc">
-                Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking and biking.
+                Use research-backed insights, statewide counts, and planning tools tailored for researchers and practitioners focused on people walking and biking.
                 Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
               </p>
             </div>
@@ -676,15 +679,11 @@ def create_server():
                       <div class="status-feed-body">
                         <div class="status-feed-title">
                           <span class="status-feed-location">
-                            <a class="status-feed-link" href="/live/" title="Open live detection dashboard">
-                              N Santa Monica Blvd &amp; Silver Spring Drive <span class="status-feed-area">– Whitefish Bay, WI</span>
-                            </a>
+                            N Santa Monica Blvd &amp; Silver Spring Drive <span class="status-feed-area">– Whitefish Bay, WI</span>
                           </span>
-                          <span class="status-feed-time">just now</span>
                         </div>
                         <div class="status-feed-meta">
-                          <span class="status-feed-badge">LIVE – Video</span>
-                          <span class="status-feed-updated">Updated just now</span>
+                          <a class="status-feed-badge" href="/live/" title="Open live detection dashboard">LIVE-Video</a>
                         </div>
                       </div>
                     </div>
@@ -697,21 +696,17 @@ def create_server():
                       <div class="status-feed-body">
                         <div class="status-feed-title">
                           <span class="status-feed-location">
-                            <a class="status-feed-link" href="/vivacity/" title="Open live Vivacity dashboard">
-                              W Wells St &amp; N 68th St <span class="status-feed-area">– Milwaukee, WI</span>
-                            </a>
+                            W Wells St &amp; N 68th St <span class="status-feed-area">– Milwaukee, WI</span>
                           </span>
-                          <span class="status-feed-time" data-live-time data-live-static aria-live="polite">just now</span>
                         </div>
                         <div class="status-feed-meta">
-                          <span class="status-feed-badge">LIVE – API</span>
-                          <span class="status-feed-updated" data-live-updated data-live-static aria-live="polite">Updated just now</span>
+                          <a class="status-feed-badge" href="/vivacity/" title="Open live Vivacity dashboard">LIVE-Counts</a>
                         </div>
                         <div class="status-feed-message" data-live-message aria-live="polite"></div>
                       </div>
                     </div>
                     <div class="status-feed-extra" aria-hidden="true">
-                      <svg class="status-feed-sparkline" viewBox="0 0 120 40" preserveAspectRatio="none" data-sparkline>
+                      <svg class="status-feed-sparkline" viewBox="0 0 120 40" preserveAspectRatio="none" data-sparkline title="last 24-hour trend">
                         <path d="M4 30" />
                         <circle cx="4" cy="30" r="3" />
                       </svg>
@@ -763,7 +758,6 @@ def create_server():
 
       const API_URL = '/api/v1/vivacity/sparkline';
       const REFRESH_MS = 60_000;
-      const UPDATE_MS = 30_000;
 
       const sparkline = card.querySelector('[data-sparkline]');
       const pathEl = sparkline ? sparkline.querySelector('path') : null;
@@ -772,8 +766,6 @@ def create_server():
       const updatedEl = card.querySelector('[data-live-updated]');
       const messageEl = card.querySelector('[data-live-message]');
       const globalUpdatedEl = document.querySelector('[data-live-global="updated"]');
-      const timeIsStatic = timeEl ? timeEl.hasAttribute('data-live-static') : false;
-      const updatedIsStatic = updatedEl ? updatedEl.hasAttribute('data-live-static') : false;
 
       let lastTimestampIso = null;
 
@@ -783,39 +775,41 @@ def create_server():
         return Number.isNaN(d.getTime()) ? null : d;
       }
 
-      function formatRelative(date){
-        if (!date) { return '—'; }
-        const now = new Date();
-        const diffMs = Math.max(0, now.getTime() - date.getTime());
-        const seconds = diffMs / 1000;
-        if (seconds < 45) { return 'just now'; }
-        if (seconds < 90) { return '1 min ago'; }
-        const minutes = seconds / 60;
-        if (minutes < 60) { return `${Math.round(minutes)} min ago`; }
-        const hours = minutes / 60;
-        if (hours < 24) {
-          const rounded = Math.round(hours);
-          return `${rounded} hr${rounded === 1 ? '' : 's'} ago`;
+      const absoluteFormatter = new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+
+      function formatAbsolute(date){
+        if (!date) { return null; }
+        try {
+          return absoluteFormatter.format(date);
+        } catch (err) {
+          try {
+            return date.toLocaleString();
+          } catch (err2) {
+            return date.toISOString();
+          }
         }
-        const days = Math.round(hours / 24);
-        return `${days} day${days === 1 ? '' : 's'} ago`;
       }
 
-      function updateRelativeLabels(){
+      function updateTimestampLabels(){
         const tsDate = isoToDate(lastTimestampIso);
+        const absoluteLabel = formatAbsolute(tsDate);
         if (timeEl) {
-          timeEl.textContent = timeIsStatic ? 'just now' : formatRelative(tsDate);
+          timeEl.textContent = absoluteLabel || '—';
         }
         if (updatedEl) {
-          if (updatedIsStatic) {
-            updatedEl.textContent = 'Updated just now';
+          if (!tsDate) {
+            updatedEl.textContent = 'Awaiting live update…';
           } else {
-            const rel = formatRelative(tsDate);
-            updatedEl.textContent = rel === '—' ? 'Awaiting live update…' : `Updated ${rel}`;
+            updatedEl.textContent = `Updated ${absoluteLabel}`;
           }
         }
         if (globalUpdatedEl) {
-          globalUpdatedEl.textContent = formatRelative(tsDate);
+          globalUpdatedEl.textContent = absoluteLabel || '—';
         }
       }
 
@@ -881,14 +875,13 @@ def create_server():
           }
         } finally {
           card.removeAttribute('data-live-loading');
-          updateRelativeLabels();
+          updateTimestampLabels();
         }
       }
 
-      updateRelativeLabels();
+      updateTimestampLabels();
       fetchData();
       setInterval(fetchData, REFRESH_MS);
-      setInterval(updateRelativeLabels, UPDATE_MS);
     })();
   </script>
 
