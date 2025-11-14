@@ -881,6 +881,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         for cw in initial_crosswalks
     ]
 
+    panel_height = "72vh"
+
     crosswalk_line_controls = dbc.Card(
         dbc.CardBody(
             [
@@ -899,7 +901,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             ]
         ),
         className="shadow-sm h-100 w-100",
-        style={"maxHeight": "78vh", "overflowY": "auto"},
+        style={"height": panel_height, "overflowY": "auto"},
     )
 
     start_time_card = dbc.Card(
@@ -953,7 +955,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             className="d-flex flex-column gap-3",
         ),
         className="shadow-sm h-100 w-100",
-        style={"maxHeight": "78vh", "overflowY": "auto"},
+        style={"height": panel_height, "overflowY": "auto"},
     )
 
     video_panel = dbc.Card(
@@ -963,9 +965,10 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 className="w-100 h-100",
                 style={"objectFit": "cover"},
             ),
-            className="ratio ratio-4x3",
+            className="w-100 h-100",
         ),
         className="shadow-sm h-100 w-100 overflow-hidden",
+        style={"height": panel_height},
     )
 
     app.layout = dash_page(
@@ -979,8 +982,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     ),
                     dbc.Row(
                         [
-                            dbc.Col(video_panel, lg=6, className="d-flex"),
-                            dbc.Col(counts_panel, lg=3, className="d-flex mt-3 mt-lg-0"),
+                            dbc.Col(video_panel, lg=5, className="d-flex"),
+                            dbc.Col(counts_panel, lg=4, className="d-flex mt-3 mt-lg-0"),
                             dbc.Col(
                                 crosswalk_line_controls,
                                 lg=3,
