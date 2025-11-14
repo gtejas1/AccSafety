@@ -975,10 +975,15 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         html.Div(
             html.Img(
                 src=route_path,
-                className="w-100 h-100",
-                style={"objectFit": "cover"},
+                className="img-fluid",
+                style={
+                    "maxHeight": "100%",
+                    "width": "auto",
+                    "height": "auto",
+                    "objectFit": "contain",
+                },
             ),
-            className="w-100 h-100",
+            className="w-100 h-100 d-flex align-items-center justify-content-center bg-black",
         ),
         className="shadow-sm h-100 w-100 overflow-hidden",
         style={"height": panel_height},
