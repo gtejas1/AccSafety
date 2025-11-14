@@ -898,7 +898,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 dcc.Store(id="crosswalk-config-store", data=crosswalk_store_payload),
             ]
         ),
-        className="shadow-sm",
+        className="shadow-sm h-100 w-100",
+        style={"maxHeight": "78vh", "overflowY": "auto"},
     )
 
     start_time_card = dbc.Card(
@@ -931,24 +932,40 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         className="shadow-sm h-100",
     )
 
-    counts_panel = html.Div(
-        [
-            dbc.Row(
-                [
-                    dbc.Col(start_time_card, xs=12, md=4),
-                    dbc.Col(ped_card, xs=6, md=4),
-                    dbc.Col(cyc_card, xs=6, md=4),
-                ],
-                class_name="g-3",
+    counts_panel = dbc.Card(
+        dbc.CardBody(
+            [
+                dbc.Row(
+                    [
+                        dbc.Col(start_time_card, xs=12, md=4),
+                        dbc.Col(ped_card, xs=6, md=4),
+                        dbc.Col(cyc_card, xs=6, md=4),
+                    ],
+                    class_name="g-3",
+                ),
+                html.Div(
+                    "Crosswalk Counts (both directions)",
+                    className="text-muted fw-semibold",
+                ),
+                dbc.Row(crosswalk_cards, class_name="g-3"),
+                dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
+            ],
+            className="d-flex flex-column gap-3",
+        ),
+        className="shadow-sm h-100 w-100",
+        style={"maxHeight": "78vh", "overflowY": "auto"},
+    )
+
+    video_panel = dbc.Card(
+        html.Div(
+            html.Img(
+                src=route_path,
+                className="w-100 h-100",
+                style={"objectFit": "cover"},
             ),
-            html.Div(
-                "Crosswalk Counts (both directions)",
-                className="text-muted mt-4 mb-2",
-            ),
-            dbc.Row(crosswalk_cards, class_name="g-3"),
-            dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
-        ],
-        className="mt-3",
+            className="ratio ratio-4x3",
+        ),
+        className="shadow-sm h-100 w-100 overflow-hidden",
     )
 
     app.layout = dash_page(
@@ -957,27 +974,20 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             card(
                 [
                     html.H3("N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay, WI"),
-                    html.P("NOTE: Only pedestrians and cyclists are counted when they cross the virtual countline."),
+                    html.P(
+                        "NOTE: Only pedestrians and cyclists are counted when they cross the virtual countline.",
+                    ),
                     dbc.Row(
                         [
+                            dbc.Col(video_panel, lg=6, className="d-flex"),
+                            dbc.Col(counts_panel, lg=3, className="d-flex mt-3 mt-lg-0"),
                             dbc.Col(
-                                [
-                                    html.Img(
-                                        src=route_path,
-                                        style={"width": "100%", "borderRadius": "12px"},
-                                    ),
-                                    counts_panel,
-                                ],
-                                md=8,
-                            ),
-                            dbc.Col(
-                                [
-                                    crosswalk_line_controls,
-                                ],
-                                md=4,
+                                crosswalk_line_controls,
+                                lg=3,
+                                className="d-flex mt-3 mt-lg-0",
                             ),
                         ],
-                        class_name="mt-2",
+                        class_name="g-3 align-items-stretch",
                     ),
                 ],
                 class_name="app-card--wide",
