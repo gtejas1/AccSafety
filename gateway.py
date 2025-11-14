@@ -708,7 +708,7 @@ def create_server():
                       </div>
                     </div>
                     <div class="status-feed-extra" aria-hidden="true">
-                      <svg class="status-feed-sparkline" viewBox="0 0 120 40" preserveAspectRatio="none" data-sparkline>
+                      <svg class="status-feed-sparkline" viewBox="0 0 120 40" preserveAspectRatio="none" data-sparkline title="last 24-hour trend">
                         <path d="M4 30" />
                         <circle cx="4" cy="30" r="3" />
                       </svg>
@@ -760,7 +760,6 @@ def create_server():
 
       const API_URL = '/api/v1/vivacity/sparkline';
       const REFRESH_MS = 60_000;
-      const UPDATE_MS = 30_000;
 
       const sparkline = card.querySelector('[data-sparkline]');
       const pathEl = sparkline ? sparkline.querySelector('path') : null;
@@ -769,8 +768,6 @@ def create_server():
       const updatedEl = card.querySelector('[data-live-updated]');
       const messageEl = card.querySelector('[data-live-message]');
       const globalUpdatedEl = document.querySelector('[data-live-global="updated"]');
-      const timeIsStatic = timeEl ? timeEl.hasAttribute('data-live-static') : false;
-      const updatedIsStatic = updatedEl ? updatedEl.hasAttribute('data-live-static') : false;
 
       let lastTimestampIso = null;
 
@@ -780,39 +777,41 @@ def create_server():
         return Number.isNaN(d.getTime()) ? null : d;
       }
 
-      function formatRelative(date){
-        if (!date) { return '—'; }
-        const now = new Date();
-        const diffMs = Math.max(0, now.getTime() - date.getTime());
-        const seconds = diffMs / 1000;
-        if (seconds < 60) { return 'less than a minute ago'; }
-        if (seconds < 90) { return '1 min ago'; }
-        const minutes = seconds / 60;
-        if (minutes < 60) { return `${Math.round(minutes)} min ago`; }
-        const hours = minutes / 60;
-        if (hours < 24) {
-          const rounded = Math.round(hours);
-          return `${rounded} hr${rounded === 1 ? '' : 's'} ago`;
+      const absoluteFormatter = new Intl.DateTimeFormat(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+
+      function formatAbsolute(date){
+        if (!date) { return null; }
+        try {
+          return absoluteFormatter.format(date);
+        } catch (err) {
+          try {
+            return date.toLocaleString();
+          } catch (err2) {
+            return date.toISOString();
+          }
         }
-        const days = Math.round(hours / 24);
-        return `${days} day${days === 1 ? '' : 's'} ago`;
       }
 
-      function updateRelativeLabels(){
+      function updateTimestampLabels(){
         const tsDate = isoToDate(lastTimestampIso);
+        const absoluteLabel = formatAbsolute(tsDate);
         if (timeEl) {
-          timeEl.textContent = timeIsStatic ? 'less than a minute ago' : formatRelative(tsDate);
+          timeEl.textContent = absoluteLabel || '—';
         }
         if (updatedEl) {
-          if (updatedIsStatic) {
-            updatedEl.textContent = 'Updated less than a minute ago';
+          if (!tsDate) {
+            updatedEl.textContent = 'Awaiting live update…';
           } else {
-            const rel = formatRelative(tsDate);
-            updatedEl.textContent = rel === '—' ? 'Awaiting live update…' : `Updated ${rel}`;
+            updatedEl.textContent = `Updated ${absoluteLabel}`;
           }
         }
         if (globalUpdatedEl) {
-          globalUpdatedEl.textContent = formatRelative(tsDate);
+          globalUpdatedEl.textContent = absoluteLabel || '—';
         }
       }
 
@@ -878,14 +877,13 @@ def create_server():
           }
         } finally {
           card.removeAttribute('data-live-loading');
-          updateRelativeLabels();
+          updateTimestampLabels();
         }
       }
 
-      updateRelativeLabels();
+      updateTimestampLabels();
       fetchData();
       setInterval(fetchData, REFRESH_MS);
-      setInterval(updateRelativeLabels, UPDATE_MS);
     })();
   </script>
 
