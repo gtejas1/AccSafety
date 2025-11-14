@@ -455,7 +455,7 @@ def create_server():
     .portal-metric-text {display:flex;flex-direction:column;line-height:1.1;}
     .portal-metric-value {font-size:1.85rem;font-weight:700;color:#0b1736;margin:0;}
     .portal-metric-label {font-size:0.95rem;color:#475569;}
-    .desc {color:#0b1736;margin:10px 0 16px;line-height:1.55;font-size:1rem;max-width:820px;}
+    .desc {color:#000;margin:10px 0 16px;line-height:1.55;font-size:1.15rem;max-width:820px;}
 
     .portal-overview {display:grid;gap:24px;grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch;}
     .portal-primary {display:grid;gap:18px;align-content:start;justify-items:stretch;}
@@ -526,6 +526,9 @@ def create_server():
       border-radius:999px;
       font-size:0.85rem;
       letter-spacing:0.01em;
+      text-decoration:none;
+      display:inline-flex;
+      align-items:center;
     }
     .status-feed-updated {font-size:0.85rem;color:#475569;}
     .status-feed-extra {width:120px;display:flex;justify-content:flex-end;}
@@ -626,7 +629,7 @@ def create_server():
             <div class="portal-hero-text">
               <h2>Explore Wisconsin's Pedestrian & Bicycle Activity Data</h2>
               <p class="desc">
-                Use research-backed insights, statewide counts, and planning tools curated for practitioners focused on people walking and biking.
+                Use research-backed insights, statewide counts, and planning tools tailored for researchers and practitioners focused on people walking and biking.
                 Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
               </p>
             </div>
@@ -676,15 +679,11 @@ def create_server():
                       <div class="status-feed-body">
                         <div class="status-feed-title">
                           <span class="status-feed-location">
-                            <a class="status-feed-link" href="/live/" title="Open live detection dashboard">
-                              N Santa Monica Blvd &amp; Silver Spring Drive <span class="status-feed-area">– Whitefish Bay, WI</span>
-                            </a>
+                            N Santa Monica Blvd &amp; Silver Spring Drive <span class="status-feed-area">– Whitefish Bay, WI</span>
                           </span>
-                          <span class="status-feed-time">just now</span>
                         </div>
                         <div class="status-feed-meta">
-                          <span class="status-feed-badge">LIVE – Video</span>
-                          <span class="status-feed-updated">Updated just now</span>
+                          <a class="status-feed-badge" href="/live/" title="Open live detection dashboard">LIVE-Video</a>
                         </div>
                       </div>
                     </div>
@@ -697,15 +696,13 @@ def create_server():
                       <div class="status-feed-body">
                         <div class="status-feed-title">
                           <span class="status-feed-location">
-                            <a class="status-feed-link" href="/vivacity/" title="Open live Vivacity dashboard">
-                              W Wells St &amp; N 68th St <span class="status-feed-area">– Milwaukee, WI</span>
-                            </a>
+                            W Wells St &amp; N 68th St <span class="status-feed-area">– Milwaukee, WI</span>
                           </span>
-                          <span class="status-feed-time" data-live-time data-live-static aria-live="polite">just now</span>
+                          <span class="status-feed-time" data-live-time data-live-static aria-live="polite"></span>
                         </div>
                         <div class="status-feed-meta">
-                          <span class="status-feed-badge">LIVE – API</span>
-                          <span class="status-feed-updated" data-live-updated data-live-static aria-live="polite">Updated just now</span>
+                          <a class="status-feed-badge" href="/vivacity/" title="Open live Vivacity dashboard">LIVE-Counts</a>
+                          <span class="status-feed-updated" data-live-updated data-live-static aria-live="polite"></span>
                         </div>
                         <div class="status-feed-message" data-live-message aria-live="polite"></div>
                       </div>
