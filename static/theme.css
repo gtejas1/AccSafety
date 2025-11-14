@@ -156,6 +156,136 @@ body {
   width: 100%;
 }
 
+.vivacity-layout-row {
+  flex-wrap: wrap;
+}
+
+.vivacity-side-column,
+.vivacity-main-column {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.vivacity-side-column {
+  flex: 1 1 320px;
+}
+
+.vivacity-main-column {
+  flex: 2 1 480px;
+}
+
+.vivacity-image-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vivacity-image-placeholder {
+  border: 2px dashed rgba(100, 116, 139, 0.4);
+  border-radius: 12px;
+  min-height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--brand-muted);
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.vivacity-filters-card {
+  flex: 1 1 auto;
+  padding-bottom: 20px;
+}
+
+.vivacity-filters-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vivacity-filters-hint {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.vivacity-time-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vivacity-class-checklist {
+  margin-top: 6px;
+}
+
+.vivacity-graph-card {
+  flex: 0 0 auto;
+}
+
+.vivacity-main-column .vivacity-graph-card .dash-graph {
+  width: 100%;
+}
+
+.vivacity-main-column .vivacity-graph-card .js-plotly-plot,
+.vivacity-main-column .vivacity-graph-card .dash-graph {
+  min-height: 360px;
+}
+
+.vivacity-main-column .vivacity-graph-card .js-plotly-plot {
+  width: 100%;
+}
+
+.vivacity-main-column .vivacity-graph-card .modebar {
+  right: 20px !important;
+}
+
+.vivacity-main-column .vivacity-graph-card .modebar-btn {
+  opacity: 0.8;
+}
+
+.vivacity-main-column .vivacity-graph-card .modebar-btn:hover {
+  opacity: 1;
+}
+
+.vivacity-main-column .vivacity-graph-card .plotly {
+  width: 100%;
+}
+
+.vivacity-main-column .vivacity-graph-card .plotly svg {
+  width: 100%;
+}
+
+.vivacity-main-column .vivacity-graph-card .plotly .main-svg {
+  width: 100% !important;
+}
+
+.vivacity-main-column .vivacity-graph-card .plot-container {
+  width: 100% !important;
+}
+
+.vivacity-main-column .vivacity-graph-card .plotly .main-svg {
+  height: auto !important;
+}
+
+.vivacity-table-card {
+  flex: 1 1 auto;
+}
+
+.vivacity-table-card .dash-spreadsheet-container {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+@media (min-width: 992px) {
+  .vivacity-filters-card {
+    max-height: calc(100vh - 260px);
+    overflow-y: auto;
+  }
+}
+
 .app-card--narrow {
   max-width: 520px;
   margin: 0 auto;
