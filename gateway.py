@@ -698,11 +698,9 @@ def create_server():
                           <span class="status-feed-location">
                             W Wells St &amp; N 68th St <span class="status-feed-area">– Milwaukee, WI</span>
                           </span>
-                          <span class="status-feed-time" data-live-time data-live-static aria-live="polite"></span>
                         </div>
                         <div class="status-feed-meta">
                           <a class="status-feed-badge" href="/vivacity/" title="Open live Vivacity dashboard">LIVE-Counts</a>
-                          <span class="status-feed-updated" data-live-updated data-live-static aria-live="polite"></span>
                         </div>
                         <div class="status-feed-message" data-live-message aria-live="polite"></div>
                       </div>
