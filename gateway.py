@@ -628,8 +628,8 @@ def create_server():
         <div class="portal-overview">
           <div class="portal-primary">
             <div class="portal-hero-text">
-              <h2>Explore Wisconsin's Pedestrian & Bicycle Activity Data</h2>
-              <p class="desc">
+              <h1>Explore Wisconsin's Pedestrian & Bicycle Activity Data</h1>
+              <p>
                 Use research-backed insights, statewide counts, and planning tools tailored for researchers and practitioners focused on people walking and biking.
                 Explore integrated datasets, guidance, and quick-start resources to turn analysis into on-the-ground improvements.
               </p>
@@ -658,17 +658,17 @@ def create_server():
                 <article class="portal-data-card">
                   <h3>Data Sources Available</h3>
                   <span class="portal-data-value">7</span>
-                  <p class="portal-data-note">Non-driver; VRU; roadway; census; counts; transit; local</p>
+                  <p class="portal-data-note">short-term & long-term counts, intersection/midblock and trails, crowdsourced data</p>
                 </article>
                 <article class="portal-data-card">
                   <h3>Research Tools You Can Run</h3>
-                  <span class="portal-data-value">8</span>
-                  <p class="portal-data-note">Risk; counts; site screening; export</p>
+                  <span class="portal-data-value">6</span>
+                  <p class="portal-data-note">Model-based Demand Estimates, Hourly Expansion Factors, Ped/bike Crash Prediction Models</p>
                 </article>
                 <article class="portal-data-card">
                   <h3>Analysis Options</h3>
-                  <span class="portal-data-value">15</span>
-                  <p class="portal-data-note">Filters by mode; facility; time</p>
+                  <span class="portal-data-value">13</span>
+                  <p class="portal-data-note">Filter by mode, facility, source</p>
                 </article>
               </div>
             </div>
