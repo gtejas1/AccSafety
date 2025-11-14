@@ -904,12 +904,15 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         style={"height": panel_height, "overflowY": "auto"},
     )
 
+    metric_body_class = "d-flex flex-column gap-2"
+
     start_time_card = dbc.Card(
         dbc.CardBody(
             [
-                html.Div("Detection Started", className="text-muted"),
-                html.H5(id="start-time", className="mb-0"),
-            ]
+                html.Small("Detection Started", className="text-muted text-uppercase"),
+                html.H5(id="start-time", className="mb-0 fw-semibold"),
+            ],
+            className=metric_body_class,
         ),
         className="shadow-sm h-100",
     )
@@ -917,9 +920,14 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     ped_card = dbc.Card(
         dbc.CardBody(
             [
-                html.Div("Pedestrians Detected", className="text-muted"),
-                html.H2(id="ped-count", className="mb-0 text-primary"),
-            ]
+                html.Small("Pedestrians Detected", className="text-muted text-uppercase"),
+                html.H4(
+                    id="ped-count",
+                    className="mb-0 text-primary fw-bold",
+                    style={"fontSize": "1.9rem"},
+                ),
+            ],
+            className=metric_body_class,
         ),
         className="shadow-sm h-100",
     )
@@ -927,9 +935,14 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     cyc_card = dbc.Card(
         dbc.CardBody(
             [
-                html.Div("Cyclists Detected", className="text-muted"),
-                html.H2(id="cyc-count", className="mb-0 text-success"),
-            ]
+                html.Small("Cyclists Detected", className="text-muted text-uppercase"),
+                html.H4(
+                    id="cyc-count",
+                    className="mb-0 text-success fw-bold",
+                    style={"fontSize": "1.9rem"},
+                ),
+            ],
+            className=metric_body_class,
         ),
         className="shadow-sm h-100",
     )
@@ -983,14 +996,10 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     dbc.Row(
                         [
                             dbc.Col(video_panel, lg=5, className="d-flex"),
-                            dbc.Col(counts_panel, lg=4, className="d-flex mt-3 mt-lg-0"),
-                            dbc.Col(
-                                crosswalk_line_controls,
-                                lg=3,
-                                className="d-flex mt-3 mt-lg-0",
-                            ),
+                            dbc.Col(counts_panel, lg=4, className="d-flex"),
+                            dbc.Col(crosswalk_line_controls, lg=3, className="d-flex"),
                         ],
-                        class_name="g-3 align-items-stretch",
+                        class_name="g-3 gy-4 gy-lg-0 align-items-stretch",
                     ),
                 ],
                 class_name="app-card--wide",
