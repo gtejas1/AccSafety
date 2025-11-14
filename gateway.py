@@ -698,7 +698,7 @@ def create_server():
                         <div class="status-feed-title">
                           <span class="status-feed-location">
                             <a class="status-feed-link" href="/vivacity/" title="Open live Vivacity dashboard">
-                              W Wells St &amp; N 68th St <span class="status-feed-area">– Milwaukee</span>
+                              W Wells St &amp; N 68th St <span class="status-feed-area">– Milwaukee, WI</span>
                             </a>
                           </span>
                           <span class="status-feed-time" data-live-time data-live-static aria-live="polite">just now</span>

@@ -956,9 +956,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         [
             card(
                 [
-                    html.H3("N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay"),
-                    html.P("Streaming live YOLO inference showing cumulative detections."),
-                    html.P("NOTE: Only pedestrians and cyclists are counted."),
+                    html.H3("N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay, WI"),
+                    html.P("NOTE: Only pedestrians and cyclists are counted when they cross the virtual countline."),
                     dbc.Row(
                         [
                             dbc.Col(

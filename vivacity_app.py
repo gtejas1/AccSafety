@@ -242,7 +242,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         suppress_callback_exceptions=True,
         assets_url_path=f"{prefix.rstrip('/')}/assets",
     )
-    app.title = " Vivacity W Wells St & N 68th St Intersection"
+    app.title = "W Wells St & N 68th St Intersection"
 
     # Preload meta (optional)
     try:
