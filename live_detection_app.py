@@ -983,7 +983,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 ),
                 dbc.Row(
                     crosswalk_cards,
-                    class_name="g-3 row-cols-1 row-cols-sm-2 row-cols-lg-4",
+                    class_name="g-3 row-cols-1 row-cols-sm-2",
                 ),
                 dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
             ],
