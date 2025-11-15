@@ -647,6 +647,15 @@ def create_server():
             </div>
 
             <div class="portal-primary-cards" aria-label="Portal data and tools overview">
+              <div class="portal-metric" aria-label="Count sites available">
+                <span class="portal-metric-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.94 0-7.29 3.04-7.29 7.08 0 3.18 2.22 6.63 6.56 10.26.49.43 1.24.43 1.73 0 4.34-3.63 6.56-7.08 6.56-10.26 0-4.04-3.35-7.08-7.56-7.08Zm0 10.65a3.57 3.57 0 1 1 0-7.14 3.57 3.57 0 0 1 0 7.14Z"/></svg>
+                </span>
+                <div class="portal-metric-text">
+                  <span class="portal-metric-value">8526</span>
+                  <span class="portal-metric-label">Count sites</span>
+                </div>
+              </div>
               <article class="portal-data-card">
                 <h3>Data Sources Available</h3>
                 <span class="portal-data-value">7</span>

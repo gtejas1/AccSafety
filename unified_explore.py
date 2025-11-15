@@ -591,7 +591,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     filter_block = card(
         [
             html.H2("Explore Counts"),
-            html.P("Query: Mode → Facility → Data source", className="app-muted"),
+            html.P("Pick Mode, then Facility, then Source.", className="app-muted"),
 
             html.Div(
                 [
