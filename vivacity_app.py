@@ -289,7 +289,11 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                                 [
                                     html.H3("Intersection Preview", className="mb-3"),
                                     html.Div(
-                                        "Image coming soon",
+                                        html.Img(
+                                            src="/static/img/whitefish-bay-intersection.jpg",
+                                            alt="W Wells St & N 68th St intersection preview",
+                                            className="vivacity-image",
+                                        ),
                                         className="vivacity-image-placeholder",
                                     ),
                                 ],
