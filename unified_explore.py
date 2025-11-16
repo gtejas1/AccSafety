@@ -92,6 +92,22 @@ TRAIL_CROSS_FLAGS           = [
 TRAIL_CROSS_PORTAL_URL      = "https://uwm.maps.arcgis.com"
 TRAIL_CROSS_SCRIPT_SRC      = "https://js.arcgis.com/4.34/embeddable-components/"
 
+# ---- NEW: Bicyclist + Intersection + Pilot custom map ----
+BICYCLIST_PILOT_MODE        = "Bicyclist"
+BICYCLIST_PILOT_FACILITY    = "Intersection"
+BICYCLIST_PILOT_SOURCE      = "Wisconsin Pilot Counting Program Counts"
+BICYCLIST_PILOT_ITEM_ID     = "d5e4157ca9a5464d80ca1783935f023e"
+BICYCLIST_PILOT_CENTER      = "-88.3583354998354,43.534559715287145"
+BICYCLIST_PILOT_SCALE       = "2311162.2171545"
+BICYCLIST_PILOT_THEME       = "light"
+BICYCLIST_PILOT_SCRIPT_SRC  = "https://js.arcgis.com/4.34/embeddable-components/"
+BICYCLIST_PILOT_PORTAL_URL  = "https://uwm.maps.arcgis.com"
+
+# ---- NEW: Bicyclist special location (Pilot) ----
+BICYCLIST_PILOT_LOCATION = "University of Wisconsin- Whitewater: W Starin Rd & N Prairie St"
+BICYCLIST_PILOT_DURATION = "Not Available"
+BICYCLIST_PILOT_VIEW     = "Not Available"
+
 MODE_LABEL_OVERRIDES = {
     "Pedestrian": "Pedestrian Only",
     "Bicyclist": "Bicyclist Only",
@@ -314,6 +330,8 @@ def _viv_total_last_days(ids: list[str], days: int = 7) -> int:
 def _build_view_link(row: pd.Series) -> str:
     src = (row.get("Source") or "").strip()
     loc = (row.get("Location") or "").strip()
+    if loc == BICYCLIST_PILOT_LOCATION and src == BICYCLIST_PILOT_SOURCE:
+        return BICYCLIST_PILOT_VIEW
     if loc == SP2_LOCATION and src == SP2_SOURCE:
         return f"[Open]({SP2_VIEW_ROUTE})"
     if loc == SP_LOCATION and src == SP_SOURCE:
@@ -451,6 +469,41 @@ def _trail_crossing_embedded_map(container_id: str = "trail-crossing-map") -> ht
             "boxShadow": "0 1px 4px rgba(0,0,0,0.1)",
             "background": "transparent",
         },
+    )
+
+
+def _bicyclist_pilot_intersection_map(container_id: str = "bicyclist-pilot-map") -> html.Iframe:
+    srcdoc = f"""<!doctype html>
+<html lang=\"en\">
+  <head>
+    <meta charset=\"utf-8\"/>
+    <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>
+    <script type=\"module\" src=\"{BICYCLIST_PILOT_SCRIPT_SRC}\"></script>
+    <style>
+      html,body{{margin:0;padding:0;height:100%;width:100%;background:transparent}}
+      #holder{{height:100%;width:100%;display:flex;align-items:stretch;justify-content:stretch}}
+      arcgis-embedded-map{{height:100%;width:100%}}
+    </style>
+  </head>
+  <body>
+    <div id=\"holder\">
+      <arcgis-embedded-map
+        item-id=\"{BICYCLIST_PILOT_ITEM_ID}\"
+        theme=\"{BICYCLIST_PILOT_THEME}\"
+        portal-url=\"{BICYCLIST_PILOT_PORTAL_URL}\"
+        center=\"{BICYCLIST_PILOT_CENTER}\"
+        scale=\"{BICYCLIST_PILOT_SCALE}\"
+        legend-enabled
+      ></arcgis-embedded-map>
+    </div>
+  </body>
+</html>"""
+
+    return html.Iframe(
+        id=container_id,
+        srcDoc=srcdoc,
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms",
+        style=DEFAULT_IFRAME_STYLE,
     )
 
 
@@ -858,6 +911,18 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             }
             df = pd.concat([df, pd.DataFrame([sp2_row])], ignore_index=True)
 
+            if str(mode or "").strip().casefold() == BICYCLIST_PILOT_MODE.casefold():
+                uw_whitewater_row = {
+                    "Location": BICYCLIST_PILOT_LOCATION,
+                    "Duration": BICYCLIST_PILOT_DURATION,
+                    "Total counts": None,
+                    "Source type": SP_SOURCE_TYPE,
+                    "Source": SP_SOURCE,
+                    "Facility type": SP_FACILITY,
+                    "Mode": str(mode).strip(),
+                }
+                df = pd.concat([df, pd.DataFrame([uw_whitewater_row])], ignore_index=True)
+
         # --- Map selection (Pilot OR Statewide OR SEWRPC Trails OR Milwaukee AAEC OR NEW AAEC Statewide embed OR Mid-Block) ---
         source_val = str(source or "").strip().casefold()
         map_children = []
@@ -866,6 +931,14 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         embed_component = _source_embed_component(source_val)
         if embed_component is not None:
             map_children = embed_component
+            map_style = {"display": "block"}
+
+        if (
+            str(mode or "").strip().casefold() == BICYCLIST_PILOT_MODE.casefold()
+            and str(facility or "").strip().casefold() == BICYCLIST_PILOT_FACILITY.casefold()
+            and source_val == BICYCLIST_PILOT_SOURCE.casefold()
+        ):
+            map_children = _bicyclist_pilot_intersection_map()
             map_style = {"display": "block"}
 
         source_types = pd.Series(dtype=str)
