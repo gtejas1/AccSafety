@@ -101,7 +101,7 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
     bp = Blueprint("wisdot_files", __name__)
 
     # Folder where your WisDOT files live
-    BASE_DIR = r"C:\\D-Drive\\IPIT_Research_Assistant\\WisDOT_download"
+    BASE_DIR = r"/srv/AccSafety/WisDot_RawData"
     # Disk cache path for filename/location/date metadata
     CACHE_PATH = os.path.join(os.path.dirname(__file__), "wisdot_cache.json")
 
@@ -218,7 +218,7 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>WisDOT Count Files</title>
+  <title>Historical Data</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/theme.css">
 </head>
@@ -228,7 +228,7 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
       <img src="/static/img/accsafety-logo.png" alt="AccSafety logo" class="app-logo">
       <div class="app-header-title">
         <span class="app-brand">AccSafety</span>
-        <span class="app-subtitle">WisDOT Count Files</span>
+        <span class="app-subtitle">Historical Data</span>
       </div>
       <nav class="app-nav">
         <a class="app-link" href="/">Back to Portal</a>
@@ -236,8 +236,8 @@ def create_wisdot_files_app(server: Flask, prefix: str = "/wisdot/") -> None:
     </header>
     <main class="app-content">
       <section class="app-card">
-        <h1>Download historical WisDOT data</h1>
-        <p class="app-muted">Files are synchronised from the raw data folder in the server. Choose a location below to retrieve the latest spreadsheet.</p>
+        <h1>Download historical data</h1>
+        <p class="app-muted">Click download below to retrieve the spreadsheet.</p>
         {% if not trail_rows and not intersection_rows %}
           <div class="app-alert">No count files were found in the configured directory.</div>
         {% endif %}
