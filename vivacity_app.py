@@ -287,7 +287,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                         [
                             card(
                                 [
-                                    html.H3("Intersection Preview", className="mb-3"),
+                                    html.H3("Count Site Overview", className="mb-3"),
                                     html.Div(
                                         html.Img(
                                             src="/static/img/vivacity.jpg",
