@@ -754,13 +754,22 @@ def create_server():
               <div class="portal-map-slideshow">
                 <div class="portal-map-track">
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/wisconsin-overview.png" alt="Stylized statewide map of Wisconsin showing non-driver activity hotspots" loading="lazy">
+                    <img src="/static/img/slides/1.jpg" alt="1" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/community-crossing.jpg" alt="Signalized intersection in Milwaukee highlighting crosswalk improvements" loading="lazy">
+                    <img src="/static/img/slides/2.jpg" alt="2" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/trail-investments.png" alt="Regional view of priority trail investment corridors" loading="lazy">
+                    <img src="/static/img/slides/3.jpg" alt="3" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/4.jpg" alt="4" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/5.jpg" alt="5" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/6.jpg" alt="6" loading="lazy">
                   </figure>
                 </div>
               </div>
