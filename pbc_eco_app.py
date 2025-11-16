@@ -66,6 +66,22 @@ def _table_for_location_mode(location: Optional[str], mode: str) -> str:
         return "trail_traffic_data"
     return table
 
+
+def _short_direction_label(direction: Optional[str]) -> str:
+    """Return a compact label for legend display (e.g., "Pedestrian IN")."""
+    if not direction:
+        return ""
+    direction = str(direction).strip()
+    lowered = direction.lower()
+    for keyword in ("pedestrian", "bicyclist", "bike", "cyclist"):
+        idx = lowered.find(keyword)
+        if idx != -1:
+            return direction[idx:].strip()
+    parts = direction.split()
+    if len(parts) > 3:
+        return " ".join(parts[-3:])
+    return direction
+
 # --- SQL helpers that USE your new tables/view layout -------------------------
 _BOUNDS_SQL = text("""
 WITH all_hits AS (
@@ -189,29 +205,59 @@ def create_eco_dash(server, prefix="/eco/"):
         ),
     ])
 
-    dashboard_layout = card([
-        dbc.Row([dbc.Col(html.H1(id="eco-dashboard-title", className="text-center mb-4"))]),
-        # (Back to Summary button removed per request)
-        dbc.Row([
-            dbc.Col(
+    filters_card = dbc.Card(
+        [
+            dbc.CardHeader("Filters"),
+            dbc.CardBody([
+                dbc.Label("Mode"),
                 dcc.Dropdown(id="eco-mode", options=MODE_OPTIONS, value="Pedestrian", clearable=False),
-                xs=12, md=6, lg=4
-            ),
-            dbc.Col(dcc.DatePickerRange(id="eco-date-picker", display_format="MM-DD-YYYY"), xs=12, md=6, lg=4),
-            dbc.Col(
+                dbc.Label("Date Range", className="mt-3"),
+                dcc.DatePickerRange(id="eco-date-picker", display_format="MM-DD-YYYY", className="w-100"),
                 html.Div(
                     html.A(
                         "Download Data", id="eco-download-link", href="", target="_blank",
-                        className="btn btn-outline-primary float-end",
+                        className="btn btn-outline-primary w-100 mt-3",
                     )
                 ),
-                xs=12, lg=4,
-            ),
-        ], className="g-3"),
-        html.Hr(),
-        dbc.Row([dbc.Col(html.H4("Volume Summary"), width=12), dbc.Col(dcc.Graph(id="eco-daily-traffic"), width=12)]),
-        dbc.Row([dbc.Col(html.H4("Hourly Volumes"), width=12), dbc.Col(dcc.Graph(id="eco-hourly-traffic"), width=12)]),
-        dbc.Row([dbc.Col(html.H4("Average Volume by Day of the Week"), width=12), dbc.Col(dcc.Graph(id="eco-dow-traffic"), width=12)]),
+            ]),
+        ],
+        className="h-100",
+    )
+
+    daily_card = dbc.Card(
+        [
+            dbc.CardHeader("Daily Volume Summary"),
+            dbc.CardBody(dcc.Graph(id="eco-daily-traffic", className="flex-grow-1")),
+        ],
+        className="h-100",
+    )
+
+    hourly_card = dbc.Card(
+        [
+            dbc.CardHeader("Hourly Volumes"),
+            dbc.CardBody(dcc.Graph(id="eco-hourly-traffic", className="flex-grow-1")),
+        ],
+        className="h-100",
+    )
+
+    dow_card = dbc.Card(
+        [
+            dbc.CardHeader("Average Volume by Day of the Week"),
+            dbc.CardBody(dcc.Graph(id="eco-dow-traffic", className="flex-grow-1")),
+        ],
+        className="h-100",
+    )
+
+    dashboard_layout = card([
+        dbc.Row([dbc.Col(html.H1(id="eco-dashboard-title", className="text-center mb-4"))]),
+        dbc.Row([
+            dbc.Col(filters_card, xs=12, md=6, className="mb-4"),
+            dbc.Col(daily_card, xs=12, md=6, className="mb-4"),
+        ], className="g-4"),
+        dbc.Row([
+            dbc.Col(hourly_card, xs=12, md=6, className="mb-4"),
+            dbc.Col(dow_card, xs=12, md=6, className="mb-4"),
+        ], className="g-4"),
         html.Div(id="eco-note", className="text-muted mt-2"),
     ])
 
@@ -354,7 +400,25 @@ def create_eco_dash(server, prefix="/eco/"):
         data["date"] = pd.to_datetime(data["date"]).sort_values()
 
         # Hourly
-        hourly_fig = px.line(data, x="date", y="count", color="direction", title="Hourly Traffic Trends")
+        data["direction_label"] = data["direction"].apply(_short_direction_label)
+        hourly_fig = px.line(
+            data,
+            x="date",
+            y="count",
+            color="direction_label",
+            title="Hourly Traffic Trends",
+        )
+        hourly_fig.update_layout(
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+                title="",
+            ),
+            margin=dict(t=60, r=20, b=60),
+        )
 
         # Daily totals
         daily = data.set_index("date")["count"].resample("D").sum().reset_index()
