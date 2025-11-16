@@ -315,6 +315,115 @@ def create_server():
     .notice-actions button { border-radius: 999px; border: none; padding: 10px 18px; font-weight: 600; cursor: pointer; font-size: 0.95rem; }
     .notice-actions .primary { background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary)); color: #fff; box-shadow: 0 12px 26px rgba(11, 102, 195, 0.28); }
     .notice-backdrop[hidden] { display: none; }
+    
+    /* --- Compact hero text for less vertical space --- */
+    .portal-hero-text h1 {
+      font-size: 2rem;
+      line-height: 1.25;
+      margin-bottom: 8px;
+    }
+    .portal-hero-text p {
+      font-size: 0.98rem;
+      line-height: 1.45;
+      max-width: 640px;
+      margin: 6px 0 10px;
+    }
+
+    .cta-wrap {
+      margin-top: 4px;
+      margin-bottom: 10px;
+    }
+
+    .portal-status-card {
+      padding: 18px 18px;
+      border-radius: 18px;
+      box-shadow: 0 18px 32px rgba(15,23,42,0.10);
+    }
+
+    .portal-metric {
+      padding: 12px 14px;
+      border-radius: 14px;
+    }
+    .portal-metric-value {
+      font-size: 1.6rem;
+    }
+
+    .portal-data-card {
+      padding: 14px 16px;
+      border-radius: 12px;
+    }
+    .portal-data-value {
+      font-size: 1.6rem;
+    }
+
+    /* --- Desktop layout: put hero+CTA+status in one column, metrics in another --- */
+    @media (min-width: 1100px) {
+      .portal-overview {
+        grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.1fr);
+        align-items: start;
+        gap: 20px;
+      }
+
+      /* Turn the left side into a 2-column grid: 
+         - column 1: hero + CTA + status
+         - column 2: metric cards
+      */
+      .portal-primary {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+        grid-template-rows: auto auto 1fr;
+        grid-template-areas:
+          "hero   metrics"
+          "cta    metrics"
+          "status metrics";
+        gap: 14px 20px;
+        align-items: start;
+      }
+
+      .portal-hero-text {
+        grid-area: hero;
+      }
+      .cta-wrap {
+        grid-area: cta;
+        align-self: start;
+      }
+      .portal-primary-cards {
+        grid-area: metrics;
+        align-self: stretch;
+      }
+      .portal-status-card {
+        grid-area: status;
+      }
+
+      /* Make the 3 small cards themselves compact and side-by-side */
+      .portal-primary-cards {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-auto-rows: 1fr;
+        gap: 10px;
+      }
+
+      /* Put the big "Unique Count Sites" metric on top spanning both columns */
+      .portal-metric {
+        grid-column: 1 / -1;
+      }
+
+      /* Right column slideshow fills available height but doesn’t get too tall */
+      .portal-secondary {
+        align-self: stretch;
+      }
+      .portal-map-card {
+        height: 100%;
+        max-height: 420px;
+        display: flex;
+        flex-direction: column;
+      }
+      .portal-map-slideshow {
+        flex: 1;
+        min-height: 240px;
+      }
+    }
+
   </style>
 </head>
 <body>
@@ -468,7 +577,7 @@ def create_server():
     .portal-map-card {background:rgba(255,255,255,0.92);border:1px solid rgba(148,163,184,0.26);border-radius:18px;box-shadow:0 16px 28px rgba(15,23,42,0.1);padding:18px 20px;display:flex;flex-direction:column;gap:14px;width:100%;height:100%;max-width:none;flex:1;}
     .portal-map-heading {margin:0;font-size:1.05rem;font-weight:700;color:#0b1736;}
     .portal-map-slideshow {flex:1;width:100%;position:relative;border-radius:18px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);overflow:hidden;background:linear-gradient(135deg,rgba(148,163,184,0.25),rgba(226,232,240,0.9));padding:18px;display:flex;}
-    .portal-map-track {position:relative;width:100%;min-height:clamp(200px,32vw,360px);}
+    .portal-map-track {position:relative;width:100%;min-height:clamp(200px,22vw,280px);}
     .portal-map-slide {margin:0;position:absolute;inset:0;border-radius:14px;overflow:hidden;box-shadow:0 10px 20px rgba(15,23,42,0.1);opacity:0;transition:opacity 600ms ease;}
     .portal-map-slide:first-child {opacity:1;}
     .portal-map-track[data-has-js] .portal-map-slide:first-child {opacity:0;}
@@ -748,22 +857,22 @@ def create_server():
               <div class="portal-map-slideshow">
                 <div class="portal-map-track">
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/1.jpg" alt="1" loading="lazy">
+                    <img src="/static/img/slides/1.png" alt="1" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/2.jpg" alt="2" loading="lazy">
+                    <img src="/static/img/slides/2.png" alt="2" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/3.jpg" alt="3" loading="lazy">
+                    <img src="/static/img/slides/3.png" alt="3" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/4.jpg" alt="4" loading="lazy">
+                    <img src="/static/img/slides/4.png" alt="4" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/5.jpg" alt="5" loading="lazy">
+                    <img src="/static/img/slides/5.png" alt="5" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/6.jpg" alt="6" loading="lazy">
+                    <img src="/static/img/slides/6.png" alt="6" loading="lazy">
                   </figure>
                 </div>
               </div>
