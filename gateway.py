@@ -467,7 +467,19 @@ def create_server():
     .portal-data-note {margin:0;font-size:0.9rem;color:#475569;line-height:1.35;}
     .portal-map-card {background:rgba(255,255,255,0.92);border:1px solid rgba(148,163,184,0.26);border-radius:18px;box-shadow:0 16px 28px rgba(15,23,42,0.1);padding:18px 20px;display:flex;flex-direction:column;gap:14px;width:100%;height:100%;max-width:none;flex:1;}
     .portal-map-heading {margin:0;font-size:1.05rem;font-weight:700;color:#0b1736;}
-    .portal-map-image {flex:1;width:100%;height:100%;display:block;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);object-fit:cover;background:#e2e8f0;min-height:320px;}
+    .portal-map-slideshow {flex:1;width:100%;position:relative;border-radius:18px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);overflow:hidden;background:linear-gradient(135deg,rgba(148,163,184,0.25),rgba(226,232,240,0.9));padding:18px;display:flex;}
+    .portal-map-track {position:relative;width:100%;min-height:clamp(200px,32vw,360px);}
+    .portal-map-slide {margin:0;position:absolute;inset:0;border-radius:14px;overflow:hidden;box-shadow:0 10px 20px rgba(15,23,42,0.1);opacity:0;animation:portalMapFade 21s linear infinite;}
+    .portal-map-slide:first-child {opacity:1;}
+    .portal-map-slide:nth-child(2) {animation-delay:7s;}
+    .portal-map-slide:nth-child(3) {animation-delay:14s;}
+    .portal-map-slide img {width:100%;height:100%;display:block;object-fit:cover;}
+    @keyframes portalMapFade {
+      0% {opacity:1;}
+      27% {opacity:1;}
+      33% {opacity:0;}
+      100% {opacity:0;}
+    }
     .portal-hero-text {justify-self:start;}
     .portal-hero-text h1 {margin:0;font-size:2.4rem;line-height:1.2;}
     .portal-status-card {
@@ -548,7 +560,7 @@ def create_server():
       .portal-overview {grid-template-columns:1fr;gap:20px;}
       .portal-secondary {display:grid;align-self:auto;}
       .portal-map-card {max-width:100%;height:auto;}
-      .portal-map-image {min-height:0;height:auto;max-height:320px;object-fit:contain;}
+      .portal-map-slideshow {padding:16px;}
     }
 
     /* Info tooltip beside the CTA */
@@ -739,12 +751,28 @@ def create_server():
 
           <div class="portal-secondary">
             <div class="portal-map-card">
-              <img
-                class="portal-map-image"
-                src="/static/img/home-map.png"
-                alt="Map of Wisconsin highlighting non-driver activity and safety"
-                loading="lazy"
-              >
+              <div class="portal-map-slideshow">
+                <div class="portal-map-track">
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/1.jpg" alt="1" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/2.jpg" alt="2" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/3.jpg" alt="3" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/4.jpg" alt="4" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/5.jpg" alt="5" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/6.jpg" alt="6" loading="lazy">
+                  </figure>
+                </div>
+              </div>
             </div>
           </div>
         </div>
