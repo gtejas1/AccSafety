@@ -469,17 +469,11 @@ def create_server():
     .portal-map-heading {margin:0;font-size:1.05rem;font-weight:700;color:#0b1736;}
     .portal-map-slideshow {flex:1;width:100%;position:relative;border-radius:18px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);overflow:hidden;background:linear-gradient(135deg,rgba(148,163,184,0.25),rgba(226,232,240,0.9));padding:18px;display:flex;}
     .portal-map-track {position:relative;width:100%;min-height:clamp(200px,32vw,360px);}
-    .portal-map-slide {margin:0;position:absolute;inset:0;border-radius:14px;overflow:hidden;box-shadow:0 10px 20px rgba(15,23,42,0.1);opacity:0;animation:portalMapFade 21s linear infinite;}
+    .portal-map-slide {margin:0;position:absolute;inset:0;border-radius:14px;overflow:hidden;box-shadow:0 10px 20px rgba(15,23,42,0.1);opacity:0;transition:opacity 600ms ease;}
     .portal-map-slide:first-child {opacity:1;}
-    .portal-map-slide:nth-child(2) {animation-delay:7s;}
-    .portal-map-slide:nth-child(3) {animation-delay:14s;}
+    .portal-map-track[data-has-js] .portal-map-slide:first-child {opacity:0;}
+    .portal-map-track[data-has-js] .portal-map-slide[data-active] {opacity:1;}
     .portal-map-slide img {width:100%;height:100%;display:block;object-fit:cover;}
-    @keyframes portalMapFade {
-      0% {opacity:1;}
-      27% {opacity:1;}
-      33% {opacity:0;}
-      100% {opacity:0;}
-    }
     .portal-hero-text {justify-self:start;}
     .portal-hero-text h1 {margin:0;font-size:2.4rem;line-height:1.2;}
     .portal-status-card {
@@ -799,6 +793,83 @@ def create_server():
       </div>
     </div>
   </div>
+
+  <script>
+    (function(){
+      const INTERVAL_MS = 7000;
+      const motionQuery = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+
+      function startSlideshow(track, slides){
+        if (!slides.length) { return; }
+
+        track.dataset.hasJs = '1';
+
+        let index = 0;
+        let timerId = null;
+
+        function setActiveSlide(nextIndex){
+          slides[index].removeAttribute('data-active');
+          index = nextIndex;
+          slides[index].setAttribute('data-active', 'true');
+        }
+
+        // Ensure the first slide is active for JS-driven rotation
+        slides[index].setAttribute('data-active', 'true');
+
+        if (slides.length < 2) {
+          return;
+        }
+
+        const tick = () => {
+          const next = (index + 1) % slides.length;
+          setActiveSlide(next);
+        };
+
+        const start = () => {
+          if (timerId !== null) {
+            return;
+          }
+          timerId = window.setInterval(tick, INTERVAL_MS);
+        };
+
+        const stop = () => {
+          if (timerId === null) {
+            return;
+          }
+          window.clearInterval(timerId);
+          timerId = null;
+        };
+
+        if (!motionQuery || !motionQuery.matches) {
+          start();
+        }
+
+        if (motionQuery) {
+          const handleMotionChange = (event) => {
+            if (event.matches) {
+              stop();
+            } else {
+              start();
+            }
+          };
+
+          if (typeof motionQuery.addEventListener === 'function') {
+            motionQuery.addEventListener('change', handleMotionChange);
+          } else if (typeof motionQuery.addListener === 'function') {
+            motionQuery.addListener(handleMotionChange);
+          }
+        }
+      }
+
+      document.querySelectorAll('.portal-map-track').forEach((track) => {
+        const slides = track.querySelectorAll('.portal-map-slide');
+        if (!slides.length) {
+          return;
+        }
+        startSlideshow(track, slides);
+      });
+    })();
+  </script>
 
   <script>
     (function(){
