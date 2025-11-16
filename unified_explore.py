@@ -499,6 +499,7 @@ def _pilot_intersection_map(container_id: str = "bicyclist-pilot-map") -> html.I
         center=\"{BICYCLIST_PILOT_CENTER}\"
         scale=\"{BICYCLIST_PILOT_SCALE}\"
         legend-enabled
+        information-enabled
       ></arcgis-embedded-map>
     </div>
   </body>
