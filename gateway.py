@@ -467,7 +467,11 @@ def create_server():
     .portal-data-note {margin:0;font-size:0.9rem;color:#475569;line-height:1.35;}
     .portal-map-card {background:rgba(255,255,255,0.92);border:1px solid rgba(148,163,184,0.26);border-radius:18px;box-shadow:0 16px 28px rgba(15,23,42,0.1);padding:18px 20px;display:flex;flex-direction:column;gap:14px;width:100%;height:100%;max-width:none;flex:1;}
     .portal-map-heading {margin:0;font-size:1.05rem;font-weight:700;color:#0b1736;}
-    .portal-map-image {flex:1;width:100%;height:100%;display:block;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);object-fit:cover;background:#e2e8f0;min-height:320px;}
+    .portal-map-slideshow {--slide-height:clamp(280px,34vw,420px);--slide-duration:28s;--slide-count:4;flex:1;width:100%;position:relative;border-radius:14px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);overflow:hidden;background:linear-gradient(135deg,rgba(148,163,184,0.25),rgba(226,232,240,0.9));min-height:var(--slide-height);}
+    .portal-map-track {display:flex;flex-direction:column;gap:0;animation:mapSlide var(--slide-duration) linear infinite;}
+    .portal-map-slide {height:var(--slide-height);margin:0;position:relative;}
+    .portal-map-slide img {width:100%;height:100%;display:block;object-fit:cover;}
+    @keyframes mapSlide {from {transform:translateY(0);} to {transform:translateY(calc(-1 * (var(--slide-count) - 1) * var(--slide-height)));}}
     .portal-hero-text {justify-self:start;}
     .portal-hero-text h1 {margin:0;font-size:2.4rem;line-height:1.2;}
     .portal-status-card {
@@ -548,7 +552,7 @@ def create_server():
       .portal-overview {grid-template-columns:1fr;gap:20px;}
       .portal-secondary {display:grid;align-self:auto;}
       .portal-map-card {max-width:100%;height:auto;}
-      .portal-map-image {min-height:0;height:auto;max-height:320px;object-fit:contain;}
+      .portal-map-slideshow {--slide-height:clamp(220px,60vw,360px);height:auto;min-height:var(--slide-height);}
     }
 
     /* Info tooltip beside the CTA */
@@ -739,12 +743,22 @@ def create_server():
 
           <div class="portal-secondary">
             <div class="portal-map-card">
-              <img
-                class="portal-map-image"
-                src="/static/img/home-map.png"
-                alt="Map of Wisconsin highlighting non-driver activity and safety"
-                loading="lazy"
-              >
+              <div class="portal-map-slideshow" style="--slide-count:4;">
+                <div class="portal-map-track">
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/wisconsin-overview.png" alt="Stylized statewide map of Wisconsin showing non-driver activity hotspots" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/community-crossing.jpg" alt="Signalized intersection in Milwaukee highlighting crosswalk improvements" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/trail-investments.png" alt="Regional view of priority trail investment corridors" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/wisconsin-overview.png" alt="Stylized statewide map of Wisconsin showing non-driver activity hotspots" loading="lazy">
+                  </figure>
+                </div>
+              </div>
             </div>
           </div>
         </div>
