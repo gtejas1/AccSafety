@@ -465,19 +465,22 @@ def create_server():
     .portal-data-card h3 {margin:0;font-size:0.85rem;font-weight:700;color:#0b1736;letter-spacing:0.04em;text-transform:uppercase;}
     .portal-data-value {font-size:2rem;font-weight:700;color:#0b1736;line-height:1;}
     .portal-data-note {margin:0;font-size:0.9rem;color:#475569;line-height:1.35;}
-    .portal-map-card {background:rgba(255,255,255,0.92);border:1px solid rgba(148,163,184,0.26);border-radius:18px;box-shadow:0 16px 28px rgba(15,23,42,0.1);padding:18px 20px;display:flex;flex-direction:column;gap:14px;width:100%;height:100%;max-width:none;flex:1;}
+    .portal-map-card {background:rgba(255,255,255,0.94);border:1px solid rgba(148,163,184,0.32);border-radius:20px;box-shadow:0 18px 32px rgba(15,23,42,0.12);padding:20px 22px;display:flex;flex-direction:column;gap:16px;width:100%;max-width:560px;min-height:clamp(340px,42vw,460px);}
     .portal-map-heading {margin:0;font-size:1.05rem;font-weight:700;color:#0b1736;}
-    .portal-map-slideshow {flex:1;width:100%;position:relative;border-radius:18px;box-shadow:0 12px 24px rgba(15,23,42,0.12);border:1px solid rgba(148,163,184,0.28);overflow:hidden;background:linear-gradient(135deg,rgba(148,163,184,0.25),rgba(226,232,240,0.9));padding:18px;display:flex;}
-    .portal-map-track {position:relative;width:100%;min-height:clamp(200px,32vw,360px);}
-    .portal-map-slide {margin:0;position:absolute;inset:0;border-radius:14px;overflow:hidden;box-shadow:0 10px 20px rgba(15,23,42,0.1);opacity:0;animation:portalMapFade 21s linear infinite;}
+    .portal-map-slideshow {flex:1;width:100%;position:relative;border-radius:20px;box-shadow:0 14px 28px rgba(15,23,42,0.14);border:1px solid rgba(148,163,184,0.28);overflow:hidden;background:linear-gradient(135deg,rgba(15,118,110,0.12),rgba(37,99,235,0.08));padding:20px;display:flex;--portal-slide-time:6s;}
+    .portal-map-track {position:relative;width:100%;aspect-ratio:16/9;min-height:clamp(260px,34vw,420px);}
+    .portal-map-slide {margin:0;position:absolute;inset:0;border-radius:16px;overflow:hidden;box-shadow:0 12px 22px rgba(15,23,42,0.18);opacity:0;animation:portalMapFade calc(var(--portal-slide-time)*6) ease-in-out infinite;}
     .portal-map-slide:first-child {opacity:1;}
-    .portal-map-slide:nth-child(2) {animation-delay:7s;}
-    .portal-map-slide:nth-child(3) {animation-delay:14s;}
-    .portal-map-slide img {width:100%;height:100%;display:block;object-fit:cover;}
+    .portal-map-slide:nth-child(2) {animation-delay:calc(var(--portal-slide-time)*1);}
+    .portal-map-slide:nth-child(3) {animation-delay:calc(var(--portal-slide-time)*2);}
+    .portal-map-slide:nth-child(4) {animation-delay:calc(var(--portal-slide-time)*3);}
+    .portal-map-slide:nth-child(5) {animation-delay:calc(var(--portal-slide-time)*4);}
+    .portal-map-slide:nth-child(6) {animation-delay:calc(var(--portal-slide-time)*5);}
+    .portal-map-slide img {width:100%;height:100%;display:block;object-fit:cover;object-position:center;}
     @keyframes portalMapFade {
       0% {opacity:1;}
-      27% {opacity:1;}
-      33% {opacity:0;}
+      20% {opacity:1;}
+      28% {opacity:0;}
       100% {opacity:0;}
     }
     .portal-hero-text {justify-self:start;}
@@ -559,8 +562,9 @@ def create_server():
     @media (max-width: 960px) {
       .portal-overview {grid-template-columns:1fr;gap:20px;}
       .portal-secondary {display:grid;align-self:auto;}
-      .portal-map-card {max-width:100%;height:auto;}
-      .portal-map-slideshow {padding:16px;}
+    .portal-map-card {max-width:100%;min-height:auto;}
+    .portal-map-slideshow {padding:16px;}
+    .portal-map-track {min-height:220px;aspect-ratio:16/10;}
     }
 
     /* Info tooltip beside the CTA */
@@ -754,13 +758,22 @@ def create_server():
               <div class="portal-map-slideshow">
                 <div class="portal-map-track">
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/wisconsin-overview.png" alt="Stylized statewide map of Wisconsin showing non-driver activity hotspots" loading="lazy">
+                    <img src="/static/img/slides/urban-crosswalk-trio.jpg" alt="Three pedestrians crossing a downtown street at a marked crosswalk" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/community-crossing.jpg" alt="Signalized intersection in Milwaukee highlighting crosswalk improvements" loading="lazy">
+                    <img src="/static/img/slides/non-motorist-counting.png" alt="Illustration of a Wisconsin DOT analyst capturing non-motorist counts" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/trail-investments.png" alt="Regional view of priority trail investment corridors" loading="lazy">
+                    <img src="/static/img/slides/multimodal-young-travelers.jpg" alt="Group of young travelers carrying a skateboard and bicycle while entering a protected crossing" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/regional-volume-map.png" alt="Modeled annual non-motorist volumes shown on a two-panel Wisconsin regional map" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/downtown-network-detail.png" alt="Downtown Milwaukee map highlighting corridors with purple dots and navigation buttons" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/mobile-trip-tracking.jpg" alt="Hand holding a phone tracking ride distance with cyclists in the background" loading="lazy">
                   </figure>
                 </div>
               </div>
