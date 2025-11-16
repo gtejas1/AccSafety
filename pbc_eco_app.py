@@ -66,6 +66,22 @@ def _table_for_location_mode(location: Optional[str], mode: str) -> str:
         return "trail_traffic_data"
     return table
 
+
+def _short_direction_label(direction: Optional[str]) -> str:
+    """Return a compact label for legend display (e.g., "Pedestrian IN")."""
+    if not direction:
+        return ""
+    direction = str(direction).strip()
+    lowered = direction.lower()
+    for keyword in ("pedestrian", "bicyclist", "bike", "cyclist"):
+        idx = lowered.find(keyword)
+        if idx != -1:
+            return direction[idx:].strip()
+    parts = direction.split()
+    if len(parts) > 3:
+        return " ".join(parts[-3:])
+    return direction
+
 # --- SQL helpers that USE your new tables/view layout -------------------------
 _BOUNDS_SQL = text("""
 WITH all_hits AS (
@@ -384,7 +400,25 @@ def create_eco_dash(server, prefix="/eco/"):
         data["date"] = pd.to_datetime(data["date"]).sort_values()
 
         # Hourly
-        hourly_fig = px.line(data, x="date", y="count", color="direction", title="Hourly Traffic Trends")
+        data["direction_label"] = data["direction"].apply(_short_direction_label)
+        hourly_fig = px.line(
+            data,
+            x="date",
+            y="count",
+            color="direction_label",
+            title="Hourly Traffic Trends",
+        )
+        hourly_fig.update_layout(
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+                title="",
+            ),
+            margin=dict(t=60, r=20, b=60),
+        )
 
         # Daily totals
         daily = data.set_index("date")["count"].resample("D").sum().reset_index()
