@@ -531,6 +531,7 @@ def create_server():
     }
     .status-feed-updated {font-size:0.85rem;color:#475569;}
     .status-feed-extra {width:120px;display:flex;justify-content:flex-end;}
+    .status-feed-photo {width:120px;height:70px;object-fit:cover;border-radius:10px;border:1px solid #d1d5db;box-shadow:0 4px 12px rgba(0,0,0,0.12);}
     .status-feed-sparkline {width:120px;height:40px;display:block;}
     .status-feed-sparkline path {stroke:rgba(37,99,235,1);stroke-width:3;fill:none;stroke-linecap:round;stroke-linejoin:round;opacity:0.9;}
     .status-feed-sparkline circle {fill:rgba(37,99,235,1);}
@@ -539,6 +540,7 @@ def create_server():
       .status-card-updated {white-space:normal;}
       .status-feed-item {grid-template-columns:1fr;}
       .status-feed-extra {width:100%;justify-content:flex-start;}
+      .status-feed-photo {width:100%;height:120px;}
       .status-feed-sparkline {width:100%;max-width:180px;}
       .status-feed-time {font-size:0.9rem;}
     }
@@ -697,6 +699,14 @@ def create_server():
                           <a class="status-feed-badge" href="/live/" title="Open live detection dashboard">LIVE-Video</a>
                         </div>
                       </div>
+                    </div>
+                    <div class="status-feed-extra status-feed-extra--photo" aria-hidden="true">
+                      <img
+                        class="status-feed-photo"
+                        src="/static/img/whitefish-bay-intersection.jpg"
+                        alt=""
+                        loading="lazy"
+                      >
                     </div>
                   </li>
                   <li class="status-feed-item status-feed-item--live" data-live-card>
