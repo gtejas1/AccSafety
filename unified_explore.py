@@ -94,6 +94,11 @@ TRAIL_CROSS_SCRIPT_SRC      = "https://js.arcgis.com/4.34/embeddable-components/
 
 # ---- NEW: Bicyclist + Intersection + Pilot custom map ----
 BICYCLIST_PILOT_MODE        = "Bicyclist"
+PEDESTRIAN_PILOT_MODE       = "Pedestrian"
+PILOT_INTERSECTION_MODES    = {
+    BICYCLIST_PILOT_MODE.strip().casefold(),
+    PEDESTRIAN_PILOT_MODE.strip().casefold(),
+}
 BICYCLIST_PILOT_FACILITY    = "Intersection"
 BICYCLIST_PILOT_SOURCE      = "Wisconsin Pilot Counting Program Counts"
 BICYCLIST_PILOT_ITEM_ID     = "d5e4157ca9a5464d80ca1783935f023e"
@@ -472,7 +477,7 @@ def _trail_crossing_embedded_map(container_id: str = "trail-crossing-map") -> ht
     )
 
 
-def _bicyclist_pilot_intersection_map(container_id: str = "bicyclist-pilot-map") -> html.Iframe:
+def _pilot_intersection_map(container_id: str = "bicyclist-pilot-map") -> html.Iframe:
     srcdoc = f"""<!doctype html>
 <html lang=\"en\">
   <head>
@@ -911,7 +916,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             }
             df = pd.concat([df, pd.DataFrame([sp2_row])], ignore_index=True)
 
-            if str(mode or "").strip().casefold() == BICYCLIST_PILOT_MODE.casefold():
+            if str(mode or "").strip().casefold() in PILOT_INTERSECTION_MODES:
                 uw_whitewater_row = {
                     "Location": BICYCLIST_PILOT_LOCATION,
                     "Duration": BICYCLIST_PILOT_DURATION,
@@ -933,12 +938,13 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             map_children = embed_component
             map_style = {"display": "block"}
 
+        mode_casefold = str(mode or "").strip().casefold()
         if (
-            str(mode or "").strip().casefold() == BICYCLIST_PILOT_MODE.casefold()
+            mode_casefold in PILOT_INTERSECTION_MODES
             and str(facility or "").strip().casefold() == BICYCLIST_PILOT_FACILITY.casefold()
             and source_val == BICYCLIST_PILOT_SOURCE.casefold()
         ):
-            map_children = _bicyclist_pilot_intersection_map()
+            map_children = _pilot_intersection_map()
             map_style = {"display": "block"}
 
         source_types = pd.Series(dtype=str)
