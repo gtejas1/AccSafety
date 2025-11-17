@@ -108,6 +108,17 @@ BICYCLIST_PILOT_THEME       = "light"
 BICYCLIST_PILOT_SCRIPT_SRC  = "https://js.arcgis.com/4.34/embeddable-components/"
 BICYCLIST_PILOT_PORTAL_URL  = "https://uwm.maps.arcgis.com"
 
+# ---- NEW: Bicyclist + Off-Street Trail + Pilot custom map ----
+BICYCLIST_TRAIL_MODE          = "Bicyclist"
+BICYCLIST_TRAIL_FACILITY      = "Off-Street Trail"
+BICYCLIST_TRAIL_SOURCE        = "Wisconsin Pilot Counting Program Counts"
+BICYCLIST_TRAIL_ITEM_ID       = "ff0e8b77db434415a375410c76c8e2fc"
+BICYCLIST_TRAIL_CENTER        = "-88.71709514453103,43.38567609475957"
+BICYCLIST_TRAIL_SCALE         = "2311162.2171545"
+BICYCLIST_TRAIL_THEME         = "light"
+BICYCLIST_TRAIL_PORTAL_URL    = "https://uwm.maps.arcgis.com"
+BICYCLIST_TRAIL_SCRIPT_SRC    = "https://js.arcgis.com/4.34/embeddable-components/"
+
 # ---- NEW: Bicyclist special location (Pilot) ----
 BICYCLIST_PILOT_LOCATION = "University of Wisconsin- Whitewater: W Starin Rd & N Prairie St"
 BICYCLIST_PILOT_DURATION = "Not Available"
@@ -513,6 +524,42 @@ def _pilot_intersection_map(container_id: str = "bicyclist-pilot-map") -> html.I
     )
 
 
+def _pilot_offstreet_trail_map(container_id: str = "bicyclist-trail-map") -> html.Iframe:
+    srcdoc = f"""<!doctype html>
+<html lang=\"en\">
+  <head>
+    <meta charset=\"utf-8\"/>
+    <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>
+    <script type=\"module\" src=\"{BICYCLIST_TRAIL_SCRIPT_SRC}\"></script>
+    <style>
+      html,body{{margin:0;padding:0;height:100%;width:100%;background:transparent}}
+      #holder{{height:100%;width:100%;display:flex;align-items:stretch;justify-content:stretch}}
+      arcgis-embedded-map{{height:100%;width:100%}}
+    </style>
+  </head>
+  <body>
+    <div id=\"holder\">
+      <arcgis-embedded-map
+        item-id=\"{BICYCLIST_TRAIL_ITEM_ID}\"
+        theme=\"{BICYCLIST_TRAIL_THEME}\"
+        portal-url=\"{BICYCLIST_TRAIL_PORTAL_URL}\"
+        center=\"{BICYCLIST_TRAIL_CENTER}\"
+        scale=\"{BICYCLIST_TRAIL_SCALE}\"
+        legend-enabled
+        information-enabled
+      ></arcgis-embedded-map>
+    </div>
+  </body>
+</html>"""
+
+    return html.Iframe(
+        id=container_id,
+        srcDoc=srcdoc,
+        sandbox="allow-scripts allow-same-origin allow-popups allow-forms",
+        style=DEFAULT_IFRAME_STYLE,
+    )
+
+
 DEFAULT_IFRAME_STYLE = {
     "width": "100%",
     "height": "600px",
@@ -650,7 +697,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     filter_block = card(
         [
             html.H2("Explore Counts"),
-            html.P("Pick Mode, then Facility, then Source.", className="app-muted"),
+            html.P("Query: Mode → Facility → Data source", className="app-muted"),
 
             html.Div(
                 [
@@ -940,9 +987,18 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             map_style = {"display": "block"}
 
         mode_casefold = str(mode or "").strip().casefold()
+        facility_casefold = str(facility or "").strip().casefold()
+        if (
+            mode_casefold == BICYCLIST_TRAIL_MODE.strip().casefold()
+            and facility_casefold == BICYCLIST_TRAIL_FACILITY.strip().casefold()
+            and source_val == BICYCLIST_TRAIL_SOURCE.strip().casefold()
+        ):
+            map_children = _pilot_offstreet_trail_map()
+            map_style = {"display": "block"}
+
         if (
             mode_casefold in PILOT_INTERSECTION_MODES
-            and str(facility or "").strip().casefold() == BICYCLIST_PILOT_FACILITY.casefold()
+            and facility_casefold == BICYCLIST_PILOT_FACILITY.casefold()
             and source_val == BICYCLIST_PILOT_SOURCE.casefold()
         ):
             map_children = _pilot_intersection_map()
