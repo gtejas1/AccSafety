@@ -875,10 +875,10 @@ def create_server():
                     <img src="/static/img/slides/6.jpg" alt="6" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/7.jpg" alt="6" loading="lazy">
+                    <img src="/static/img/slides/7.jpg" alt="7" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/8.jpg" alt="6" loading="lazy">
+                    <img src="/static/img/slides/8.jpg" alt="8" loading="lazy">
                   </figure>
                 </div>
               </div>
