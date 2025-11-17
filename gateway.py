@@ -582,7 +582,14 @@ def create_server():
     .portal-map-slide:first-child {opacity:1;}
     .portal-map-track[data-has-js] .portal-map-slide:first-child {opacity:0;}
     .portal-map-track[data-has-js] .portal-map-slide[data-active] {opacity:1;}
-    .portal-map-slide img {width:100%;height:100%;display:block;object-fit:cover;}
+    .portal-map-slide img {
+      width:100%;
+      height:auto;
+      max-height:100%;
+      display:block;
+      object-fit:contain;
+      object-position:center;
+    }
     .portal-hero-text {justify-self:start;}
     .portal-hero-text h1 {margin:0;font-size:2.4rem;line-height:1.2;}
     .portal-status-card {
