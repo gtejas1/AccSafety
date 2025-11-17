@@ -119,6 +119,28 @@ BICYCLIST_TRAIL_THEME         = "light"
 BICYCLIST_TRAIL_PORTAL_URL    = "https://uwm.maps.arcgis.com"
 BICYCLIST_TRAIL_SCRIPT_SRC    = "https://js.arcgis.com/4.34/embeddable-components/"
 
+# ---- NEW: Pedestrian + On-Street (Sidewalk) + Pilot custom map ----
+PEDESTRIAN_SIDEWALK_MODE         = "Pedestrian"
+PEDESTRIAN_SIDEWALK_FACILITY     = "On-Street (sidewalk)"
+PEDESTRIAN_SIDEWALK_SOURCE       = "Wisconsin Pilot Counting Program Counts"
+PEDESTRIAN_SIDEWALK_ITEM_ID      = "f36d0a332f7347a08eb6546b4be5e868"
+PEDESTRIAN_SIDEWALK_CENTER       = "-88.34905335206712,43.672428224138976"
+PEDESTRIAN_SIDEWALK_SCALE        = "2311162.2171545"
+PEDESTRIAN_SIDEWALK_THEME        = "light"
+PEDESTRIAN_SIDEWALK_PORTAL_URL   = "https://uwm.maps.arcgis.com"
+PEDESTRIAN_SIDEWALK_SCRIPT_SRC   = "https://js.arcgis.com/4.34/embeddable-components/"
+
+# ---- NEW: Bicyclist + On-Street (Sidewalk/Bike Lane) + Pilot custom map ----
+BICYCLIST_SIDEWALK_MODE         = "Bicyclist"
+BICYCLIST_SIDEWALK_FACILITY     = "On-Street (Sidewalk/Bike Lane)"
+BICYCLIST_SIDEWALK_SOURCE       = "Wisconsin Pilot Counting Program Counts"
+BICYCLIST_SIDEWALK_ITEM_ID      = "04d8da6f551d40419fafd8dba9cd1173"
+BICYCLIST_SIDEWALK_CENTER       = "-87.79149719972348,42.618384817978345"
+BICYCLIST_SIDEWALK_SCALE        = "2311162.2171545"
+BICYCLIST_SIDEWALK_THEME        = "light"
+BICYCLIST_SIDEWALK_PORTAL_URL   = "https://uwm.maps.arcgis.com"
+BICYCLIST_SIDEWALK_SCRIPT_SRC   = "https://js.arcgis.com/4.34/embeddable-components/"
+
 # ---- NEW: Bicyclist special location (Pilot) ----
 BICYCLIST_PILOT_LOCATION = "University of Wisconsin- Whitewater: W Starin Rd & N Prairie St"
 BICYCLIST_PILOT_DURATION = "Not Available"
@@ -524,13 +546,22 @@ def _pilot_intersection_map(container_id: str = "bicyclist-pilot-map") -> html.I
     )
 
 
-def _pilot_offstreet_trail_map(container_id: str = "bicyclist-trail-map") -> html.Iframe:
+def _pilot_arcgis_map(
+    *,
+    container_id: str,
+    item_id: str,
+    theme: str,
+    portal_url: str,
+    center: str,
+    scale: str,
+    script_src: str,
+) -> html.Iframe:
     srcdoc = f"""<!doctype html>
 <html lang=\"en\">
   <head>
     <meta charset=\"utf-8\"/>
     <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>
-    <script type=\"module\" src=\"{BICYCLIST_TRAIL_SCRIPT_SRC}\"></script>
+    <script type=\"module\" src=\"{script_src}\"></script>
     <style>
       html,body{{margin:0;padding:0;height:100%;width:100%;background:transparent}}
       #holder{{height:100%;width:100%;display:flex;align-items:stretch;justify-content:stretch}}
@@ -540,11 +571,11 @@ def _pilot_offstreet_trail_map(container_id: str = "bicyclist-trail-map") -> htm
   <body>
     <div id=\"holder\">
       <arcgis-embedded-map
-        item-id=\"{BICYCLIST_TRAIL_ITEM_ID}\"
-        theme=\"{BICYCLIST_TRAIL_THEME}\"
-        portal-url=\"{BICYCLIST_TRAIL_PORTAL_URL}\"
-        center=\"{BICYCLIST_TRAIL_CENTER}\"
-        scale=\"{BICYCLIST_TRAIL_SCALE}\"
+        item-id=\"{item_id}\"
+        theme=\"{theme}\"
+        portal-url=\"{portal_url}\"
+        center=\"{center}\"
+        scale=\"{scale}\"
         legend-enabled
         information-enabled
       ></arcgis-embedded-map>
@@ -557,6 +588,42 @@ def _pilot_offstreet_trail_map(container_id: str = "bicyclist-trail-map") -> htm
         srcDoc=srcdoc,
         sandbox="allow-scripts allow-same-origin allow-popups allow-forms",
         style=DEFAULT_IFRAME_STYLE,
+    )
+
+
+def _pilot_offstreet_trail_map(container_id: str = "bicyclist-trail-map") -> html.Iframe:
+    return _pilot_arcgis_map(
+        container_id=container_id,
+        item_id=BICYCLIST_TRAIL_ITEM_ID,
+        theme=BICYCLIST_TRAIL_THEME,
+        portal_url=BICYCLIST_TRAIL_PORTAL_URL,
+        center=BICYCLIST_TRAIL_CENTER,
+        scale=BICYCLIST_TRAIL_SCALE,
+        script_src=BICYCLIST_TRAIL_SCRIPT_SRC,
+    )
+
+
+def _pilot_ped_sidewalk_map(container_id: str = "pedestrian-sidewalk-map") -> html.Iframe:
+    return _pilot_arcgis_map(
+        container_id=container_id,
+        item_id=PEDESTRIAN_SIDEWALK_ITEM_ID,
+        theme=PEDESTRIAN_SIDEWALK_THEME,
+        portal_url=PEDESTRIAN_SIDEWALK_PORTAL_URL,
+        center=PEDESTRIAN_SIDEWALK_CENTER,
+        scale=PEDESTRIAN_SIDEWALK_SCALE,
+        script_src=PEDESTRIAN_SIDEWALK_SCRIPT_SRC,
+    )
+
+
+def _pilot_bicyclist_sidewalk_map(container_id: str = "bicyclist-sidewalk-map") -> html.Iframe:
+    return _pilot_arcgis_map(
+        container_id=container_id,
+        item_id=BICYCLIST_SIDEWALK_ITEM_ID,
+        theme=BICYCLIST_SIDEWALK_THEME,
+        portal_url=BICYCLIST_SIDEWALK_PORTAL_URL,
+        center=BICYCLIST_SIDEWALK_CENTER,
+        scale=BICYCLIST_SIDEWALK_SCALE,
+        script_src=BICYCLIST_SIDEWALK_SCRIPT_SRC,
     )
 
 
@@ -994,6 +1061,22 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             and source_val == BICYCLIST_TRAIL_SOURCE.strip().casefold()
         ):
             map_children = _pilot_offstreet_trail_map()
+            map_style = {"display": "block"}
+
+        elif (
+            mode_casefold == PEDESTRIAN_SIDEWALK_MODE.strip().casefold()
+            and facility_casefold == PEDESTRIAN_SIDEWALK_FACILITY.strip().casefold()
+            and source_val == PEDESTRIAN_SIDEWALK_SOURCE.strip().casefold()
+        ):
+            map_children = _pilot_ped_sidewalk_map()
+            map_style = {"display": "block"}
+
+        elif (
+            mode_casefold == BICYCLIST_SIDEWALK_MODE.strip().casefold()
+            and facility_casefold == BICYCLIST_SIDEWALK_FACILITY.strip().casefold()
+            and source_val == BICYCLIST_SIDEWALK_SOURCE.strip().casefold()
+        ):
+            map_children = _pilot_bicyclist_sidewalk_map()
             map_style = {"display": "block"}
 
         if (
