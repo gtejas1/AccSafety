@@ -769,7 +769,7 @@ def create_server():
                   <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.94 0-7.29 3.04-7.29 7.08 0 3.18 2.22 6.63 6.56 10.26.49.43 1.24.43 1.73 0 4.34-3.63 6.56-7.08 6.56-10.26 0-4.04-3.35-7.08-7.56-7.08Zm0 10.65a3.57 3.57 0 1 1 0-7.14 3.57 3.57 0 0 1 0 7.14Z"/></svg>
                 </span>
                 <div class="portal-metric-text">
-                  <span class="portal-metric-value">1003</span>
+                  <span class="portal-metric-value">1000+</span>
                   <span class="portal-metric-label">Unique Count Sites</span>
                 </div>
               </div>
@@ -857,22 +857,28 @@ def create_server():
               <div class="portal-map-slideshow">
                 <div class="portal-map-track">
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/1.png" alt="1" loading="lazy">
+                    <img src="/static/img/slides/1.jpg" alt="1" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/2.png" alt="2" loading="lazy">
+                    <img src="/static/img/slides/2.jpg" alt="2" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/3.png" alt="3" loading="lazy">
+                    <img src="/static/img/slides/3.jpg" alt="3" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/4.png" alt="4" loading="lazy">
+                    <img src="/static/img/slides/4.jpg" alt="4" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/5.png" alt="5" loading="lazy">
+                    <img src="/static/img/slides/5.jpg" alt="5" loading="lazy">
                   </figure>
                   <figure class="portal-map-slide">
-                    <img src="/static/img/slides/6.png" alt="6" loading="lazy">
+                    <img src="/static/img/slides/6.jpg" alt="6" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/7.jpg" alt="6" loading="lazy">
+                  </figure>
+                  <figure class="portal-map-slide">
+                    <img src="/static/img/slides/8.jpg" alt="6" loading="lazy">
                   </figure>
                 </div>
               </div>
