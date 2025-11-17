@@ -136,7 +136,7 @@ body {
   max-width: none;
   margin: 0;
   flex: 1 1 auto;
-  padding: 32px 24px 40px;
+  padding: 24px 24px 32px;
   display: flex;
   flex-direction: column;
   gap: 24px;
@@ -150,7 +150,7 @@ body {
 .app-card {
   background: var(--bg-surface);
   border-radius: 16px;
-  padding: 24px 28px;
+  padding: 20px 24px;
   box-shadow: 0 24px 48px rgba(15, 23, 42, 0.16);
   border: 1px solid var(--border-soft);
   width: 100%;
@@ -158,13 +158,15 @@ body {
 
 .vivacity-layout-row {
   flex-wrap: wrap;
+  align-items: stretch;
 }
 
 .vivacity-side-column,
 .vivacity-main-column {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
+  min-height: 0;
 }
 
 .vivacity-side-column {
@@ -211,7 +213,65 @@ body {
 .vivacity-filters-content {
   display: flex;
   flex-direction: column;
+  gap: 16px;
+}
+
+.vivacity-filter-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vivacity-filter-subtitle {
+  font-size: 0.85rem;
+  color: var(--brand-muted);
+  margin: 0;
+}
+
+.vivacity-filter-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 1200px) {
+  .vivacity-filter-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+
+.vivacity-filter-section {
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
+}
+
+.vivacity-filter-heading {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+
+.vivacity-input-group .form-control {
+  font-size: 0.9rem;
+}
+
+.vivacity-input-group .input-group-text {
+  font-size: 0.85rem;
+}
+
+.vivacity-filter-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .vivacity-filters-hint {
@@ -222,11 +282,42 @@ body {
 .vivacity-time-range {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .vivacity-class-checklist {
   margin-top: 6px;
+}
+
+.vivacity-filter-actions {
+  margin-top: 4px;
+}
+
+.vivacity-refresh-btn {
+  width: 100%;
+}
+
+.vivacity-main-column > .app-card,
+.vivacity-side-column > .app-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.vivacity-graph-card,
+.vivacity-table-card {
+  min-height: 0;
+}
+
+.vivacity-graph-card .dash-graph,
+.vivacity-graph-card .js-plotly-plot,
+.vivacity-graph-card .dash-graph .plotly {
+  flex: 1 1 auto;
+}
+
+.vivacity-table-card {
+  display: flex;
+  flex-direction: column;
 }
 
 .vivacity-graph-card {
@@ -283,8 +374,24 @@ body {
 }
 
 .vivacity-table-card .dash-spreadsheet-container {
-  max-height: 320px;
+  max-height: 360px;
   overflow-y: auto;
+  flex: 1 1 auto;
+}
+
+.vivacity-table-card .dash-table-container .dash-spreadsheet.dash-table {
+  height: 100%;
+}
+
+@media (min-width: 1200px) {
+  .vivacity-side-column,
+  .vivacity-main-column {
+    min-height: calc(100vh - 260px);
+  }
+
+  .vivacity-main-column > .app-card {
+    flex: 1 1 0%;
+  }
 }
 
 @media (min-width: 992px) {
