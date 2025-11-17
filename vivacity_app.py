@@ -316,7 +316,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                                             [
                                                 html.H3("Filters", className="mb-1"),
                                                 html.P(
-                                                    "Focus on locations, time windows, and modes.",
+                                                    "Select countline, enter time range, aggregation and hit refresh button.",
                                                     className="vivacity-filter-subtitle",
                                                 ),
                                             ],
