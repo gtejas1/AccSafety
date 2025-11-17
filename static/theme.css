@@ -320,6 +320,26 @@ body {
   flex-direction: column;
 }
 
+.vivacity-error-alert {
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+  border-radius: 10px;
+  border-width: 1px;
+  padding: 0.65rem 0.9rem;
+}
+
+.vivacity-error-summary {
+  font-weight: 600;
+  display: block;
+}
+
+.vivacity-error-detail {
+  font-size: 0.85rem;
+  display: block;
+  margin-top: 2px;
+  opacity: 0.9;
+}
+
 .vivacity-graph-card {
   flex: 0 0 auto;
 }

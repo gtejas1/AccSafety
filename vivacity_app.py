@@ -232,6 +232,16 @@ def _classes_from_search(search: str | None) -> List[str] | None:
             return classes
     return None
 
+
+def _friendly_error(summary: str, detail: str | None = None):
+    """Return formatted children for the UI error alert."""
+    summary = (summary or "").strip()
+    detail = (detail or "").strip()
+    children = [html.Span(summary, className="vivacity-error-summary")]
+    if detail:
+        children.append(html.Span(detail, className="vivacity-error-detail"))
+    return children
+
 def create_vivacity_dash(server, prefix="/vivacity/"):
     app = dash.Dash(
         name="vivacity_dash",
@@ -466,6 +476,12 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                             card(
                                 [
                                     html.H4("Raw Data"),
+                                    dbc.Alert(
+                                        id="viv-error-box",
+                                        color="danger",
+                                        is_open=False,
+                                        className="vivacity-error-alert",
+                                    ),
                                     html.Div(
                                         [
                                             html.Button(
@@ -497,7 +513,6 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                                             "minHeight": 320,
                                         },
                                     ),
-                                    html.Div(id="viv-error-box", style={"color": "#b00", "marginTop": 10}),
                                 ],
                                 class_name="vivacity-table-card",
                             ),
@@ -531,6 +546,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         Output("viv-timeseries-graph", "figure"),
         Output("viv-data-table", "data"),
         Output("viv-error-box", "children"),
+        Output("viv-error-box", "is_open"),
         Output("viv-raw-df-store", "data"),
         Input("viv-init", "n_intervals"),
         Input("viv-refresh-btn", "n_clicks"),
@@ -597,12 +613,36 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
             dt_to_local = datetime.fromisoformat(f"{end_date}T{eh:02d}:{em:02d}:00").replace(tzinfo=LOCAL_TZ)
             dt_from_utc, dt_to_utc = dt_from_local.astimezone(timezone.utc), dt_to_local.astimezone(timezone.utc)
         except Exception as e:
-            return dash.no_update, dash.no_update, f"Failed to parse dates/times: {e}", None
+            return (
+                dash.no_update,
+                dash.no_update,
+                _friendly_error(
+                    "We couldn't understand the dates or times you entered.",
+                    f"Details: {e}",
+                ),
+                True,
+                None,
+            )
 
         if not API_KEY:
-            return dash.no_update, dash.no_update, "Missing API key. Set VIVACITY_API_KEY.", None
+            return (
+                dash.no_update,
+                dash.no_update,
+                _friendly_error(
+                    "Add a Vivacity API key to load this dashboard.",
+                    "Set the VIVACITY_API_KEY environment variable and refresh the page.",
+                ),
+                True,
+                None,
+            )
         if not ids:
-            return dash.no_update, dash.no_update, "Please select at least one Direction.", None
+            return (
+                dash.no_update,
+                dash.no_update,
+                _friendly_error("Choose at least one direction to run the report."),
+                True,
+                None,
+            )
 
         # Align to bucket and possibly optimize
         dt_from_utc, dt_to_utc = _align_range_to_bucket(dt_from_utc, dt_to_utc, bucket)
@@ -628,7 +668,16 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                 fill_zeros=fill_zeros,
             )
         except Exception as e:
-            return dash.no_update, dash.no_update, f"API error: {e}", None
+            return (
+                dash.no_update,
+                dash.no_update,
+                _friendly_error(
+                    "Vivacity couldn't return data right now. Please try again shortly.",
+                    f"Details: {e}",
+                ),
+                True,
+                None,
+            )
 
         if probe_df.empty:
             fig = {
@@ -639,7 +688,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                     "yaxis": {"title": "Count"},
                 },
             }
-            return fig, [], "", None
+            return fig, [], [], False, None
 
         # Label map for directions (fallback to id if unknown/manual)
         id_to_dir = ID_TO_DIRECTION
@@ -705,7 +754,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
 
         # Store raw df for download (keep both direction + id for CSV users)
         store_json = df.to_json(date_format="iso", orient="split")
-        return fig, tbl, "", store_json
+        return fig, tbl, [], False, store_json
 
     @app.callback(
         Output("viv-download-raw", "data"),
