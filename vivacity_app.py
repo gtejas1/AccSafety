@@ -232,6 +232,16 @@ def _classes_from_search(search: str | None) -> List[str] | None:
             return classes
     return None
 
+
+def _friendly_error(summary: str, detail: str | None = None):
+    """Return formatted children for the UI error alert."""
+    summary = (summary or "").strip()
+    detail = (detail or "").strip()
+    children = [html.Span(summary, className="vivacity-error-summary")]
+    if detail:
+        children.append(html.Span(detail, className="vivacity-error-detail"))
+    return children
+
 def create_vivacity_dash(server, prefix="/vivacity/"):
     app = dash.Dash(
         name="vivacity_dash",
@@ -302,83 +312,141 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                             card(
                                 html.Div(
                                     [
-                                        html.H3("Filters", className="mb-3"),
-                                        html.Label("Direction"),
-                                        dcc.Dropdown(
-                                            id="viv-countline-dd",
-                                            options=[
-                                                {"label": row["direction_label"], "value": row["countline_id"]}
-                                                for _, row in PRELOADED_META.iterrows()
-                                            ],
-                                            multi=True,
-                                            placeholder=("Select direction(s)"),
-                                            value=DEFAULT_IDS,
-                                        ),
-                                        dcc.Input(
-                                            id="viv-manual-ids",
-                                            placeholder="Or enter IDs e.g. 54315,54316",
-                                            style={"width": "100%"},
-                                        ),
-                                        html.Hr(),
-
-                                        html.Label("From / To (Local time)"),
-                                        dcc.DatePickerRange(
-                                            id="viv-date-range",
-                                            start_date=DEFAULT_FROM_LOCAL.date(),
-                                            end_date=DEFAULT_TO_LOCAL.date(),
-                                            display_format="YYYY-MM-DD",
-                                            updatemode="bothdates",
-                                        ),
                                         html.Div(
-                                            "Time of day can be adjusted below.",
-                                            className="vivacity-filters-hint",
+                                            [
+                                                html.H3("Filters", className="mb-1"),
+                                                html.P(
+                                                    "Select countline, enter time range, aggregation and hit refresh button.",
+                                                    className="vivacity-filter-subtitle",
+                                                ),
+                                            ],
+                                            className="vivacity-filter-header",
                                         ),
                                         html.Div(
                                             [
-                                                dcc.Input(
-                                                    id="viv-from-time",
-                                                    type="text",
-                                                    value="00:00",
-                                                    placeholder="HH:MM",
-                                                    style={"width": 100, "marginRight": 8},
+                                                html.Div(
+                                                    [
+                                                        html.H5("Countlines", className="vivacity-filter-heading"),
+                                                        dcc.Dropdown(
+                                                            id="viv-countline-dd",
+                                                            options=[
+                                                                {
+                                                                    "label": row["direction_label"],
+                                                                    "value": row["countline_id"],
+                                                                }
+                                                                for _, row in PRELOADED_META.iterrows()
+                                                            ],
+                                                            multi=True,
+                                                            placeholder=("Select direction(s)"),
+                                                            value=DEFAULT_IDS,
+                                                        ),
+                                                        dbc.InputGroup(
+                                                            [
+                                                                dbc.InputGroupText("IDs"),
+                                                                dbc.Input(
+                                                                    id="viv-manual-ids",
+                                                                    placeholder="54315,54316",
+                                                                    type="text",
+                                                                ),
+                                                            ],
+                                                            className="vivacity-input-group",
+                                                        ),
+                                                    ],
+                                                    className="vivacity-filter-section",
                                                 ),
-                                                dcc.Input(
-                                                    id="viv-to-time",
-                                                    type="text",
-                                                    value="23:59",
-                                                    placeholder="HH:MM",
-                                                    style={"width": 100},
+                                                html.Div(
+                                                    [
+                                                        html.H5("Date & Time", className="vivacity-filter-heading"),
+                                                        dcc.DatePickerRange(
+                                                            id="viv-date-range",
+                                                            start_date=DEFAULT_FROM_LOCAL.date(),
+                                                            end_date=DEFAULT_TO_LOCAL.date(),
+                                                            display_format="YYYY-MM-DD",
+                                                            updatemode="bothdates",
+                                                        ),
+                                                        html.Div(
+                                                            "Time of day can be adjusted below.",
+                                                            className="vivacity-filters-hint",
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                dbc.InputGroup(
+                                                                    [
+                                                                        dbc.InputGroupText("From"),
+                                                                        dbc.Input(
+                                                                            id="viv-from-time",
+                                                                            type="text",
+                                                                            value="00:00",
+                                                                            placeholder="HH:MM",
+                                                                        ),
+                                                                    ],
+                                                                    className="vivacity-input-group",
+                                                                ),
+                                                                dbc.InputGroup(
+                                                                    [
+                                                                        dbc.InputGroupText("To"),
+                                                                        dbc.Input(
+                                                                            id="viv-to-time",
+                                                                            type="text",
+                                                                            value="23:59",
+                                                                            placeholder="HH:MM",
+                                                                        ),
+                                                                    ],
+                                                                    className="vivacity-input-group",
+                                                                ),
+                                                            ],
+                                                            className="vivacity-time-range",
+                                                        ),
+                                                    ],
+                                                    className="vivacity-filter-section",
+                                                ),
+                                                html.Div(
+                                                    [
+                                                        html.H5("Aggregation", className="vivacity-filter-heading"),
+                                                        dcc.Dropdown(
+                                                            id="viv-bucket-dd",
+                                                            options=[
+                                                                {"label": "5 minutes", "value": "5m"},
+                                                                {"label": "15 minutes", "value": "15m"},
+                                                                {"label": "1 hour", "value": "1h"},
+                                                                {"label": "24 hours", "value": "24h"},
+                                                            ],
+                                                            value=DEFAULT_TIME_BUCKET,
+                                                            clearable=False,
+                                                        ),
+                                                        html.Div(
+                                                            [
+                                                                html.Span("Classes", className="vivacity-filter-heading"),
+                                                                dcc.Checklist(
+                                                                    id="viv-classes-check",
+                                                                    options=[
+                                                                        {"label": c.title(), "value": c}
+                                                                        for c in DEFAULT_CLASSES
+                                                                    ],
+                                                                    value=DEFAULT_CLASSES,
+                                                                    inline=False,
+                                                                    className="vivacity-class-checklist",
+                                                                ),
+                                                            ],
+                                                            className="vivacity-filter-stack",
+                                                        ),
+                                                    ],
+                                                    className="vivacity-filter-section",
                                                 ),
                                             ],
-                                            className="vivacity-time-range",
+                                            className="vivacity-filter-grid",
                                         ),
-                                        html.Hr(),
-
-                                        html.Label("Time bucket"),
-                                        dcc.Dropdown(
-                                            id="viv-bucket-dd",
-                                            options=[
-                                                {"label": "5 minutes", "value": "5m"},
-                                                {"label": "15 minutes", "value": "15m"},
-                                                {"label": "1 hour", "value": "1h"},
-                                                {"label": "24 hours", "value": "24h"},
+                                        html.Div(
+                                            [
+                                                dbc.Button(
+                                                    "Refresh",
+                                                    id="viv-refresh-btn",
+                                                    n_clicks=0,
+                                                    color="primary",
+                                                    className="vivacity-refresh-btn",
+                                                ),
                                             ],
-                                            value=DEFAULT_TIME_BUCKET,
-                                            clearable=False,
-                                        ),
-                                        html.Label("Classes", style={"marginTop": 8}),
-                                        dcc.Checklist(
-                                            id="viv-classes-check",
-                                            options=[{"label": c.title(), "value": c} for c in DEFAULT_CLASSES],
-                                            value=DEFAULT_CLASSES,
-                                            inline=False,
-                                            className="vivacity-class-checklist",
-                                        ),
-                                        html.Button(
-                                            "Refresh",
-                                            id="viv-refresh-btn",
-                                            n_clicks=0,
-                                            style={"marginTop": 10, "width": "100%"},
+                                            className="vivacity-filter-actions",
                                         ),
                                     ],
                                     className="vivacity-filters-content",
@@ -398,13 +466,22 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                             card(
                                 [
                                     html.H2("W Wells St & N 68th St Intersection", className="mb-2"),
-                                    dcc.Graph(id="viv-timeseries-graph", style={"height": 360}),
+                                    dcc.Graph(
+                                        id="viv-timeseries-graph",
+                                        style={"height": 380, "minHeight": 360},
+                                    ),
                                 ],
                                 class_name="vivacity-graph-card",
                             ),
                             card(
                                 [
                                     html.H4("Raw Data"),
+                                    dbc.Alert(
+                                        id="viv-error-box",
+                                        color="danger",
+                                        is_open=False,
+                                        className="vivacity-error-alert",
+                                    ),
                                     html.Div(
                                         [
                                             html.Button(
@@ -429,9 +506,13 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                                         sort_action="native",
                                         filter_action="native",
                                         page_size=20,
-                                        style_table={"overflowX": "auto", "overflowY": "auto", "maxHeight": 320},
+                                        style_table={
+                                            "overflowX": "auto",
+                                            "overflowY": "auto",
+                                            "maxHeight": 360,
+                                            "minHeight": 320,
+                                        },
                                     ),
-                                    html.Div(id="viv-error-box", style={"color": "#b00", "marginTop": 10}),
                                 ],
                                 class_name="vivacity-table-card",
                             ),
@@ -465,6 +546,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         Output("viv-timeseries-graph", "figure"),
         Output("viv-data-table", "data"),
         Output("viv-error-box", "children"),
+        Output("viv-error-box", "is_open"),
         Output("viv-raw-df-store", "data"),
         Input("viv-init", "n_intervals"),
         Input("viv-refresh-btn", "n_clicks"),
@@ -531,12 +613,36 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
             dt_to_local = datetime.fromisoformat(f"{end_date}T{eh:02d}:{em:02d}:00").replace(tzinfo=LOCAL_TZ)
             dt_from_utc, dt_to_utc = dt_from_local.astimezone(timezone.utc), dt_to_local.astimezone(timezone.utc)
         except Exception as e:
-            return dash.no_update, dash.no_update, f"Failed to parse dates/times: {e}", None
+            return (
+                dash.no_update,
+                dash.no_update,
+                _friendly_error(
+                    "We couldn't understand the dates or times you entered.",
+                    f"Details: {e}",
+                ),
+                True,
+                None,
+            )
 
         if not API_KEY:
-            return dash.no_update, dash.no_update, "Missing API key. Set VIVACITY_API_KEY.", None
+            return (
+                dash.no_update,
+                dash.no_update,
+                _friendly_error(
+                    "Add a Vivacity API key to load this dashboard.",
+                    "Set the VIVACITY_API_KEY environment variable and refresh the page.",
+                ),
+                True,
+                None,
+            )
         if not ids:
-            return dash.no_update, dash.no_update, "Please select at least one Direction.", None
+            return (
+                dash.no_update,
+                dash.no_update,
+                _friendly_error("Choose at least one direction to run the report."),
+                True,
+                None,
+            )
 
         # Align to bucket and possibly optimize
         dt_from_utc, dt_to_utc = _align_range_to_bucket(dt_from_utc, dt_to_utc, bucket)
@@ -562,7 +668,16 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                 fill_zeros=fill_zeros,
             )
         except Exception as e:
-            return dash.no_update, dash.no_update, f"API error: {e}", None
+            return (
+                dash.no_update,
+                dash.no_update,
+                _friendly_error(
+                    "Vivacity couldn't return data right now. Please try again shortly.",
+                    f"Details: {e}",
+                ),
+                True,
+                None,
+            )
 
         if probe_df.empty:
             fig = {
@@ -573,7 +688,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                     "yaxis": {"title": "Count"},
                 },
             }
-            return fig, [], "", None
+            return fig, [], [], False, None
 
         # Label map for directions (fallback to id if unknown/manual)
         id_to_dir = ID_TO_DIRECTION
@@ -639,7 +754,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
 
         # Store raw df for download (keep both direction + id for CSV users)
         store_json = df.to_json(date_format="iso", orient="split")
-        return fig, tbl, "", store_json
+        return fig, tbl, [], False, store_json
 
     @app.callback(
         Output("viv-download-raw", "data"),
