@@ -841,11 +841,13 @@ def create_server():
                         <div class="status-feed-message" data-live-message aria-live="polite"></div>
                       </div>
                     </div>
-                    <div class="status-feed-extra" aria-hidden="true" title="last 24-hour trend">
-                      <svg class="status-feed-sparkline" viewBox="0 0 120 40" preserveAspectRatio="none" data-sparkline title="last 24-hour trend">
-                        <path d="M4 30" />
-                        <circle cx="4" cy="30" r="3" />
-                      </svg>
+                    <div class="status-feed-extra status-feed-extra--photo" aria-hidden="true">
+                      <img
+                        class="status-feed-photo"
+                        src="/static/img/vivacity.jpg"
+                        alt=""
+                        loading="lazy"
+                      >
                     </div>
                   </li>
                 </ul>
