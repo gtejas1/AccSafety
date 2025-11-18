@@ -570,11 +570,11 @@ def create_server():
     .portal-primary {display:grid;gap:18px;align-content:start;justify-items:stretch;}
     .portal-secondary {display:flex;flex-direction:column;align-self:stretch;align-items:stretch;gap:18px;}
     .portal-data-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;width:100%;}
-    .portal-data-card {background:#fff;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:18px 20px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:grid;gap:8px;align-content:start;text-align:left;}
-    .portal-data-card-header {display:flex;align-items:center;gap:10px;margin-bottom:2px;}
+    .portal-data-card {background:#fff;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:18px 20px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:flex;gap:16px;align-items:flex-start;text-align:left;}
     .portal-data-card h3 {margin:0;font-size:0.85rem;font-weight:700;color:#0b1736;letter-spacing:0.04em;text-transform:uppercase;}
-    .portal-data-icon {width:38px;height:38px;border-radius:12px;background:rgba(11,23,54,0.06);color:#0b1736;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
-    .portal-data-icon svg {width:22px;height:22px;}
+    .portal-data-icon {width:46px;height:46px;border-radius:16px;background:rgba(11,23,54,0.06);color:#0b1736;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .portal-data-icon svg {width:24px;height:24px;}
+    .portal-data-content {display:flex;flex-direction:column;gap:6px;}
     .portal-data-value {font-size:2rem;font-weight:700;color:#0b1736;line-height:1;}
     .portal-data-note {margin:0;font-size:0.9rem;color:#475569;line-height:1.35;}
     .portal-map-card {background:rgba(255,255,255,0.92);border:1px solid rgba(148,163,184,0.26);border-radius:18px;box-shadow:0 16px 28px rgba(15,23,42,0.1);padding:0;display:flex;flex-direction:column;align-items:center;width:100%;height:100%;max-width:none;flex:1;overflow:hidden;}
@@ -777,46 +777,46 @@ def create_server():
                 </div>
               </div>
               <article class="portal-data-card">
-                <div class="portal-data-card-header">
-                  <span class="portal-data-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                      <circle cx="6" cy="6" r="2" fill="currentColor"></circle>
-                      <circle cx="18" cy="6" r="2" fill="currentColor"></circle>
-                      <circle cx="12" cy="18" r="2.6" fill="currentColor" fill-opacity="0.9"></circle>
-                      <path d="M6 8v5m12-5v5M6 13h12M12 13v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
-                  </span>
+                <span class="portal-data-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="presentation" focusable="false">
+                    <circle cx="6" cy="6" r="2" fill="currentColor"></circle>
+                    <circle cx="18" cy="6" r="2" fill="currentColor"></circle>
+                    <circle cx="12" cy="18" r="2.6" fill="currentColor" fill-opacity="0.9"></circle>
+                    <path d="M6 8v5m12-5v5M6 13h12M12 13v3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path>
+                  </svg>
+                </span>
+                <div class="portal-data-content">
                   <h3>Data Sources Available</h3>
+                  <span class="portal-data-value">7</span>
+                  <p class="portal-data-note">short-term & long-term counts, intersection/midblock and trails, crowdsourced data</p>
                 </div>
-                <span class="portal-data-value">7</span>
-                <p class="portal-data-note">short-term & long-term counts, intersection/midblock and trails, crowdsourced data</p>
               </article>
               <article class="portal-data-card">
-                <div class="portal-data-card-header">
-                  <span class="portal-data-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                      <rect x="5" y="3.5" width="14" height="17" rx="2.4" ry="2.4" fill="none" stroke="currentColor" stroke-width="1.6"></rect>
-                      <rect x="7" y="5.5" width="10" height="4" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="1.4" rx="1"></rect>
-                      <path d="M8 13h2M8 16h2M12 13h2M12 16h2M16 13h2M16 16h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
-                    </svg>
-                  </span>
+                <span class="portal-data-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="presentation" focusable="false">
+                    <rect x="5" y="3.5" width="14" height="17" rx="2.4" ry="2.4" fill="none" stroke="currentColor" stroke-width="1.6"></rect>
+                    <rect x="7" y="5.5" width="10" height="4" fill="currentColor" fill-opacity="0.12" stroke="currentColor" stroke-width="1.4" rx="1"></rect>
+                    <path d="M8 13h2M8 16h2M12 13h2M12 16h2M16 13h2M16 16h2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"></path>
+                  </svg>
+                </span>
+                <div class="portal-data-content">
                   <h3>Research Tools You Can Run</h3>
+                  <span class="portal-data-value">6</span>
+                  <p class="portal-data-note">Model-based Demand Estimates, Hourly Expansion Factors, Ped/bike Crash Prediction Models</p>
                 </div>
-                <span class="portal-data-value">6</span>
-                <p class="portal-data-note">Model-based Demand Estimates, Hourly Expansion Factors, Ped/bike Crash Prediction Models</p>
               </article>
               <article class="portal-data-card">
-                <div class="portal-data-card-header">
-                  <span class="portal-data-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" role="presentation" focusable="false">
-                      <path d="M4 5h16l-6.5 7.4v5.2L10 20v-7.6z" fill="currentColor"></path>
-                      <path d="m4 5 7.5 7.4V20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
-                  </span>
+                <span class="portal-data-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" role="presentation" focusable="false">
+                    <path d="M4 5h16l-6.5 7.4v5.2L10 20v-7.6z" fill="currentColor"></path>
+                    <path d="m4 5 7.5 7.4V20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path>
+                  </svg>
+                </span>
+                <div class="portal-data-content">
                   <h3>Analysis Options</h3>
+                  <span class="portal-data-value">13</span>
+                  <p class="portal-data-note">Filter by mode, facility, source</p>
                 </div>
-                <span class="portal-data-value">13</span>
-                <p class="portal-data-note">Filter by mode, facility, source</p>
               </article>
             </div>
 
