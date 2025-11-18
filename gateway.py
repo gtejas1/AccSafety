@@ -579,12 +579,16 @@ def create_server():
     .portal-data-note {margin:0;font-size:0.9rem;color:#475569;line-height:1.35;}
     .portal-map-card {background:rgba(255,255,255,0.92);border:1px solid rgba(148,163,184,0.26);border-radius:18px;box-shadow:0 16px 28px rgba(15,23,42,0.1);padding:0;display:flex;flex-direction:column;align-items:center;width:100%;height:100%;max-width:none;flex:1;overflow:hidden;}
     .portal-map-heading {margin:0;font-size:1.05rem;font-weight:700;color:#0b1736;}
-    .portal-map-slideshow {flex:1;width:100%;max-width:800px;position:relative;border-radius:inherit;box-shadow:none;border:none;overflow:hidden;background:none;padding:0;display:flex;align-items:center;justify-content:center;}
+    .portal-map-slideshow {flex:1;width:100%;max-width:800px;position:relative;border-radius:inherit;box-shadow:none;border:none;overflow:hidden;background:none;padding:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;}
     .portal-map-track {position:relative;width:100%;aspect-ratio:1/1;max-width:800px;}
-    .portal-map-slide {margin:0;position:absolute;inset:0;border-radius:inherit;overflow:hidden;box-shadow:0 10px 20px rgba(15,23,42,0.1);opacity:0;transition:opacity 600ms ease;}
-    .portal-map-slide:first-child {opacity:1;}
-    .portal-map-track[data-has-js] .portal-map-slide:first-child {opacity:0;}
-    .portal-map-track[data-has-js] .portal-map-slide[data-active] {opacity:1;}
+    .portal-map-slide {margin:0;position:absolute;inset:0;border-radius:inherit;overflow:hidden;box-shadow:0 10px 20px rgba(15,23,42,0.1);opacity:0;transform:scale(1.03);transition:opacity 600ms ease,transform 900ms ease;}
+    .portal-map-slide:first-child {opacity:1;transform:scale(1);}
+    .portal-map-track[data-has-js] .portal-map-slide:first-child {opacity:0;transform:scale(1.03);}
+    .portal-map-track[data-has-js] .portal-map-slide[data-active] {opacity:1;transform:scale(1);z-index:2;}
+    .portal-map-controls {display:flex;justify-content:center;align-items:center;gap:8px;padding:12px 0 16px;}
+    .portal-map-dot {width:10px;height:10px;border-radius:50%;border:0;background:rgba(15,23,42,0.25);padding:0;cursor:pointer;transition:transform 200ms ease,background 200ms ease;}
+    .portal-map-dot[data-active] {background:rgba(15,23,42,0.75);transform:scale(1.25);}
+    .portal-map-dot:focus-visible {outline:2px solid var(--brand-primary);outline-offset:2px;}
     .portal-map-slide img {width:100%;height:100%;display:block;object-fit:contain;background:#000;}
     .portal-hero-text {justify-self:start;}
     .portal-hero-text h1 {margin:0;font-size:2.4rem;line-height:1.2;}
@@ -913,6 +917,7 @@ def create_server():
                     <img src="/static/img/slides/8.jpg" alt="8" loading="lazy">
                   </figure>
                 </div>
+                <div class="portal-map-controls" data-map-dots role="group" aria-label="Slideshow controls" hidden></div>
               </div>
             </div>
           </div>
@@ -953,15 +958,50 @@ def create_server():
 
         let index = 0;
         let timerId = null;
+        const dotsRoot = track.closest('.portal-map-slideshow')?.querySelector('[data-map-dots]') || null;
+        const dots = [];
+
+        if (dotsRoot) {
+          dotsRoot.innerHTML = '';
+          const showDots = slides.length > 1;
+          dotsRoot.hidden = !showDots;
+
+          if (showDots) {
+            slides.forEach((_, slideIndex) => {
+              const button = document.createElement('button');
+              button.type = 'button';
+              button.className = 'portal-map-dot';
+              button.setAttribute('aria-label', `Show slide ${slideIndex + 1} of ${slides.length}`);
+              button.addEventListener('click', () => {
+                setActiveSlide(slideIndex);
+                if (!motionQuery || !motionQuery.matches) {
+                  stop();
+                  start();
+                }
+              });
+              dotsRoot.appendChild(button);
+              dots.push(button);
+            });
+          }
+        }
 
         function setActiveSlide(nextIndex){
           slides[index].removeAttribute('data-active');
+          if (dots[index]) {
+            dots[index].removeAttribute('data-active');
+          }
           index = nextIndex;
           slides[index].setAttribute('data-active', 'true');
+          if (dots[index]) {
+            dots[index].setAttribute('data-active', 'true');
+          }
         }
 
         // Ensure the first slide is active for JS-driven rotation
         slides[index].setAttribute('data-active', 'true');
+        if (dots[index]) {
+          dots[index].setAttribute('data-active', 'true');
+        }
 
         if (slides.length < 2) {
           return;
