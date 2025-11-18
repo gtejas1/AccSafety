@@ -4,22 +4,26 @@ Only 'person' and 'bicycle' detections are rendered, with cumulative counts show
 
 from __future__ import annotations
 
+import csv
+import io
 import os
 import time
 import threading
 import math
 import json
 from typing import Optional, List, Dict, Tuple, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import cv2
-from flask import Response
+from flask import Response, send_file
 from ultralytics import YOLO
 
 import dash
 from dash import html, dcc
 from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
+
+from sqlalchemy import create_engine, text
 
 from theme import card, dash_page
 
@@ -36,6 +40,8 @@ TARGET_WIDTH = int(os.getenv("YOLO_TARGET_WIDTH", 960))
 SCORE_THRESH = float(os.getenv("YOLO_SCORE_THRESH", 0.4))
 FRAME_SKIP = int(os.getenv("YOLO_FRAME_SKIP", 0))
 READ_TIMEOUT_SEC = float(os.getenv("YOLO_READ_TIMEOUT", 8))
+SAVE_INTERVAL_SEC = int(os.getenv("YOLO_SAVE_INTERVAL_SEC", 300))
+DB_URL = os.getenv("YOLO_DB_URL", "postgresql://postgres:gw2ksoft@localhost/TrafficDB")
 
 # Virtual crosswalk definitions expressed as normalized coordinates (x, y)
 # relative to the incoming frame. These were calibrated against the public
@@ -82,6 +88,37 @@ CROSSWALK_CONFIG_PATH = os.getenv(
     "YOLO_CROSSWALK_CONFIG_PATH",
     os.path.join(os.path.dirname(__file__), "crosswalk_config.json"),
 )
+
+try:
+    ENGINE = create_engine(DB_URL, pool_pre_ping=True)
+except Exception:  # pragma: no cover - best effort DB init
+    ENGINE = None
+
+
+def _ensure_live_detection_table() -> None:
+    if ENGINE is None:
+        return
+    try:
+        with ENGINE.begin() as conn:
+            conn.execute(
+                text(
+                    """
+                    CREATE TABLE IF NOT EXISTS live_detection_counts (
+                        id SERIAL PRIMARY KEY,
+                        interval_start TIMESTAMPTZ NOT NULL,
+                        interval_end TIMESTAMPTZ NOT NULL,
+                        total_pedestrians INTEGER NOT NULL,
+                        total_cyclists INTEGER NOT NULL,
+                        crosswalk_counts JSONB NOT NULL DEFAULT '{}'::jsonb
+                    )
+                    """
+                )
+            )
+    except Exception:
+        pass
+
+
+_ensure_live_detection_table()
 
 
 def _clamp_norm(value: float) -> float:
@@ -185,6 +222,11 @@ class VideoWorker:
         self._track_sides: Dict[int, Dict[str, int]] = {}
         self._track_last_seen: Dict[int, float] = {}
         self._reset_tracker_history()
+        self.save_interval = SAVE_INTERVAL_SEC
+        self._last_save_ts = time.time()
+        self._pending_totals = {"pedestrians": 0, "cyclists": 0}
+        self._pending_crosswalk_counts: Dict[str, Dict[str, int]] = {}
+        self._interval_start: Optional[datetime] = None
 
         self.stop_flag = threading.Event()
         self.frame_count = 0
@@ -201,6 +243,8 @@ class VideoWorker:
             self.set_crosswalk_config(saved_crosswalks)
         else:
             self.set_crosswalk_config(CROSSWALK_LINES)
+
+        self._load_persisted_totals()
 
     # ────────────────────────────────────────────────────────────────────────
     def connect(self) -> None:
@@ -302,6 +346,142 @@ class VideoWorker:
                 pass
             return
 
+    def _load_persisted_totals(self) -> None:
+        """Initialize counts from any saved database intervals."""
+
+        if ENGINE is None:
+            return
+        try:
+            with ENGINE.connect() as conn:
+                totals_row = conn.execute(
+                    text(
+                        """
+                        SELECT
+                            COALESCE(SUM(total_pedestrians), 0) AS ped,
+                            COALESCE(SUM(total_cyclists), 0) AS cyc,
+                            MIN(interval_start) AS start_ts
+                        FROM live_detection_counts
+                        """
+                    )
+                ).mappings().one()
+                crosswalk_payloads = conn.execute(
+                    text("SELECT crosswalk_counts FROM live_detection_counts")
+                ).scalars().all()
+        except Exception:
+            return
+
+        ped = int(totals_row.get("ped") or 0)
+        cyc = int(totals_row.get("cyc") or 0)
+        start_ts = totals_row.get("start_ts")
+
+        crosswalk_totals: Dict[str, Dict[str, int]] = {}
+        for payload in crosswalk_payloads:
+            if not isinstance(payload, dict):
+                continue
+            for key, counts in payload.items():
+                aggregated = crosswalk_totals.setdefault(
+                    key, {"pedestrians": 0, "cyclists": 0}
+                )
+                aggregated["pedestrians"] += int(counts.get("pedestrians", 0) or 0)
+                aggregated["cyclists"] += int(counts.get("cyclists", 0) or 0)
+
+        with self.stats_lock:
+            self.total_counts = {"pedestrians": ped, "cyclists": cyc}
+            if start_ts and self.start_time is None:
+                self.start_time = start_ts
+            for key in list(self.crosswalk_counts.keys()):
+                saved_counts = crosswalk_totals.get(key)
+                if saved_counts:
+                    self.crosswalk_counts[key] = saved_counts.copy()
+
+    def _record_pending_deltas_locked(
+        self,
+        totals_delta: Dict[str, int],
+        crosswalk_deltas: Dict[str, Dict[str, int]],
+    ) -> None:
+        if not totals_delta and not crosswalk_deltas:
+            return
+
+        had_pending = any(self._pending_totals.values()) or any(
+            (counts.get("pedestrians", 0) or counts.get("cyclists", 0))
+            for counts in self._pending_crosswalk_counts.values()
+        )
+
+        for group, delta in totals_delta.items():
+            if not delta:
+                continue
+            self._pending_totals[group] = self._pending_totals.get(group, 0) + int(delta)
+
+        for key, delta_counts in crosswalk_deltas.items():
+            pending = self._pending_crosswalk_counts.setdefault(
+                key, {"pedestrians": 0, "cyclists": 0}
+            )
+            pending["pedestrians"] += int(delta_counts.get("pedestrians", 0) or 0)
+            pending["cyclists"] += int(delta_counts.get("cyclists", 0) or 0)
+
+        if self._interval_start is None:
+            self._interval_start = datetime.utcnow()
+        if not had_pending:
+            self._last_save_ts = time.time()
+
+    def _persist_counts_if_needed_locked(self, force: bool = False) -> None:
+        if ENGINE is None:
+            return
+
+        now = time.time()
+        if not force and now - self._last_save_ts < self.save_interval:
+            return
+
+        totals_pending = any(self._pending_totals.values())
+        crosswalk_pending = any(
+            (counts.get("pedestrians", 0) or counts.get("cyclists", 0))
+            for counts in self._pending_crosswalk_counts.values()
+        )
+        if not totals_pending and not crosswalk_pending:
+            return
+
+        interval_start = self._interval_start or datetime.utcnow() - timedelta(
+            seconds=self.save_interval
+        )
+        interval_end = datetime.utcnow()
+        payload = {
+            "interval_start": interval_start,
+            "interval_end": interval_end,
+            "ped": int(self._pending_totals.get("pedestrians", 0)),
+            "cyc": int(self._pending_totals.get("cyclists", 0)),
+            "crosswalk": json.dumps(self._pending_crosswalk_counts or {}),
+        }
+
+        try:
+            with ENGINE.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        INSERT INTO live_detection_counts (
+                            interval_start,
+                            interval_end,
+                            total_pedestrians,
+                            total_cyclists,
+                            crosswalk_counts
+                        ) VALUES (
+                            :interval_start,
+                            :interval_end,
+                            :ped,
+                            :cyc,
+                            :crosswalk::jsonb
+                        )
+                        """
+                    ),
+                    payload,
+                )
+        except Exception:
+            return
+
+        self._pending_totals = {"pedestrians": 0, "cyclists": 0}
+        self._pending_crosswalk_counts = {}
+        self._interval_start = interval_end
+        self._last_save_ts = now
+
     def _reset_tracker_history(self) -> None:
         """Reset the cache of tracker IDs that have been counted."""
         groups = set(self.class_group.values())
@@ -324,6 +504,10 @@ class VideoWorker:
             self.crosswalk_counts = {
                 cw["key"]: {"pedestrians": 0, "cyclists": 0} for cw in config_snapshot
             }
+            self._pending_totals = {"pedestrians": 0, "cyclists": 0}
+            self._pending_crosswalk_counts = {}
+            self._interval_start = None
+            self._last_save_ts = time.time()
 
     def set_crosswalk_config(self, lines: List[Dict[str, object]]) -> None:
         """Replace the crosswalk configuration with new normalized endpoints."""
@@ -462,6 +646,7 @@ class VideoWorker:
             pass
         else:
             deltas = {"pedestrians": 0, "cyclists": 0}
+            crosswalk_deltas: Dict[str, Dict[str, int]] = {}
             with self.stats_lock:
                 timestamp = time.time()
                 for cid, track_id, center in zip(classes, track_ids, centers):
@@ -502,8 +687,16 @@ class VideoWorker:
                             )
                             if group == "pedestrian":
                                 counts_for_crosswalk["pedestrians"] += 1
+                                delta_entry = crosswalk_deltas.setdefault(
+                                    key, {"pedestrians": 0, "cyclists": 0}
+                                )
+                                delta_entry["pedestrians"] += 1
                             elif group == "cyclist":
                                 counts_for_crosswalk["cyclists"] += 1
+                                delta_entry = crosswalk_deltas.setdefault(
+                                    key, {"pedestrians": 0, "cyclists": 0}
+                                )
+                                delta_entry["cyclists"] += 1
 
                 for key, delta in deltas.items():
                     if delta:
@@ -512,6 +705,8 @@ class VideoWorker:
                     self.start_time = datetime.now()
 
                 self._prune_stale_tracks_locked(timestamp)
+                self._record_pending_deltas_locked(deltas, crosswalk_deltas)
+                self._persist_counts_if_needed_locked()
             return
 
         # If anything above failed, do not update counts.
@@ -576,6 +771,8 @@ class VideoWorker:
             self._update_counts(results, crosswalk_pixels)
             annotated = results[0].plot()
             self._draw_crosswalks(annotated, crosswalk_pixels)
+            with self.stats_lock:
+                self._persist_counts_if_needed_locked()
 
             ok, jpg = cv2.imencode(".jpg", annotated, [cv2.IMWRITE_JPEG_QUALITY, 80])
             if ok:
@@ -622,6 +819,8 @@ class VideoWorker:
         self.stop_flag.set()
         if self.cap:
             self.cap.release()
+        with self.stats_lock:
+            self._persist_counts_if_needed_locked(force=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -652,6 +851,66 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     route_path = f"{prefix}video_feed"
     if endpoint_name not in server.view_functions:
         server.add_url_rule(route_path, endpoint=endpoint_name, view_func=_video_feed)
+
+    def _download_counts():
+        if ENGINE is None:
+            return "Database connection unavailable", 500
+        try:
+            with ENGINE.connect() as conn:
+                rows = conn.execute(
+                    text(
+                        """
+                        SELECT
+                            interval_start,
+                            interval_end,
+                            total_pedestrians,
+                            total_cyclists,
+                            crosswalk_counts
+                        FROM live_detection_counts
+                        ORDER BY interval_start
+                        """
+                    )
+                ).mappings().all()
+        except Exception as exc:
+            return f"Failed to load counts: {exc}", 500
+
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "interval_start",
+                "interval_end",
+                "total_pedestrians",
+                "total_cyclists",
+                "crosswalk_counts",
+            ]
+        )
+        for row in rows:
+            writer.writerow(
+                [
+                    row.get("interval_start"),
+                    row.get("interval_end"),
+                    row.get("total_pedestrians"),
+                    row.get("total_cyclists"),
+                    json.dumps(row.get("crosswalk_counts") or {}),
+                ]
+            )
+
+        buffer = io.BytesIO(output.getvalue().encode("utf-8"))
+        filename = f"live_detection_counts_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.csv"
+        return send_file(
+            buffer,
+            mimetype="text/csv",
+            as_attachment=True,
+            download_name=filename,
+        )
+
+    download_endpoint = (
+        f"live_detection_download_{prefix.strip('/').replace('/', '_') or 'root'}"
+    )
+    download_path = f"{prefix}download"
+    if download_endpoint not in server.view_functions:
+        server.add_url_rule(download_path, endpoint=download_endpoint, view_func=_download_counts)
 
     app = dash.Dash(
         name="live_detection_dash",
@@ -965,6 +1224,14 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         className="shadow-sm h-100",
     )
 
+    download_button = dbc.Button(
+        "Download Saved Counts",
+        href=download_path,
+        target="_blank",
+        color="outline-primary",
+        className="ms-auto",
+    )
+
     counts_panel = dbc.Card(
         dbc.CardBody(
             [
@@ -976,6 +1243,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     ],
                     class_name="g-3",
                 ),
+                html.Div(download_button, className="d-flex justify-content-end"),
                 html.Div(
                     "Crosswalk Counts (both directions)",
                     className="text-muted fw-semibold",
