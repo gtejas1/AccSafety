@@ -24,6 +24,9 @@ DEFAULT_CLASSES = ["pedestrian", "cyclist"]
 DEFAULT_TIME_BUCKET = "1h"
 REQUEST_TIMEOUT = 30
 MAX_RETRIES = 3
+# Automatically poll for new counts every X minutes
+AUTO_REFRESH_MINUTES = 5
+AUTO_REFRESH_INTERVAL_MS = AUTO_REFRESH_MINUTES * 60 * 1000
 
 # UI values -> API class names (keep as-is if your API expects these exact strings)
 CLASS_ALIAS = {
@@ -289,6 +292,11 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         [
             dcc.Location(id="viv-url", refresh=False),
             dcc.Interval(id="viv-init", interval=200, n_intervals=0, max_intervals=1),
+            dcc.Interval(
+                id="viv-auto-refresh",
+                interval=AUTO_REFRESH_INTERVAL_MS,
+                n_intervals=0,
+            ),
 
             dbc.Row(
                 [
@@ -445,6 +453,10 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
                                                     color="primary",
                                                     className="vivacity-refresh-btn",
                                                 ),
+                                                html.Small(
+                                                    f"Counts refresh automatically every {AUTO_REFRESH_MINUTES} minutes.",
+                                                    className="vivacity-auto-refresh-hint",
+                                                ),
                                             ],
                                             className="vivacity-filter-actions",
                                         ),
@@ -550,6 +562,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
         Output("viv-raw-df-store", "data"),
         Input("viv-init", "n_intervals"),
         Input("viv-refresh-btn", "n_clicks"),
+        Input("viv-auto-refresh", "n_intervals"),
         State("viv-countline-dd", "value"),
         State("viv-manual-ids", "value"),
         State("viv-date-range", "start_date"),
@@ -563,6 +576,7 @@ def create_vivacity_dash(server, prefix="/vivacity/"):
     def refresh(
         _init_tick,
         _n,
+        _auto_tick,
         dd_vals,
         manual_ids,
         start_date,
