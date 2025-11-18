@@ -119,6 +119,17 @@ BICYCLIST_TRAIL_THEME         = "light"
 BICYCLIST_TRAIL_PORTAL_URL    = "https://uwm.maps.arcgis.com"
 BICYCLIST_TRAIL_SCRIPT_SRC    = "https://js.arcgis.com/4.34/embeddable-components/"
 
+# ---- NEW: Pedestrian + Off-Street Trail + Pilot custom map ----
+PEDESTRIAN_TRAIL_MODE          = "Pedestrian"
+PEDESTRIAN_TRAIL_FACILITY      = "Off-Street Trail"
+PEDESTRIAN_TRAIL_SOURCE        = "Wisconsin Pilot Counting Program Counts"
+PEDESTRIAN_TRAIL_ITEM_ID       = "ff0e8b77db434415a375410c76c8e2fc"
+PEDESTRIAN_TRAIL_CENTER        = "-88.71709514453103,43.38567609475957"
+PEDESTRIAN_TRAIL_SCALE         = "2311162.2171545"
+PEDESTRIAN_TRAIL_THEME         = "light"
+PEDESTRIAN_TRAIL_PORTAL_URL    = "https://uwm.maps.arcgis.com"
+PEDESTRIAN_TRAIL_SCRIPT_SRC    = "https://js.arcgis.com/4.34/embeddable-components/"
+
 # ---- NEW: Pedestrian + On-Street (Sidewalk) + Pilot custom map ----
 PEDESTRIAN_SIDEWALK_MODE         = "Pedestrian"
 PEDESTRIAN_SIDEWALK_FACILITY     = "On-Street (sidewalk)"
@@ -603,6 +614,18 @@ def _pilot_offstreet_trail_map(container_id: str = "bicyclist-trail-map") -> htm
     )
 
 
+def _pilot_ped_offstreet_trail_map(container_id: str = "pedestrian-trail-map") -> html.Iframe:
+    return _pilot_arcgis_map(
+        container_id=container_id,
+        item_id=PEDESTRIAN_TRAIL_ITEM_ID,
+        theme=PEDESTRIAN_TRAIL_THEME,
+        portal_url=PEDESTRIAN_TRAIL_PORTAL_URL,
+        center=PEDESTRIAN_TRAIL_CENTER,
+        scale=PEDESTRIAN_TRAIL_SCALE,
+        script_src=PEDESTRIAN_TRAIL_SCRIPT_SRC,
+    )
+
+
 def _pilot_ped_sidewalk_map(container_id: str = "pedestrian-sidewalk-map") -> html.Iframe:
     return _pilot_arcgis_map(
         container_id=container_id,
@@ -1061,6 +1084,14 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             and source_val == BICYCLIST_TRAIL_SOURCE.strip().casefold()
         ):
             map_children = _pilot_offstreet_trail_map()
+            map_style = {"display": "block"}
+
+        elif (
+            mode_casefold == PEDESTRIAN_TRAIL_MODE.strip().casefold()
+            and facility_casefold == PEDESTRIAN_TRAIL_FACILITY.strip().casefold()
+            and source_val == PEDESTRIAN_TRAIL_SOURCE.strip().casefold()
+        ):
+            map_children = _pilot_ped_offstreet_trail_map()
             map_style = {"display": "block"}
 
         elif (
