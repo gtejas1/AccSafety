@@ -570,9 +570,9 @@ def create_server():
     .portal-primary {display:grid;gap:18px;align-content:start;justify-items:stretch;}
     .portal-secondary {display:flex;flex-direction:column;align-self:stretch;align-items:stretch;gap:18px;}
     .portal-data-grid {display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;width:100%;}
-    .portal-data-card {background:#fff;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:18px 20px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:flex;gap:16px;align-items:flex-start;text-align:left;}
+    .portal-data-card {background:#fff;border:1px solid rgba(148,163,184,0.28);border-radius:14px;padding:18px 20px;box-shadow:0 16px 28px rgba(15,23,42,0.08);display:flex;gap:16px;align-items:center;text-align:left;}
     .portal-data-card h3 {margin:0;font-size:0.85rem;font-weight:700;color:#0b1736;letter-spacing:0.04em;text-transform:uppercase;}
-    .portal-data-icon {width:46px;height:46px;border-radius:16px;background:rgba(11,23,54,0.06);color:#0b1736;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
+    .portal-data-icon {width:46px;height:46px;border-radius:16px;background:linear-gradient(135deg,rgba(11,102,195,0.12),rgba(14,165,233,0.22));color:#0b66c3;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:inset 0 0 0 1px rgba(11,102,195,0.15);}
     .portal-data-icon svg {width:24px;height:24px;}
     .portal-data-content {display:flex;flex-direction:column;gap:6px;}
     .portal-data-value {font-size:2rem;font-weight:700;color:#0b1736;line-height:1;}
