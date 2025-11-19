@@ -559,7 +559,7 @@ def create_server():
       background:#ffffff;border:1px solid rgba(148,163,184,0.25);box-shadow:0 18px 34px rgba(15,23,42,0.08);
       font-feature-settings:"tnum" on;font-variant-numeric:tabular-nums;}
     .portal-metric-icon {width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:50%;
-      background:rgba(76,81,191,0.12);color:#4c51bf;}
+      background:linear-gradient(135deg,rgba(11,102,195,0.12),rgba(14,165,233,0.22));color:#0b66c3;box-shadow:inset 0 0 0 1px rgba(11,102,195,0.15);}
     .portal-metric-icon svg {width:24px;height:24px;fill:currentColor;}
     .portal-metric-text {display:flex;flex-direction:column;line-height:1.1;}
     .portal-metric-value {font-size:1.85rem;font-weight:700;color:#0b1736;margin:0;}
