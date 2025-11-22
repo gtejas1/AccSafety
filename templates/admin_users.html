@@ -42,6 +42,14 @@
         <div class="admin-card">
           <h2>Account approvals and roles</h2>
           <p class="meta">Manage pending requests and update user roles. Roles are comma-separated; include <strong>admin</strong> to grant admin privileges.</p>
+          <div class="meta" style="background: rgba(14,165,233,0.06); padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(14,165,233,0.16);">
+            <strong>How to use this page</strong>
+            <ol style="margin: 8px 0 0 18px; padding: 0; line-height: 1.6;">
+              <li>Find the new account in the table below; pending users show a yellow badge.</li>
+              <li>Click <em>Approve</em> to grant access, or <em>Revoke</em> to remove it later.</li>
+              <li>Adjust the comma-separated roles as needed (add <code>admin</code> for administrators) and click <em>Update roles</em>.</li>
+            </ol>
+          </div>
           {% if message %}<p class="success">{{ message }}</p>{% endif %}
           <div class="table-wrap">
             <table class="user-list">
