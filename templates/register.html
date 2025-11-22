@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Register · AccSafety</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/theme.css">
+  <style>
+    .login-card h1 { margin: 0 0 12px; font-size: 1.4rem; }
+    .login-card p { margin: 0 0 20px; color: var(--brand-muted); }
+    .login-card label { display: block; margin: 12px 0 6px; font-weight: 600; font-size: 0.9rem; color: #0b1736; }
+    .login-card input[type="text"], .login-card input[type="password"], .login-card input[type="email"] {
+      width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(15, 23, 42, 0.16);
+      background: #f8fafc; font-size: 0.95rem;
+    }
+    .login-card button {
+      width: 100%; margin-top: 20px; padding: 12px 16px; border: none; border-radius: 999px;
+      background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary)); color: white; font-weight: 600;
+      cursor: pointer; font-size: 1rem; box-shadow: 0 14px 30px rgba(11, 102, 195, 0.28);
+    }
+    .login-card button:hover { filter: brightness(1.05); }
+    .login-card .error { margin-top: 12px; color: #b91c1c; font-weight: 600; font-size: 0.9rem; }
+    .login-card .success { margin-top: 12px; color: #15803d; font-weight: 600; font-size: 0.9rem; }
+    .login-card .meta { margin-top: 12px; font-size: 0.9rem; color: var(--brand-muted); text-align: center; }
+    .login-card .meta a { color: var(--brand-primary); font-weight: 600; text-decoration: none; }
+    .login-card .meta a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <img src="/static/img/accsafety-logo.png" alt="AccSafety logo" class="app-logo">
+      <div class="app-header-title">
+        <span class="app-brand">AccSafety</span>
+        <span class="app-subtitle">Wisconsin Pedestrian & Bicycle Activity and Safety Portal</span>
+      </div>
+      <nav class="app-nav">
+        <a class="app-link" href="/login">Back to Sign in</a>
+      </nav>
+    </header>
+
+    <main class="app-content">
+      <div class="app-main-centered">
+        <form class="app-card app-card--narrow login-card" method="post" autocomplete="off">
+          <h1>Request Access</h1>
+          <p>Complete this form to request an AccSafety account. An administrator may need to approve your request.</p>
+
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" required placeholder="Preferred username" value="{{ form.username }}" autofocus>
+
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required placeholder="you@example.com" value="{{ form.email }}">
+
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" required placeholder="Minimum 8 characters">
+
+          <label for="confirm_password">Confirm Password</label>
+          <input id="confirm_password" name="confirm_password" type="password" required placeholder="Re-enter password">
+
+          <button type="submit">Submit request</button>
+          {% if error %}<div class="error">{{ error }}</div>{% endif %}
+          {% if success %}<div class="success">{{ success }}</div>{% endif %}
+          <div class="meta">Already have an account? <a href="/login">Return to login</a></div>
+        </form>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

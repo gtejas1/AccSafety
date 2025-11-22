@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Sign in · AccSafety</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/theme.css">
+  <style>
+    .login-card h1 { margin: 0 0 12px; font-size: 1.4rem; }
+    .login-card p { margin: 0 0 20px; color: var(--brand-muted); }
+    .login-card label { display: block; margin: 12px 0 6px; font-weight: 600; font-size: 0.9rem; color: #0b1736; }
+    .login-card input[type="text"], .login-card input[type="password"] {
+      width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(15, 23, 42, 0.16);
+      background: #f8fafc; font-size: 0.95rem;
+    }
+    .login-card button {
+      width: 100%; margin-top: 20px; padding: 12px 16px; border: none; border-radius: 999px;
+      background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary)); color: white; font-weight: 600;
+      cursor: pointer; font-size: 1rem; box-shadow: 0 14px 30px rgba(11, 102, 195, 0.28);
+    }
+    .login-card button:hover { filter: brightness(1.05); }
+    .login-card button:disabled { filter: grayscale(0.4); cursor: not-allowed; box-shadow: none; opacity: 0.7; }
+    .login-card .showpw { margin-top: 10px; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #0b1736; }
+    .login-card .error { margin-top: 12px; color: #b91c1c; font-weight: 600; font-size: 0.9rem; }
+    .login-card .meta { margin-top: 12px; font-size: 0.9rem; color: var(--brand-muted); text-align: center; }
+    .login-card .meta a { color: var(--brand-primary); font-weight: 600; text-decoration: none; }
+    .login-card .meta a:hover { text-decoration: underline; }
+
+    .notice-backdrop { position: fixed; inset: 0; background: rgba(12, 23, 42, 0.72); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 999; }
+    .notice-card { max-width: 540px; width: 100%; background: #ffffff; border-radius: 18px; box-shadow: 0 24px 60px rgba(11, 23, 54, 0.32); padding: 28px 32px; color: #0b1736; display: grid; gap: 18px; }
+    .notice-card h2 { margin: 0; font-size: 1.35rem; }
+    .notice-card p { margin: 0; line-height: 1.55; }
+    .notice-actions { display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap; }
+    .notice-actions button { border-radius: 999px; border: none; padding: 10px 18px; font-weight: 600; cursor: pointer; font-size: 0.95rem; }
+    .notice-actions .primary { background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary)); color: #fff; box-shadow: 0 12px 26px rgba(11, 102, 195, 0.28); }
+    .notice-backdrop[hidden] { display: none; }
+
+    /* --- Compact hero text for less vertical space --- */
+    .portal-hero-text h1 {
+      font-size: 2rem;
+      line-height: 1.25;
+      margin-bottom: 8px;
+    }
+    .portal-hero-text p {
+      font-size: 0.98rem;
+      line-height: 1.45;
+      max-width: 640px;
+      margin: 6px 0 10px;
+    }
+
+    .cta-wrap {
+      margin-top: 4px;
+      margin-bottom: 10px;
+    }
+
+    .portal-status-card {
+      padding: 18px 18px;
+      border-radius: 18px;
+      box-shadow: 0 18px 32px rgba(15,23,42,0.10);
+    }
+  </style>
+</head>
+<body>
+  <!-- Policy gate modal -->
+  <div id="policy-modal" class="notice-backdrop" role="dialog" aria-modal="true" aria-labelledby="policy-title" aria-describedby="policy-copy">
+    <div class="notice-card">
+      <h2 id="policy-title">User Agreement:</h2>
+      <div id="policy-copy">
+        <p>By continuing, you confirm that you are an authorized AccSafety user and will use this portal only for official program analysis or research purposes. All insights and downloadable data may be confidential and may include sensitive roadway safety information.</p>
+        <p>You acknowledge that AccSafety and its data providers are not liable for any decisions or actions taken based on this information, and you agree to comply with all applicable privacy, security, and data handling requirements.</p>
+      </div>
+      <div class="notice-actions">
+        <button type="button" class="primary" id="policy-accept">I Understand &amp; Agree</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="app-shell">
+    <header class="app-header">
+      <img src="/static/img/accsafety-logo.png" alt="AccSafety logo" class="app-logo">
+      <div class="app-header-title">
+        <span class="app-brand">AccSafety</span>
+        <span class="app-subtitle">Wisconsin Pedestrian & Bicycle Activity and Safety Portal</span>
+      </div>
+      <nav class="app-nav">
+        <a class="app-link" href="/">Back to Portal</a>
+      </nav>
+    </header>
+
+    <main class="app-content">
+      <div class="app-main-centered">
+        <form class="app-card app-card--narrow login-card" method="post" autocomplete="off">
+          <h1>Welcome Back</h1>
+          <p>Enter your credentials to continue to the AccSafety Data Portal and Dashboards</p>
+
+          <input type="hidden" name="next" value="{{ nxt }}"/>
+
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" required placeholder="e.g. admin" autofocus>
+
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" required placeholder="••••••••">
+          <label class="showpw"><input id="toggle" type="checkbox"> Show password</label>
+
+          <button type="submit" disabled>Sign in</button>
+          {% if error %}<div class="error">{{ error }}</div>{% endif %}
+          <div class="meta">Need an account? <a href="/register">Request access</a></div>
+        </form>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    (function(){
+      const policyModal = document.getElementById('policy-modal');
+      const acceptPolicy = document.getElementById('policy-accept');
+      const submitButton = document.querySelector('.login-card button[type="submit"]');
+      const usernameInput = document.getElementById('username');
+      const urlParams = new URLSearchParams(window.location.search);
+      const LS_KEY = 'accsafetyPolicyAccepted';
+
+      if (urlParams.get('reset_policy') === '1') {
+        try { localStorage.removeItem(LS_KEY); } catch(e){}
+      }
+
+      function enableForm() {
+        policyModal.hidden = true;
+        submitButton.disabled = false;
+        usernameInput && usernameInput.focus();
+      }
+
+      acceptPolicy.addEventListener('click', function () {
+        try { localStorage.setItem(LS_KEY, 'true'); } catch(e){}
+        enableForm();
+      });
+
+      try {
+        if (localStorage.getItem(LS_KEY) === 'true') {
+          enableForm();
+        }
+      } catch(e) {
+        // If localStorage blocked, enable form anyway
+        enableForm();
+      }
+
+      document.getElementById('toggle').addEventListener('change', function(){
+        const pw = document.getElementById('password');
+        pw.type = this.checked ? 'text' : 'password';
+      });
+    })();
+  </script>
+</body>
+</html>

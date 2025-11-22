@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>User Administration · AccSafety</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/theme.css">
+  <style>
+    .admin-card { padding: 20px; border-radius: 16px; background: #ffffff; box-shadow: 0 18px 34px rgba(15,23,42,0.08); margin: 12px 0; }
+    .admin-card h2 { margin: 0 0 10px; }
+    .user-list { width: 100%; border-collapse: collapse; }
+    .user-list th, .user-list td { padding: 10px 12px; border-bottom: 1px solid rgba(15,23,42,0.08); text-align: left; }
+    .user-list th { text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.02em; color: var(--brand-muted); }
+    .user-list td form { display: inline-flex; gap: 6px; align-items: center; }
+    .user-list .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 0.8rem; background: rgba(11,102,195,0.12); color: var(--brand-primary); }
+    .pill { display: inline-block; background: #0ea5e9; color: #fff; padding: 4px 10px; border-radius: 999px; font-size: 0.78rem; margin-right: 6px; }
+    .danger { color: #b91c1c; }
+    .success { color: #15803d; }
+    .meta { margin-top: 10px; color: var(--brand-muted); font-size: 0.9rem; }
+    .input { padding: 8px 10px; border-radius: 8px; border: 1px solid rgba(15, 23, 42, 0.16); background: #f8fafc; }
+    .button { border: none; border-radius: 10px; padding: 8px 12px; background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary)); color: #fff; font-weight: 600; cursor: pointer; box-shadow: 0 14px 30px rgba(11, 102, 195, 0.28); }
+    .button.secondary { background: #e2e8f0; color: #0b1736; box-shadow: none; }
+    .button.danger { background: #ef4444; box-shadow: none; }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <img src="/static/img/accsafety-logo.png" alt="AccSafety logo" class="app-logo">
+      <div class="app-header-title">
+        <span class="app-brand">AccSafety</span>
+        <span class="app-subtitle">User Administration</span>
+      </div>
+      <nav class="app-nav">
+        <a class="app-link" href="/">Back to Portal</a>
+        <a class="app-link" href="/logout">Log out</a>
+      </nav>
+    </header>
+
+    <main class="app-content">
+      <div class="app-main-centered" style="max-width: 960px;">
+        <div class="admin-card">
+          <h2>Account approvals and roles</h2>
+          <p class="meta">Manage pending requests and update user roles. Roles are comma-separated; include <strong>admin</strong> to grant admin privileges.</p>
+          {% if message %}<p class="success">{{ message }}</p>{% endif %}
+          <div class="table-wrap">
+            <table class="user-list">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Email</th>
+                  <th>Approved</th>
+                  <th>Roles</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for user in users %}
+                <tr>
+                  <td>{{ user.username }}</td>
+                  <td>{{ user.email }}</td>
+                  <td>{% if user.approved %}<span class="pill">Approved</span>{% else %}<span class="pill" style="background:#eab308;">Pending</span>{% endif %}</td>
+                  <td>
+                    {% if user.roles %}
+                      {% for role in user.roles %}<span class="badge">{{ role }}</span>{% endfor %}
+                    {% else %}
+                      <span class="meta">none</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    <form method="post">
+                      <input type="hidden" name="username" value="{{ user.username }}">
+                      <label class="meta" for="roles-{{ loop.index }}">Roles</label>
+                      <input class="input" id="roles-{{ loop.index }}" name="roles" type="text" value="{{ ', '.join(user.roles) }}" placeholder="e.g. admin, analyst">
+                      <button class="button secondary" name="action" value="set_roles" type="submit">Update roles</button>
+                    </form>
+                    <form method="post" style="margin-top:8px;">
+                      <input type="hidden" name="username" value="{{ user.username }}">
+                      {% if not user.approved %}
+                        <button class="button" name="action" value="approve" type="submit">Approve</button>
+                      {% else %}
+                        <button class="button danger" name="action" value="revoke" type="submit">Revoke</button>
+                      {% endif %}
+                    </form>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

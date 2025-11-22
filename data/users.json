@@ -1,0 +1,22 @@
+[
+  {
+    "username": "admin",
+    "email": "admin@example.com",
+    "password_hash": "scrypt:32768:8:1$ut2LRwAFaxQnd2QU$6fde027fbff82c5901e2e3d729ee4187cf91ebc0c0eccbf3e9a4a0742181a83451f7a1336f36f8d28e5dc52bed28d58c5edede3b9091b0f13638ab22a01c6f23",
+    "roles": [
+      "admin"
+    ],
+    "flags": {},
+    "approved": true
+  },
+  {
+    "username": "ipit",
+    "email": "ipit@example.com",
+    "password_hash": "scrypt:32768:8:1$MxJoLeNMLJEuKZmX$8cca0e00314834ded0587ba6d5a3bd14ac8394388c2f2c1a350e2b000e13176308226eb7de645bb8f082ae5666065f9ce53750a4c566db73f3730d36dd528c43",
+    "roles": [
+      "user"
+    ],
+    "flags": {},
+    "approved": true
+  }
+]
