@@ -89,17 +89,44 @@ CROSSWALK_CONFIG_PATH = os.getenv(
     os.path.join(os.path.dirname(__file__), "crosswalk_config.json"),
 )
 
-try:
-    ENGINE = create_engine(DB_URL, pool_pre_ping=True)
-except Exception:  # pragma: no cover - best effort DB init
-    ENGINE = None
+ENGINE: Optional[Any] = None
+_ENGINE_LOCK = threading.Lock()
+_ENGINE_LAST_FAIL_TS = 0.0
 
 
-def _ensure_live_detection_table() -> None:
-    if ENGINE is None:
+def _get_engine() -> Optional[Any]:
+    """Return a live SQLAlchemy engine, retrying creation on failures."""
+
+    global ENGINE, _ENGINE_LAST_FAIL_TS
+
+    with _ENGINE_LOCK:
+        if ENGINE is not None:
+            return ENGINE
+
+        now = time.time()
+        # Back off a little between failures so we don't log-spam.
+        if now - _ENGINE_LAST_FAIL_TS < 30:
+            return None
+
+        try:
+            ENGINE = create_engine(DB_URL, pool_pre_ping=True)
+        except Exception as exc:  # pragma: no cover - best effort DB init
+            _ENGINE_LAST_FAIL_TS = now
+            print(f"[live_detection] Failed to create DB engine: {exc}")
+            return None
+
+        # Ensure schema exists once we have a working engine.
+        _ensure_live_detection_table(engine=ENGINE)
+
+        return ENGINE
+
+
+def _ensure_live_detection_table(engine: Optional[Any] = None) -> None:
+    engine = engine or _get_engine()
+    if engine is None:
         return
     try:
-        with ENGINE.begin() as conn:
+        with engine.begin() as conn:
             conn.execute(
                 text(
                     """
@@ -349,10 +376,11 @@ class VideoWorker:
     def _load_persisted_totals(self) -> None:
         """Initialize counts from any saved database intervals."""
 
-        if ENGINE is None:
+        engine = _get_engine()
+        if engine is None:
             return
         try:
-            with ENGINE.connect() as conn:
+            with engine.connect() as conn:
                 totals_row = conn.execute(
                     text(
                         """
@@ -425,7 +453,8 @@ class VideoWorker:
             self._last_save_ts = time.time()
 
     def _persist_counts_if_needed_locked(self, force: bool = False) -> None:
-        if ENGINE is None:
+        engine = _get_engine()
+        if engine is None:
             return
 
         now = time.time()
@@ -453,7 +482,7 @@ class VideoWorker:
         }
 
         try:
-            with ENGINE.begin() as conn:
+            with engine.begin() as conn:
                 conn.execute(
                     text(
                         """
@@ -853,10 +882,11 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         server.add_url_rule(route_path, endpoint=endpoint_name, view_func=_video_feed)
 
     def _download_counts():
-        if ENGINE is None:
+        engine = _get_engine()
+        if engine is None:
             return "Database connection unavailable", 500
         try:
-            with ENGINE.connect() as conn:
+            with engine.connect() as conn:
                 rows = conn.execute(
                     text(
                         """
