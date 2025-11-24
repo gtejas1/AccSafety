@@ -24,17 +24,37 @@ from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore
 from flask import current_app
+from auth.user_store import UserStore
 
 
 BASE_DIR = Path(__file__).resolve().parent
+USER_DATA_PATH = BASE_DIR / "data" / "users.json"
 
-VALID_USERS = {"admin": "IPIT&uwm2024", "ipit": "IPIT&uwm2024"}
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
 
 
 SPARKLINE_CACHE_TTL = timedelta(seconds=55)
 _SPARKLINE_CACHE: Dict[str, object] = {"expires": None, "payload": None}
 DEFAULT_PORTAL_VIVACITY_IDS = ["54315", "54316", "54317", "54318"]
+
+DEFAULT_SEED_PASSWORD = os.environ.get("ACC_DEFAULT_PASSWORD", "IPIT&uwm2024")
+user_store = UserStore(USER_DATA_PATH)
+user_store.ensure_seed_users(
+    {
+        "admin": {
+            "password": os.environ.get("ACC_ADMIN_PASSWORD", DEFAULT_SEED_PASSWORD),
+            "roles": ["admin"],
+            "approved": True,
+            "email": os.environ.get("ACC_ADMIN_EMAIL", "admin@example.com"),
+        },
+        "ipit": {
+            "password": os.environ.get("ACC_IPIT_PASSWORD", DEFAULT_SEED_PASSWORD),
+            "roles": ["user"],
+            "approved": True,
+            "email": os.environ.get("ACC_IPIT_EMAIL", "ipit@example.com"),
+        },
+    }
+)
 
 
 def _portal_vivacity_ids() -> List[str]:
@@ -183,6 +203,19 @@ def _get_cached_sparkline() -> Dict[str, object]:
     _SPARKLINE_CACHE["expires"] = now_utc + SPARKLINE_CACHE_TTL
     return payload
 
+
+def _current_user():
+    username = session.get("user")
+    if not username:
+        return None
+    return user_store.get_user(username)
+
+
+def _is_admin(user) -> bool:
+    if not user:
+        return False
+    return "admin" in (user.roles or [])
+
 def load_whats_new_entries(limit: int = 15):
     """Load What's New entries from a manually curated JSON file."""
 
@@ -255,274 +288,122 @@ def create_server():
     @server.before_request
     def require_login():
         path = request.path or "/"
-        # allow login, logout, favicon, and static assets
-        if path.startswith("/static/") or path in ("/login", "/logout", "/favicon.ico"):
+        # allow login, registration, logout, favicon, and static assets
+        if path.startswith("/static/") or path in ("/login", "/logout", "/register", "/favicon.ico"):
             return None
-        if path.startswith(PROTECTED_PREFIXES) and "user" not in session:
+
+        current_user = _current_user()
+        if path.startswith(PROTECTED_PREFIXES) and not current_user:
             full = request.full_path
             next_target = full[:-1] if full.endswith("?") else full
             return redirect(f"/login?next={quote(next_target)}", code=302)
+        if current_user and not current_user.approved and path not in ("/logout", "/login"):
+            session.clear()
+            return redirect("/login", code=302)
         return None
 
     # ---- Login / Logout ----
     @server.route("/login", methods=["GET", "POST"])
     def login():
         error = None
+        nxt = request.args.get("next", request.form.get("next", "/"))
         if request.method == "POST":
             u = (request.form.get("username") or "").strip()
             p = request.form.get("password") or ""
-            if u in VALID_USERS and VALID_USERS[u] == p:
-                session["user"] = u
-                nxt = request.args.get("next") or "/"
-                if not nxt.startswith("/"):
-                    nxt = "/"
-                return redirect(nxt, code=302)
-            error = "Invalid username or password."
+            auth_user = user_store.authenticate(u, p)
+            if auth_user:
+                if not auth_user.approved:
+                    error = "Your account is pending administrator approval."
+                else:
+                    session["user"] = auth_user.username
+                    session["roles"] = auth_user.roles
+                    nxt = request.form.get("next") or request.args.get("next") or "/"
+                    if not nxt.startswith("/"):
+                        nxt = "/"
+                    return redirect(nxt, code=302)
+            else:
+                known_user = user_store.get_user(u)
+                if known_user and not known_user.approved:
+                    error = "Your account is pending administrator approval."
+                else:
+                    error = "Invalid username or password."
 
-        nxt = request.args.get("next", "/")
-        # Styled login with policy modal and show-password toggle
-        return render_template_string("""
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <title>Sign in · AccSafety</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="/static/theme.css">
-  <style>
-    .login-card h1 { margin: 0 0 12px; font-size: 1.4rem; }
-    .login-card p { margin: 0 0 20px; color: var(--brand-muted); }
-    .login-card label { display: block; margin: 12px 0 6px; font-weight: 600; font-size: 0.9rem; color: #0b1736; }
-    .login-card input[type="text"], .login-card input[type="password"] {
-      width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(15, 23, 42, 0.16);
-      background: #f8fafc; font-size: 0.95rem;
-    }
-    .login-card button {
-      width: 100%; margin-top: 20px; padding: 12px 16px; border: none; border-radius: 999px;
-      background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary)); color: white; font-weight: 600;
-      cursor: pointer; font-size: 1rem; box-shadow: 0 14px 30px rgba(11, 102, 195, 0.28);
-    }
-    .login-card button:hover { filter: brightness(1.05); }
-    .login-card button:disabled { filter: grayscale(0.4); cursor: not-allowed; box-shadow: none; opacity: 0.7; }
-    .login-card .showpw { margin-top: 10px; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #0b1736; }
-    .login-card .error { margin-top: 12px; color: #b91c1c; font-weight: 600; font-size: 0.9rem; }
+        return render_template("login.html", error=error, nxt=nxt)
 
-    .notice-backdrop { position: fixed; inset: 0; background: rgba(12, 23, 42, 0.72); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 999; }
-    .notice-card { max-width: 540px; width: 100%; background: #ffffff; border-radius: 18px; box-shadow: 0 24px 60px rgba(11, 23, 54, 0.32); padding: 28px 32px; color: #0b1736; display: grid; gap: 18px; }
-    .notice-card h2 { margin: 0; font-size: 1.35rem; }
-    .notice-card p { margin: 0; line-height: 1.55; }
-    .notice-actions { display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap; }
-    .notice-actions button { border-radius: 999px; border: none; padding: 10px 18px; font-weight: 600; cursor: pointer; font-size: 0.95rem; }
-    .notice-actions .primary { background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary)); color: #fff; box-shadow: 0 12px 26px rgba(11, 102, 195, 0.28); }
-    .notice-backdrop[hidden] { display: none; }
-    
-    /* --- Compact hero text for less vertical space --- */
-    .portal-hero-text h1 {
-      font-size: 2rem;
-      line-height: 1.25;
-      margin-bottom: 8px;
-    }
-    .portal-hero-text p {
-      font-size: 0.98rem;
-      line-height: 1.45;
-      max-width: 640px;
-      margin: 6px 0 10px;
-    }
-
-    .cta-wrap {
-      margin-top: 4px;
-      margin-bottom: 10px;
-    }
-
-    .portal-status-card {
-      padding: 18px 18px;
-      border-radius: 18px;
-      box-shadow: 0 18px 32px rgba(15,23,42,0.10);
-    }
-
-    .portal-metric {
-      padding: 12px 14px;
-      border-radius: 14px;
-    }
-    .portal-metric-value {
-      font-size: 1.6rem;
-    }
-
-    .portal-data-card {
-      padding: 14px 16px;
-      border-radius: 12px;
-    }
-    .portal-data-value {
-      font-size: 1.6rem;
-    }
-
-    /* --- Desktop layout: put hero+CTA+status in one column, metrics in another --- */
-    @media (min-width: 1100px) {
-      .portal-overview {
-        grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.1fr);
-        align-items: start;
-        gap: 20px;
-      }
-
-      /* Turn the left side into a 2-column grid: 
-         - column 1: hero + CTA + status
-         - column 2: metric cards
-      */
-      .portal-primary {
-        display: grid;
-        grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-        grid-template-rows: auto auto 1fr;
-        grid-template-areas:
-          "hero   metrics"
-          "cta    metrics"
-          "status metrics";
-        gap: 14px 20px;
-        align-items: start;
-      }
-
-      .portal-hero-text {
-        grid-area: hero;
-      }
-      .cta-wrap {
-        grid-area: cta;
-        align-self: start;
-      }
-      .portal-primary-cards {
-        grid-area: metrics;
-        align-self: stretch;
-      }
-      .portal-status-card {
-        grid-area: status;
-      }
-
-      /* Make the 3 small cards themselves compact and side-by-side */
-      .portal-primary-cards {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        grid-auto-rows: 1fr;
-        gap: 10px;
-      }
-
-      /* Put the big "Unique Count Sites" metric on top spanning both columns */
-      .portal-metric {
-        grid-column: 1 / -1;
-      }
-
-      /* Right column slideshow fills available height but doesn’t get too tall */
-      .portal-secondary {
-        align-self: stretch;
-      }
-      .portal-map-card {
-        height: 100%;
-        max-height: 420px;
-        display: flex;
-        flex-direction: column;
-      }
-      .portal-map-slideshow {
-        flex: 1;
-        min-height: 240px;
-      }
-    }
-
-  </style>
-</head>
-<body>
-  <!-- Policy gate modal -->
-  <div id="policy-modal" class="notice-backdrop" role="dialog" aria-modal="true" aria-labelledby="policy-title" aria-describedby="policy-copy">
-    <div class="notice-card">
-      <h2 id="policy-title">User Agreement:</h2>
-      <div id="policy-copy">
-        <p>By continuing, you confirm that you are an authorized AccSafety user and will use this portal only for official program analysis or research purposes. All insights and downloadable data may be confidential and may include sensitive roadway safety information.</p>
-        <p>You acknowledge that AccSafety and its data providers are not liable for any decisions or actions taken based on this information, and you agree to comply with all applicable privacy, security, and data handling requirements.</p>
-      </div>
-      <div class="notice-actions">
-        <button type="button" class="primary" id="policy-accept">I Understand &amp; Agree</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="app-shell">
-    <header class="app-header">
-      <img src="/static/img/accsafety-logo.png" alt="AccSafety logo" class="app-logo">
-      <div class="app-header-title">
-        <span class="app-brand">AccSafety</span>
-        <span class="app-subtitle">Wisconsin Pedestrian & Bicycle Activity and Safety Portal</span>
-      </div>
-      <nav class="app-nav">
-        <a class="app-link" href="/">Back to Portal</a>
-      </nav>
-    </header>
-
-    <main class="app-content">
-      <div class="app-main-centered">
-        <form class="app-card app-card--narrow login-card" method="post" autocomplete="off">
-          <h1>Welcome Back</h1>
-          <p>Enter your credentials to continue to the AccSafety Data Portal and Dashboards</p>
-
-          <input type="hidden" name="next" value="{{ nxt }}"/>
-
-          <label for="username">Username</label>
-          <input id="username" name="username" type="text" required placeholder="e.g. admin" autofocus>
-
-          <label for="password">Password</label>
-          <input id="password" name="password" type="password" required placeholder="••••••••">
-          <label class="showpw"><input id="toggle" type="checkbox"> Show password</label>
-
-          <button type="submit" disabled>Sign in</button>
-          {% if error %}<div class="error">{{ error }}</div>{% endif %}
-        </form>
-      </div>
-    </main>
-  </div>
-
-  <script>
-    (function(){
-      const policyModal = document.getElementById('policy-modal');
-      const acceptPolicy = document.getElementById('policy-accept');
-      const submitButton = document.querySelector('.login-card button[type="submit"]');
-      const usernameInput = document.getElementById('username');
-      const urlParams = new URLSearchParams(window.location.search);
-      const LS_KEY = 'accsafetyPolicyAccepted';
-
-      if (urlParams.get('reset_policy') === '1') {
-        try { localStorage.removeItem(LS_KEY); } catch(e){}
-      }
-
-      function enableForm() {
-        policyModal.hidden = true;
-        submitButton.disabled = false;
-        usernameInput && usernameInput.focus();
-      }
-
-      acceptPolicy.addEventListener('click', function () {
-        try { localStorage.setItem(LS_KEY, 'true'); } catch(e){}
-        enableForm();
-      });
-
-      try {
-        if (localStorage.getItem(LS_KEY) === 'true') {
-          enableForm();
+    @server.route("/register", methods=["GET", "POST"])
+    def register():
+        error = None
+        success = None
+        form = {
+            "username": (request.form.get("username") or "").strip(),
+            "email": (request.form.get("email") or "").strip(),
         }
-      } catch(e) {
-        // If localStorage blocked, enable form anyway
-        enableForm();
-      }
 
-      document.getElementById('toggle').addEventListener('change', function(){
-        const pw = document.getElementById('password');
-        pw.type = this.checked ? 'text' : 'password';
-      });
-    })();
-  </script>
-</body>
-</html>
-        """, error=error, nxt=nxt)
+        if request.method == "POST":
+            password = request.form.get("password") or ""
+            confirm_password = request.form.get("confirm_password") or ""
+
+            if not form["username"] or len(form["username"]) < 3:
+                error = "Username must be at least 3 characters long."
+            elif " " in form["username"]:
+                error = "Username cannot contain spaces."
+            elif not form["email"] or "@" not in form["email"]:
+                error = "A valid email address is required."
+            elif len(password) < 8:
+                error = "Password must be at least 8 characters long."
+            elif password != confirm_password:
+                error = "Passwords do not match."
+            elif user_store.get_user(form["username"]):
+                error = "An account with that username already exists."
+            elif user_store.email_exists(form["email"]):
+                error = "An account with that email already exists."
+            else:
+                user_store.create_user(
+                    form["username"],
+                    form["email"],
+                    password,
+                    roles=["user"],
+                    approved=False,
+                    flags={"requested_at": datetime.utcnow().isoformat()},
+                )
+                success = "Registration received. An administrator will review your request."
+                form = {"username": "", "email": ""}
+
+        return render_template("register.html", error=error, success=success, form=form)
 
     @server.route("/logout")
     def logout():
         session.clear()
         # optional: reset policy gate so next login shows it again
         return redirect("/login?reset_policy=1", code=302)
+
+    @server.route("/admin/users", methods=["GET", "POST"])
+    def manage_users():
+        current_user = _current_user()
+        if not _is_admin(current_user):
+            return ("Forbidden", 403)
+
+        message = None
+        if request.method == "POST":
+            target_username = (request.form.get("username") or "").strip()
+            action = request.form.get("action")
+            if action == "approve":
+                updated = user_store.approve_user(target_username, True)
+                if updated:
+                    message = f"Approved {updated.username}."
+            elif action == "revoke":
+                updated = user_store.approve_user(target_username, False)
+                if updated:
+                    message = f"Revoked access for {updated.username}."
+            elif action == "set_roles":
+                raw_roles = request.form.get("roles") or ""
+                roles = [role.strip() for role in raw_roles.split(",") if role.strip()]
+                updated = user_store.update_roles(target_username, roles)
+                if updated:
+                    message = f"Updated roles for {updated.username}."
+
+        users = user_store.list_users()
+        return render_template("admin_users.html", users=users, message=message)
 
     # ---- Subapps ----
     create_trail_dash(server, prefix="/trail/")
