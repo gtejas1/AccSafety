@@ -85,10 +85,151 @@
               <h2>Need Help?</h2>
               <p>Email UWM IPIT with questions about data updates, account provisioning, or to request onboarding materials for new team members.</p>
             </section>
+
+            <section id="assistant" class="guide-section guide-chat">
+              <div class="guide-chat__header">
+                <div>
+                  <h2>Ask the AccSafety guide</h2>
+                  <p class="guide-chat__subtitle">Type a question and the guide will point you to the right place in the portal.</p>
+                </div>
+                <span class="guide-chat__badge" aria-hidden="true">Assistant</span>
+              </div>
+
+              <div class="guide-chat__prompts" aria-label="Suggested questions">
+                <button type="button" class="guide-chat__chip" data-guide-question="How do I log in?">How do I log in?</button>
+                <button type="button" class="guide-chat__chip" data-guide-question="How do I use the dataset explorer filters?">Dataset filters</button>
+                <button type="button" class="guide-chat__chip" data-guide-question="Where do I find live counts?">Live counts</button>
+                <button type="button" class="guide-chat__chip" data-guide-question="Who do I contact for support?">Support options</button>
+              </div>
+
+              <div class="guide-chat__window" aria-live="polite" aria-label="Conversation with the guide">
+                <div class="guide-chat__message guide-chat__message--assistant">
+                  <div class="guide-chat__avatar" aria-hidden="true">AG</div>
+                  <div class="guide-chat__bubble">
+                    <p>Hi! I can answer quick questions about logging in, exploring datasets, and jumping into live apps.</p>
+                    <p class="guide-chat__meta">Tip: Try one of the suggested prompts to get started.</p>
+                  </div>
+                </div>
+                <div class="guide-chat__log" id="guideChatLog"></div>
+                <div class="guide-chat__status" id="guideChatStatus" aria-live="polite"></div>
+              </div>
+
+              <form class="guide-chat__form" id="guideChatForm" novalidate>
+                <label class="guide-chat__label" for="guideChatInput">Ask a question</label>
+                <div class="guide-chat__input-row">
+                  <input id="guideChatInput" name="message" type="text" placeholder="e.g. Where can I see real-time detections?" required aria-required="true">
+                  <button type="submit" class="guide-chat__send">Send</button>
+                </div>
+              </form>
+            </section>
           </article>
         </div>
       </section>
     </main>
   </div>
+
+  <script>
+    (() => {
+      const form = document.getElementById('guideChatForm');
+      const input = document.getElementById('guideChatInput');
+      const log = document.getElementById('guideChatLog');
+      const status = document.getElementById('guideChatStatus');
+      const promptButtons = document.querySelectorAll('[data-guide-question]');
+      let pending = false;
+
+      function appendMessage(text, role = 'assistant', links = []) {
+        const wrapper = document.createElement('div');
+        wrapper.className = `guide-chat__message guide-chat__message--${role}`;
+
+        const avatar = document.createElement('div');
+        avatar.className = 'guide-chat__avatar';
+        avatar.textContent = role === 'assistant' ? 'AG' : 'You';
+        avatar.setAttribute('aria-hidden', 'true');
+
+        const bubble = document.createElement('div');
+        bubble.className = 'guide-chat__bubble';
+
+        const textEl = document.createElement('p');
+        textEl.textContent = text;
+        bubble.appendChild(textEl);
+
+        if (Array.isArray(links) && links.length) {
+          const linkList = document.createElement('div');
+          linkList.className = 'guide-chat__links';
+          links.forEach((link) => {
+            const anchor = document.createElement('a');
+            anchor.href = link.href;
+            anchor.textContent = link.label || link.href;
+            anchor.className = 'guide-chat__link';
+            linkList.appendChild(anchor);
+          });
+          bubble.appendChild(linkList);
+        }
+
+        wrapper.appendChild(avatar);
+        wrapper.appendChild(bubble);
+        log.appendChild(wrapper);
+        log.scrollTop = log.scrollHeight;
+      }
+
+      function setStatus(message, tone = 'info') {
+        status.textContent = message;
+        status.dataset.tone = tone;
+      }
+
+      async function sendPrompt(message) {
+        if (!message || pending) return;
+        pending = true;
+        setStatus('Working on your answer…');
+        appendMessage(message, 'user');
+        input.value = '';
+
+        try {
+          const response = await fetch('/api/v1/guide-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message })
+          });
+
+          if (!response.ok) {
+            throw new Error('Unable to reach the guide right now.');
+          }
+
+          const payload = await response.json();
+          appendMessage(payload.response || 'I could not find an answer.', 'assistant', payload.links || []);
+
+          if (Array.isArray(payload.suggested_topics) && payload.suggested_topics.length) {
+            setStatus(`Suggested topics: ${payload.suggested_topics.join(', ')}`);
+          } else {
+            setStatus('');
+          }
+        } catch (error) {
+          setStatus(error.message || 'Something went wrong.', 'error');
+          appendMessage('Sorry, I could not reach the assistant. Please try again.', 'assistant');
+        } finally {
+          pending = false;
+          input.focus();
+        }
+      }
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        const value = (input.value || '').trim();
+        if (!value) {
+          setStatus('Please enter a question first.', 'error');
+          input.focus();
+          return;
+        }
+        sendPrompt(value);
+      });
+
+      promptButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const prompt = button.getAttribute('data-guide-question');
+          if (prompt) sendPrompt(prompt);
+        });
+      });
+    })();
+  </script>
 </body>
 </html>
