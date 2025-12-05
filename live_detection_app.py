@@ -24,7 +24,7 @@ from dash import html, dcc
 from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import JSON, bindparam, create_engine, text
 
 from theme import card, dash_page
 
@@ -486,7 +486,7 @@ class VideoWorker:
             "interval_end": interval_end,
             "ped": int(self._pending_totals.get("pedestrians", 0)),
             "cyc": int(self._pending_totals.get("cyclists", 0)),
-            "crosswalk": json.dumps(self._pending_crosswalk_counts or {}),
+            "crosswalk": self._pending_crosswalk_counts or {},
         }
 
         try:
@@ -505,10 +505,10 @@ class VideoWorker:
                             :interval_end,
                             :ped,
                             :cyc,
-                            :crosswalk::jsonb
+                            :crosswalk
                         )
                         """
-                    ),
+                    ).bindparams(bindparam("crosswalk", type_=JSON)),
                     payload,
                 )
         except Exception:

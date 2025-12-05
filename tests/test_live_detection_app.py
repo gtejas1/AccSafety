@@ -43,6 +43,14 @@ class _DummyEngine:
         return _DummyConn(self.should_fail)
 
 
+class _DummyText:
+    def __init__(self, sql: str):
+        self.sql = sql
+
+    def bindparams(self, *_, **__):
+        return self
+
+
 @pytest.fixture
 def live_detection(monkeypatch):
     repo_root = Path(__file__).resolve().parent.parent
@@ -66,7 +74,10 @@ def live_detection(monkeypatch):
     yolo_stub = lambda *_args, **_kwargs: types.SimpleNamespace(names={0: "person", 1: "bicycle"})
     ultralytics_stub = types.SimpleNamespace(YOLO=yolo_stub)
     sqlalchemy_stub = types.SimpleNamespace(
-        create_engine=lambda *args, **kwargs: _DummyEngine(), text=lambda txt: txt
+        create_engine=lambda *args, **kwargs: _DummyEngine(),
+        text=lambda txt: _DummyText(txt),
+        bindparam=lambda name, type_=None: {"name": name, "type": type_},
+        JSON=object,
     )
 
     monkeypatch.setitem(sys.modules, "cv2", cv2_stub)
