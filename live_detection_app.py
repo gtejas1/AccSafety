@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import os
 import time
 import threading
@@ -42,6 +43,7 @@ FRAME_SKIP = int(os.getenv("YOLO_FRAME_SKIP", 0))
 READ_TIMEOUT_SEC = float(os.getenv("YOLO_READ_TIMEOUT", 8))
 SAVE_INTERVAL_SEC = int(os.getenv("YOLO_SAVE_INTERVAL_SEC", 300))
 DB_URL = os.getenv("YOLO_DB_URL", "postgresql://postgres:gw2ksoft@localhost/TrafficDB")
+DB_RETRY_BACKOFF_SEC = 5.0
 
 # Virtual crosswalk definitions expressed as normalized coordinates (x, y)
 # relative to the incoming frame. These were calibrated against the public
@@ -92,6 +94,7 @@ CROSSWALK_CONFIG_PATH = os.getenv(
 ENGINE: Optional[Any] = None
 _ENGINE_LOCK = threading.Lock()
 _ENGINE_LAST_FAIL_TS = 0.0
+_LOGGER = logging.getLogger(__name__)
 
 
 def _get_engine() -> Optional[Any]:
@@ -104,15 +107,20 @@ def _get_engine() -> Optional[Any]:
             return ENGINE
 
         now = time.time()
-        # Back off a little between failures so we don't log-spam.
-        if now - _ENGINE_LAST_FAIL_TS < 30:
+        # Back off briefly between failures so we don't log-spam, but still
+        # surface that persistence is currently unavailable.
+        cooldown_remaining = DB_RETRY_BACKOFF_SEC - (now - _ENGINE_LAST_FAIL_TS)
+        if cooldown_remaining > 0:
+            _LOGGER.warning(
+                "live_detection DB engine unavailable; retrying in %.1fs", cooldown_remaining
+            )
             return None
 
         try:
             ENGINE = create_engine(DB_URL, pool_pre_ping=True)
         except Exception as exc:  # pragma: no cover - best effort DB init
             _ENGINE_LAST_FAIL_TS = now
-            print(f"[live_detection] Failed to create DB engine: {exc}")
+            _LOGGER.warning("Failed to create DB engine: %s", exc)
             return None
 
         # Ensure schema exists once we have a working engine.
@@ -504,6 +512,13 @@ class VideoWorker:
                     payload,
                 )
         except Exception:
+            _LOGGER.exception(
+                "Failed to persist live detection counts; will retry after reconnect"
+            )
+            with _ENGINE_LOCK:
+                global ENGINE, _ENGINE_LAST_FAIL_TS
+                ENGINE = None
+                _ENGINE_LAST_FAIL_TS = time.time()
             return
 
         self._pending_totals = {"pedestrians": 0, "cyclists": 0}
