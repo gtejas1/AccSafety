@@ -156,6 +156,52 @@ def _ensure_live_detection_table(engine: Optional[Any] = None) -> None:
 _ensure_live_detection_table()
 
 
+def _build_counts_csv_bytes() -> bytes:
+    engine = _get_engine()
+    if engine is None:
+        raise RuntimeError("Database connection unavailable")
+
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT
+                    interval_start,
+                    interval_end,
+                    total_pedestrians,
+                    total_cyclists,
+                    crosswalk_counts
+                FROM live_detection_counts
+                ORDER BY interval_start
+                """
+            )
+        ).mappings().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "interval_start",
+            "interval_end",
+            "total_pedestrians",
+            "total_cyclists",
+            "crosswalk_counts",
+        ]
+    )
+    for row in rows:
+        writer.writerow(
+            [
+                row.get("interval_start"),
+                row.get("interval_end"),
+                row.get("total_pedestrians"),
+                row.get("total_cyclists"),
+                json.dumps(row.get("crosswalk_counts") or {}),
+            ]
+        )
+
+    return output.getvalue().encode("utf-8")
+
+
 def _clamp_norm(value: float) -> float:
     return max(0.0, min(1.0, float(value)))
 
@@ -897,51 +943,14 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         server.add_url_rule(route_path, endpoint=endpoint_name, view_func=_video_feed)
 
     def _download_counts():
-        engine = _get_engine()
-        if engine is None:
-            return "Database connection unavailable", 500
         try:
-            with engine.connect() as conn:
-                rows = conn.execute(
-                    text(
-                        """
-                        SELECT
-                            interval_start,
-                            interval_end,
-                            total_pedestrians,
-                            total_cyclists,
-                            crosswalk_counts
-                        FROM live_detection_counts
-                        ORDER BY interval_start
-                        """
-                    )
-                ).mappings().all()
+            payload = _build_counts_csv_bytes()
         except Exception as exc:
+            _LOGGER.exception("Failed to load saved detection counts: %s", exc)
             return f"Failed to load counts: {exc}", 500
 
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(
-            [
-                "interval_start",
-                "interval_end",
-                "total_pedestrians",
-                "total_cyclists",
-                "crosswalk_counts",
-            ]
-        )
-        for row in rows:
-            writer.writerow(
-                [
-                    row.get("interval_start"),
-                    row.get("interval_end"),
-                    row.get("total_pedestrians"),
-                    row.get("total_cyclists"),
-                    json.dumps(row.get("crosswalk_counts") or {}),
-                ]
-            )
-
-        buffer = io.BytesIO(output.getvalue().encode("utf-8"))
+        buffer = io.BytesIO(payload)
+        buffer.seek(0)
         filename = f"live_detection_counts_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.csv"
         return send_file(
             buffer,
@@ -1271,8 +1280,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
 
     download_button = dbc.Button(
         "Download Saved Counts",
-        href=download_path,
-        target="_blank",
+        id="download-counts-btn",
         color="outline-primary",
         className="ms-auto",
     )
@@ -1288,7 +1296,10 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     ],
                     class_name="g-3",
                 ),
-                html.Div(download_button, className="d-flex justify-content-end"),
+                html.Div(
+                    [download_button, dcc.Download(id="counts-download")],
+                    className="d-flex justify-content-end",
+                ),
                 html.Div(
                     "Crosswalk Counts (both directions)",
                     className="text-muted fw-semibold",
@@ -1378,6 +1389,24 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             )
             outputs.append(str(counts.get("cyclists", 0)))
         return outputs
+
+    @app.callback(
+        Output("counts-download", "data"),
+        Input("download-counts-btn", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def _trigger_counts_download(n_clicks):
+        if not n_clicks:
+            raise dash.exceptions.PreventUpdate
+
+        try:
+            payload = _build_counts_csv_bytes()
+        except Exception as exc:
+            _LOGGER.exception("Failed to trigger counts download: %s", exc)
+            return dash.no_update
+
+        filename = f"live_detection_counts_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.csv"
+        return dcc.send_bytes(lambda buffer: buffer.write(payload), filename=filename)
 
     @app.callback(
         Output("crosswalk-config-store", "data"),
