@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import os
 import time
 import threading
@@ -23,7 +24,7 @@ from dash import html, dcc
 from dash.dependencies import Input, Output
 import dash_bootstrap_components as dbc
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import JSON, bindparam, create_engine, text
 
 from theme import card, dash_page
 
@@ -42,6 +43,7 @@ FRAME_SKIP = int(os.getenv("YOLO_FRAME_SKIP", 0))
 READ_TIMEOUT_SEC = float(os.getenv("YOLO_READ_TIMEOUT", 8))
 SAVE_INTERVAL_SEC = int(os.getenv("YOLO_SAVE_INTERVAL_SEC", 300))
 DB_URL = os.getenv("YOLO_DB_URL", "postgresql://postgres:gw2ksoft@localhost/TrafficDB")
+DB_RETRY_BACKOFF_SEC = 5.0
 
 # Virtual crosswalk definitions expressed as normalized coordinates (x, y)
 # relative to the incoming frame. These were calibrated against the public
@@ -92,6 +94,7 @@ CROSSWALK_CONFIG_PATH = os.getenv(
 ENGINE: Optional[Any] = None
 _ENGINE_LOCK = threading.Lock()
 _ENGINE_LAST_FAIL_TS = 0.0
+_LOGGER = logging.getLogger(__name__)
 
 
 def _get_engine() -> Optional[Any]:
@@ -104,15 +107,20 @@ def _get_engine() -> Optional[Any]:
             return ENGINE
 
         now = time.time()
-        # Back off a little between failures so we don't log-spam.
-        if now - _ENGINE_LAST_FAIL_TS < 30:
+        # Back off briefly between failures so we don't log-spam, but still
+        # surface that persistence is currently unavailable.
+        cooldown_remaining = DB_RETRY_BACKOFF_SEC - (now - _ENGINE_LAST_FAIL_TS)
+        if cooldown_remaining > 0:
+            _LOGGER.warning(
+                "live_detection DB engine unavailable; retrying in %.1fs", cooldown_remaining
+            )
             return None
 
         try:
             ENGINE = create_engine(DB_URL, pool_pre_ping=True)
         except Exception as exc:  # pragma: no cover - best effort DB init
             _ENGINE_LAST_FAIL_TS = now
-            print(f"[live_detection] Failed to create DB engine: {exc}")
+            _LOGGER.warning("Failed to create DB engine: %s", exc)
             return None
 
         # Ensure schema exists once we have a working engine.
@@ -146,6 +154,52 @@ def _ensure_live_detection_table(engine: Optional[Any] = None) -> None:
 
 
 _ensure_live_detection_table()
+
+
+def _build_counts_csv_bytes() -> bytes:
+    engine = _get_engine()
+    if engine is None:
+        raise RuntimeError("Database connection unavailable")
+
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT
+                    interval_start,
+                    interval_end,
+                    total_pedestrians,
+                    total_cyclists,
+                    crosswalk_counts
+                FROM live_detection_counts
+                ORDER BY interval_start
+                """
+            )
+        ).mappings().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "interval_start",
+            "interval_end",
+            "total_pedestrians",
+            "total_cyclists",
+            "crosswalk_counts",
+        ]
+    )
+    for row in rows:
+        writer.writerow(
+            [
+                row.get("interval_start"),
+                row.get("interval_end"),
+                row.get("total_pedestrians"),
+                row.get("total_cyclists"),
+                json.dumps(row.get("crosswalk_counts") or {}),
+            ]
+        )
+
+    return output.getvalue().encode("utf-8")
 
 
 def _clamp_norm(value: float) -> float:
@@ -478,7 +532,7 @@ class VideoWorker:
             "interval_end": interval_end,
             "ped": int(self._pending_totals.get("pedestrians", 0)),
             "cyc": int(self._pending_totals.get("cyclists", 0)),
-            "crosswalk": json.dumps(self._pending_crosswalk_counts or {}),
+            "crosswalk": self._pending_crosswalk_counts or {},
         }
 
         try:
@@ -497,13 +551,20 @@ class VideoWorker:
                             :interval_end,
                             :ped,
                             :cyc,
-                            :crosswalk::jsonb
+                            :crosswalk
                         )
                         """
-                    ),
+                    ).bindparams(bindparam("crosswalk", type_=JSON)),
                     payload,
                 )
         except Exception:
+            _LOGGER.exception(
+                "Failed to persist live detection counts; will retry after reconnect"
+            )
+            with _ENGINE_LOCK:
+                global ENGINE, _ENGINE_LAST_FAIL_TS
+                ENGINE = None
+                _ENGINE_LAST_FAIL_TS = time.time()
             return
 
         self._pending_totals = {"pedestrians": 0, "cyclists": 0}
@@ -882,51 +943,14 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         server.add_url_rule(route_path, endpoint=endpoint_name, view_func=_video_feed)
 
     def _download_counts():
-        engine = _get_engine()
-        if engine is None:
-            return "Database connection unavailable", 500
         try:
-            with engine.connect() as conn:
-                rows = conn.execute(
-                    text(
-                        """
-                        SELECT
-                            interval_start,
-                            interval_end,
-                            total_pedestrians,
-                            total_cyclists,
-                            crosswalk_counts
-                        FROM live_detection_counts
-                        ORDER BY interval_start
-                        """
-                    )
-                ).mappings().all()
+            payload = _build_counts_csv_bytes()
         except Exception as exc:
+            _LOGGER.exception("Failed to load saved detection counts: %s", exc)
             return f"Failed to load counts: {exc}", 500
 
-        output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerow(
-            [
-                "interval_start",
-                "interval_end",
-                "total_pedestrians",
-                "total_cyclists",
-                "crosswalk_counts",
-            ]
-        )
-        for row in rows:
-            writer.writerow(
-                [
-                    row.get("interval_start"),
-                    row.get("interval_end"),
-                    row.get("total_pedestrians"),
-                    row.get("total_cyclists"),
-                    json.dumps(row.get("crosswalk_counts") or {}),
-                ]
-            )
-
-        buffer = io.BytesIO(output.getvalue().encode("utf-8"))
+        buffer = io.BytesIO(payload)
+        buffer.seek(0)
         filename = f"live_detection_counts_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.csv"
         return send_file(
             buffer,
@@ -1256,8 +1280,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
 
     download_button = dbc.Button(
         "Download Saved Counts",
-        href=download_path,
-        target="_blank",
+        id="download-counts-btn",
         color="outline-primary",
         className="ms-auto",
     )
@@ -1273,7 +1296,10 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     ],
                     class_name="g-3",
                 ),
-                html.Div(download_button, className="d-flex justify-content-end"),
+                html.Div(
+                    [download_button, dcc.Download(id="counts-download")],
+                    className="d-flex justify-content-end",
+                ),
                 html.Div(
                     "Crosswalk Counts (both directions)",
                     className="text-muted fw-semibold",
@@ -1363,6 +1389,24 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             )
             outputs.append(str(counts.get("cyclists", 0)))
         return outputs
+
+    @app.callback(
+        Output("counts-download", "data"),
+        Input("download-counts-btn", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def _trigger_counts_download(n_clicks):
+        if not n_clicks:
+            raise dash.exceptions.PreventUpdate
+
+        try:
+            payload = _build_counts_csv_bytes()
+        except Exception as exc:
+            _LOGGER.exception("Failed to trigger counts download: %s", exc)
+            return dash.no_update
+
+        filename = f"live_detection_counts_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}.csv"
+        return dcc.send_bytes(lambda buffer: buffer.write(payload), filename=filename)
 
     @app.callback(
         Output("crosswalk-config-store", "data"),
