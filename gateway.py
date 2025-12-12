@@ -87,7 +87,7 @@ def _sparkline_payload(now_utc: datetime) -> Dict[str, object]:
     if not ids:
         return {
             "status": "error",
-            "message": "No Vivacity countline IDs configured. Set PORTAL_VIVACITY_IDS or VIVACITY_DEFAULT_IDS.",
+            "message": "No countline IDs configured. Set PORTAL_VIVACITY_IDS or VIVACITY_DEFAULT_IDS.",
             "points": [],
             "last_updated": now_utc.isoformat().replace("+00:00", "Z"),
         }
@@ -109,13 +109,13 @@ def _sparkline_payload(now_utc: datetime) -> Dict[str, object]:
     except Exception as exc:  # defensive against API failures
         # Log full error on server, but only show a friendly message to users
         try:
-            current_app.logger.warning("Vivacity sparkline fetch failed", exc_info=exc)
+            current_app.logger.warning("Sparkline fetch failed", exc_info=exc)
         except Exception:
             pass
 
         return {
             "status": "fallback",
-            "message": "Live counts are temporarily unavailable. Showing a simulated 24-hour trend instead.",
+            "message": "Live counts are temporarily unavailable.",
             "points": _placeholder_series(now_utc),
             "last_updated": now_utc.isoformat().replace("+00:00", "Z"),
         }
@@ -123,7 +123,7 @@ def _sparkline_payload(now_utc: datetime) -> Dict[str, object]:
     if df.empty:
         return {
             "status": "fallback",
-            "message": "Vivacity API returned no data in the last 24 hours.",
+            "message": "API returned no data in the last 24 hours.",
             "points": _placeholder_series(now_utc),
             "last_updated": now_utc.isoformat().replace("+00:00", "Z"),
         }
@@ -132,13 +132,13 @@ def _sparkline_payload(now_utc: datetime) -> Dict[str, object]:
         # Clean and aggregate
         df = df.dropna(subset=["count"])
         if df.empty:
-            raise ValueError("Vivacity counts contained no numeric values")
+            raise ValueError("Counts contained no numeric values")
 
         df = df.groupby("timestamp", as_index=False)["count"].sum()
         df = df.sort_values("timestamp")
     except Exception as exc:  # pandas defensive branch
         try:
-            current_app.logger.warning("Vivacity sparkline processing failed", exc_info=exc)
+            current_app.logger.warning("Sparkline processing failed", exc_info=exc)
         except Exception:
             pass
 
@@ -179,7 +179,7 @@ def _sparkline_payload(now_utc: datetime) -> Dict[str, object]:
     if not points:
         return {
             "status": "fallback",
-            "message": "Vivacity data was empty after processing.",
+            "message": "API data was empty after processing.",
             "points": _placeholder_series(now_utc),
             "last_updated": now_utc.isoformat().replace("+00:00", "Z"),
         }
