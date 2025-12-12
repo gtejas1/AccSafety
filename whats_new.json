@@ -1,5 +1,13 @@
 [
   {
+    "version": "1.7",
+    "date": "2025-12-12",
+    "highlights": [
+      "The Live Detection view now keeps counting even when the database is briefly unavailable, retrying safely and offering reliable CSV downloads once storage is back online.",
+      "User administrators get clearer guidance and more breathing room when approving accounts or editing roles, making it easier to manage access in one place."
+    ]
+  },
+  {
     "version": "1.6",
     "date": "2025-11-10",
     "highlights": [
