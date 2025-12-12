@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="/static/theme.css">
   <style>
-    .admin-card { padding: 20px; border-radius: 16px; background: #ffffff; box-shadow: 0 18px 34px rgba(15,23,42,0.08); margin: 12px 0; }
+    .admin-card { padding: 20px; border-radius: 16px; background: #ffffff; box-shadow: 0 18px 34px rgba(15,23,42,0.08); margin: 12px 0; width: 100%; }
     .admin-card h2 { margin: 0 0 10px; }
     .user-list { width: 100%; border-collapse: collapse; }
     .user-list th, .user-list td { padding: 10px 12px; border-bottom: 1px solid rgba(15,23,42,0.08); text-align: left; }
@@ -21,6 +21,7 @@
     .button { border: none; border-radius: 10px; padding: 8px 12px; background: linear-gradient(130deg, var(--brand-primary), var(--brand-secondary)); color: #fff; font-weight: 600; cursor: pointer; box-shadow: 0 14px 30px rgba(11, 102, 195, 0.28); }
     .button.secondary { background: #e2e8f0; color: #0b1736; box-shadow: none; }
     .button.danger { background: #ef4444; box-shadow: none; }
+    .app-main-wide { width: 100%; max-width: none; }
   </style>
 </head>
 <body>
@@ -38,7 +39,7 @@
     </header>
 
     <main class="app-content">
-      <div class="app-main-centered" style="max-width: 960px;">
+      <div class="app-main-centered app-main-wide">
         <div class="admin-card">
           <h2>Account approvals and roles</h2>
           <p class="meta">Manage pending requests and update user roles. Roles are comma-separated; include <strong>admin</strong> to grant admin privileges.</p>
