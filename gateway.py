@@ -25,6 +25,7 @@ from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore
 from flask import current_app
 from auth.user_store import UserStore
+from guide_chatbot import GuideChatbot
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -55,6 +56,8 @@ user_store.ensure_seed_users(
         },
     }
 )
+
+guide_chatbot = GuideChatbot()
 
 
 def _portal_vivacity_ids() -> List[str]:
@@ -1136,6 +1139,16 @@ def create_server():
     # Convenience redirects
     for p in ["trail","eco","vivacity","live","wisdot","se-wi-trails"]:
         server.add_url_rule(f"/{p}", f"{p}_no_slash", lambda p=p: redirect(f"/{p}/", code=302))
+
+    @server.post("/api/v1/guide-chat")
+    def guide_chat():
+        payload = request.get_json(silent=True) or {}
+        message = str(payload.get("message", ""))
+
+        answer = guide_chatbot.answer(message)
+        status_code = 200 if answer.get("response") else 400
+
+        return jsonify(answer), status_code
 
     @server.route("/guide")
     def user_guide():
