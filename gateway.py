@@ -25,6 +25,7 @@ from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore
 from flask import current_app
 from auth.user_store import UserStore
+from auth.notifications import send_access_request_email
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -358,14 +359,19 @@ def create_server():
             elif user_store.email_exists(form["email"]):
                 error = "An account with that email already exists."
             else:
+                requested_at = datetime.utcnow().isoformat()
                 user_store.create_user(
                     form["username"],
                     form["email"],
                     password,
                     roles=["user"],
                     approved=False,
-                    flags={"requested_at": datetime.utcnow().isoformat()},
+                    flags={"requested_at": requested_at},
                 )
+                if not send_access_request_email(form["username"], form["email"], requested_at):
+                    current_app.logger.warning(
+                        "Access request email not sent for %s", form["username"]
+                    )
                 success = "Registration received. An administrator will review your request."
                 form = {"username": "", "email": ""}
 
