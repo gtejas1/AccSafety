@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 from pathlib import Path
 from urllib.parse import quote
+import pandas as pd
 from flask import (
     Flask,
     jsonify,
@@ -22,7 +23,7 @@ from vivacity_app import create_vivacity_dash, get_countline_counts, _align_rang
 from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
-from unified_explore import create_unified_explore
+from unified_explore import create_unified_explore, ENGINE
 from flask import current_app
 from auth.user_store import UserStore
 
@@ -55,6 +56,33 @@ user_store.ensure_seed_users(
         },
     }
 )
+
+UNIFIED_SEARCH_SQL = """
+    SELECT
+        "Location",
+        "Longitude",
+        "Latitude",
+        "Total counts",
+        "Source",
+        "Facility type",
+        "Mode"
+    FROM unified_site_summary
+    WHERE "Location" ILIKE %(pattern)s
+"""
+
+UNIFIED_NEARBY_SQL = """
+    SELECT
+        "Location",
+        "Longitude",
+        "Latitude",
+        "Total counts",
+        "Source",
+        "Facility type",
+        "Mode"
+    FROM unified_site_summary
+    WHERE "Longitude" IS NOT NULL
+      AND "Latitude" IS NOT NULL
+"""
 
 
 def _portal_vivacity_ids() -> List[str]:
@@ -203,6 +231,116 @@ def _get_cached_sparkline() -> Dict[str, object]:
     _SPARKLINE_CACHE["expires"] = now_utc + SPARKLINE_CACHE_TTL
     return payload
 
+
+def _haversine_miles(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    radius = 3958.8
+    phi1 = math.radians(lat1)
+    phi2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = (
+        math.sin(delta_phi / 2) ** 2
+        + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    )
+    return radius * (2 * math.atan2(math.sqrt(a), math.sqrt(1 - a)))
+
+
+def _normalize_text(value) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
+
+def _coerce_float(value):
+    try:
+        if value is None or (isinstance(value, float) and math.isnan(value)):
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _aggregate_locations(df: pd.DataFrame) -> list[dict]:
+    if df.empty:
+        return []
+    df = df.copy()
+    df["Location"] = df["Location"].fillna("").astype(str).str.strip()
+    results: list[dict] = []
+    for location, group in df.groupby("Location"):
+        location = location.strip()
+        if not location:
+            continue
+        lon = None
+        lat = None
+        if "Longitude" in group.columns:
+            for value in group["Longitude"].tolist():
+                lon = _coerce_float(value)
+                if lon is not None:
+                    break
+        if "Latitude" in group.columns:
+            for value in group["Latitude"].tolist():
+                lat = _coerce_float(value)
+                if lat is not None:
+                    break
+        datasets = []
+        for _, row in group.iterrows():
+            datasets.append(
+                {
+                    "Source": _normalize_text(row.get("Source")),
+                    "Facility type": _normalize_text(row.get("Facility type")),
+                    "Mode": _normalize_text(row.get("Mode")),
+                    "Total counts": (
+                        None
+                        if pd.isna(row.get("Total counts"))
+                        else _coerce_float(row.get("Total counts"))
+                    ),
+                }
+            )
+        results.append(
+            {
+                "Location": location,
+                "Longitude": lon,
+                "Latitude": lat,
+                "datasets": datasets,
+            }
+        )
+    return results
+
+
+def _compute_nearby_locations(
+    matches: list[dict],
+    all_locations: list[dict],
+    *,
+    radius_miles: float,
+    limit: int,
+) -> list[dict]:
+    base_points = [
+        match
+        for match in matches
+        if match.get("Latitude") is not None and match.get("Longitude") is not None
+    ]
+    if not base_points:
+        return []
+    nearby: dict[str, dict] = {}
+    for base in base_points:
+        base_lat = base["Latitude"]
+        base_lon = base["Longitude"]
+        for candidate in all_locations:
+            if candidate["Location"] == base["Location"]:
+                continue
+            cand_lat = candidate.get("Latitude")
+            cand_lon = candidate.get("Longitude")
+            if cand_lat is None or cand_lon is None:
+                continue
+            distance = _haversine_miles(base_lat, base_lon, cand_lat, cand_lon)
+            if distance > radius_miles:
+                continue
+            existing = nearby.get(candidate["Location"])
+            if existing is None or distance < existing["distance_miles"]:
+                entry = dict(candidate)
+                entry["distance_miles"] = round(distance, 2)
+                nearby[candidate["Location"]] = entry
+    return sorted(nearby.values(), key=lambda item: item["distance_miles"])[:limit]
 
 def _current_user():
     username = session.get("user")
@@ -1132,6 +1270,89 @@ def create_server():
         status = payload.get("status")
         http_code = 200 if status in {"ok", "fallback"} else 503
         return jsonify(payload), http_code
+
+    @server.get("/api/unified-search")
+    def api_unified_search():
+        query = _normalize_text(request.args.get("q") or request.args.get("location"))
+
+        def _parse_radius(value, default: float) -> float:
+            try:
+                radius_val = float(value)
+            except Exception:
+                return default
+            return radius_val if radius_val > 0 else default
+
+        def _parse_limit(value, default: int) -> int:
+            try:
+                limit_val = int(value)
+            except Exception:
+                return default
+            limit_val = max(1, limit_val)
+            return min(limit_val, 50)
+
+        radius_miles = _parse_radius(request.args.get("radius_miles"), 5.0)
+        limit = _parse_limit(request.args.get("limit"), 10)
+
+        if not query:
+            return jsonify(
+                {
+                    "query": "",
+                    "radius_miles": radius_miles,
+                    "limit": limit,
+                    "matches": [],
+                    "nearby": [],
+                }
+            )
+
+        try:
+            matches_df = pd.read_sql(UNIFIED_SEARCH_SQL, ENGINE, params={"pattern": f"%{query}%"})
+        except Exception:
+            matches_df = pd.DataFrame(
+                columns=[
+                    "Location",
+                    "Longitude",
+                    "Latitude",
+                    "Total counts",
+                    "Source",
+                    "Facility type",
+                    "Mode",
+                ]
+            )
+
+        matches = _aggregate_locations(matches_df)
+        nearby: list[dict] = []
+        if matches:
+            try:
+                all_df = pd.read_sql(UNIFIED_NEARBY_SQL, ENGINE)
+            except Exception:
+                all_df = pd.DataFrame(
+                    columns=[
+                        "Location",
+                        "Longitude",
+                        "Latitude",
+                        "Total counts",
+                        "Source",
+                        "Facility type",
+                        "Mode",
+                    ]
+                )
+            all_locations = _aggregate_locations(all_df)
+            nearby = _compute_nearby_locations(
+                matches,
+                all_locations,
+                radius_miles=radius_miles,
+                limit=limit,
+            )
+
+        return jsonify(
+            {
+                "query": query,
+                "radius_miles": radius_miles,
+                "limit": limit,
+                "matches": matches,
+                "nearby": nearby,
+            }
+        )
 
     # Convenience redirects
     for p in ["trail","eco","vivacity","live","wisdot","se-wi-trails"]:
