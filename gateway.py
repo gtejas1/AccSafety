@@ -739,6 +739,31 @@ def create_server():
                       >
                     </div>
                   </li>
+                  <li class="status-feed-item">
+                    <div class="status-feed-main">
+                      <span class="status-feed-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" role="presentation" focusable="false"><path d="M12 2.25c-3.9 0-7.25 3-7.25 7.02 0 3.1 2.16 6.45 6.41 10.01.49.41 1.2.41 1.69 0 4.25-3.56 6.41-6.91 6.41-10.01 0-4.02-3.35-7.02-7.26-7.02Zm0 10.49a3.47 3.47 0 1 1 0-6.94 3.47 3.47 0 0 1 0 6.94Z"/></svg>
+                      </span>
+                      <div class="status-feed-body">
+                        <div class="status-feed-title">
+                          <span class="status-feed-location">
+                            W Starin Rd &amp; N Prairie St <span class="status-feed-area">– UW-Whitewater</span>
+                          </span>
+                        </div>
+                        <div class="status-feed-meta">
+                          <a class="status-feed-badge" href="/live/?site=uw-whitewater" title="Open live detection dashboard">LIVE-Video</a>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="status-feed-extra status-feed-extra--photo" aria-hidden="true">
+                      <img
+                        class="status-feed-photo"
+                        src="/static/img/whitefish-bay-intersection.jpg"
+                        alt=""
+                        loading="lazy"
+                      >
+                    </div>
+                  </li>
                   <li class="status-feed-item status-feed-item--live" data-live-card>
                     <div class="status-feed-main">
                       <span class="status-feed-icon" aria-hidden="true">

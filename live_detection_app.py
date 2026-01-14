@@ -14,14 +14,15 @@ import math
 import json
 from typing import Optional, List, Dict, Tuple, Any
 from datetime import datetime, timedelta
+from urllib.parse import parse_qs
 
 import cv2
-from flask import Response, send_file
+from flask import Response, send_file, request
 from ultralytics import YOLO
 
 import dash
 from dash import html, dcc
-from dash.dependencies import Input, Output
+from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
 
 from sqlalchemy import JSON, bindparam, create_engine, text
@@ -44,6 +45,27 @@ READ_TIMEOUT_SEC = float(os.getenv("YOLO_READ_TIMEOUT", 8))
 SAVE_INTERVAL_SEC = int(os.getenv("YOLO_SAVE_INTERVAL_SEC", 300))
 DB_URL = os.getenv("YOLO_DB_URL", "postgresql://postgres:gw2ksoft@localhost/TrafficDB")
 DB_RETRY_BACKOFF_SEC = 5.0
+DEFAULT_TABLE_NAME = "live_detection_counts"
+LOCATION_QUERY_PARAM = "site"
+
+LIVE_DETECTION_LOCATIONS = {
+    "whitefish-bay": {
+        "title": "N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay, WI",
+        "rtsp_url": RTSP_URL,
+        "table_name": DEFAULT_TABLE_NAME,
+    },
+    "uw-whitewater": {
+        "title": "W Starin Rd & N Prairie St - UW-Whitewater",
+        "rtsp_url": (
+            "http://166.139.32.25/axis-cgi/media.cgi?audiocodec=aac&audiosamplerate=16000"
+            "&audiobitrate=32000&camera=1&videoframeskipmode=empty&videozprofile=classic"
+            "&resolution=1920x1080&fps=30&audiodeviceid=0&audioinputid=0&timestamp=2"
+            "&videocodec=h264&container=mp4"
+        ),
+        "table_name": "WStarinRd_N_Prairie_St_UW-Whitewater_counts",
+    },
+}
+DEFAULT_LOCATION_KEY = "whitefish-bay"
 
 # Virtual crosswalk definitions expressed as normalized coordinates (x, y)
 # relative to the incoming frame. These were calibrated against the public
@@ -97,6 +119,18 @@ _ENGINE_LAST_FAIL_TS = 0.0
 _LOGGER = logging.getLogger(__name__)
 
 
+def _quote_table_name(table_name: str) -> str:
+    return f"\"{table_name.replace('\"', '\"\"')}\""
+
+
+def _resolve_location_key(search: Optional[str]) -> str:
+    if not search:
+        return DEFAULT_LOCATION_KEY
+    query = parse_qs(search.lstrip("?"))
+    requested = query.get(LOCATION_QUERY_PARAM, [DEFAULT_LOCATION_KEY])[0]
+    return requested if requested in LIVE_DETECTION_LOCATIONS else DEFAULT_LOCATION_KEY
+
+
 def _get_engine() -> Optional[Any]:
     """Return a live SQLAlchemy engine, retrying creation on failures."""
 
@@ -123,28 +157,28 @@ def _get_engine() -> Optional[Any]:
             _LOGGER.warning("Failed to create DB engine: %s", exc)
             return None
 
-        # Ensure schema exists once we have a working engine.
-        _ensure_live_detection_table(engine=ENGINE)
-
         return ENGINE
 
 
-def _ensure_live_detection_table(engine: Optional[Any] = None) -> None:
+def _ensure_live_detection_table(
+    table_name: str = DEFAULT_TABLE_NAME, engine: Optional[Any] = None
+) -> None:
     engine = engine or _get_engine()
     if engine is None:
         return
+    table_ref = _quote_table_name(table_name)
     try:
         with engine.begin() as conn:
             conn.execute(
                 text(
-                    """
-                    CREATE TABLE IF NOT EXISTS live_detection_counts (
+                    f"""
+                    CREATE TABLE IF NOT EXISTS {table_ref} (
                         id SERIAL PRIMARY KEY,
                         interval_start TIMESTAMPTZ NOT NULL,
                         interval_end TIMESTAMPTZ NOT NULL,
                         total_pedestrians INTEGER NOT NULL,
                         total_cyclists INTEGER NOT NULL,
-                        crosswalk_counts JSONB NOT NULL DEFAULT '{}'::jsonb
+                        crosswalk_counts JSONB NOT NULL DEFAULT '{{}}'::jsonb
                     )
                     """
                 )
@@ -153,25 +187,27 @@ def _ensure_live_detection_table(engine: Optional[Any] = None) -> None:
         pass
 
 
-_ensure_live_detection_table()
+for config in LIVE_DETECTION_LOCATIONS.values():
+    _ensure_live_detection_table(config["table_name"])
 
 
-def _build_counts_csv_bytes() -> bytes:
+def _build_counts_csv_bytes(table_name: str = DEFAULT_TABLE_NAME) -> bytes:
     engine = _get_engine()
     if engine is None:
         raise RuntimeError("Database connection unavailable")
 
+    table_ref = _quote_table_name(table_name)
     with engine.connect() as conn:
         rows = conn.execute(
             text(
-                """
+                f"""
                 SELECT
                     interval_start,
                     interval_end,
                     total_pedestrians,
                     total_cyclists,
                     crosswalk_counts
-                FROM live_detection_counts
+                FROM {table_ref}
                 ORDER BY interval_start
                 """
             )
@@ -283,10 +319,12 @@ def _find_allowed_class_ids(model: YOLO) -> Tuple[List[int], Dict[int, str]]:
 class VideoWorker:
     """Background thread that maintains a connection to the video stream."""
 
-    def __init__(self, rtsp_url: str, model_path: str) -> None:
+    def __init__(self, rtsp_url: str, model_path: str, table_name: str) -> None:
         self.rtsp_url = rtsp_url
         self.model = YOLO(model_path)
         self.allowed_class_ids, self.class_group = _find_allowed_class_ids(self.model)
+        self.table_name = table_name
+        _ensure_live_detection_table(self.table_name)
 
         self.cap: Optional[cv2.VideoCapture] = None
         self.frame_lock = threading.Lock()
@@ -433,21 +471,22 @@ class VideoWorker:
         engine = _get_engine()
         if engine is None:
             return
+        table_ref = _quote_table_name(self.table_name)
         try:
             with engine.connect() as conn:
                 totals_row = conn.execute(
                     text(
-                        """
+                        f"""
                         SELECT
                             COALESCE(SUM(total_pedestrians), 0) AS ped,
                             COALESCE(SUM(total_cyclists), 0) AS cyc,
                             MIN(interval_start) AS start_ts
-                        FROM live_detection_counts
+                        FROM {table_ref}
                         """
                     )
                 ).mappings().one()
                 crosswalk_payloads = conn.execute(
-                    text("SELECT crosswalk_counts FROM live_detection_counts")
+                    text(f"SELECT crosswalk_counts FROM {table_ref}")
                 ).scalars().all()
         except Exception:
             return
@@ -535,12 +574,13 @@ class VideoWorker:
             "crosswalk": self._pending_crosswalk_counts or {},
         }
 
+        table_ref = _quote_table_name(self.table_name)
         try:
             with engine.begin() as conn:
                 conn.execute(
                     text(
-                        """
-                        INSERT INTO live_detection_counts (
+                        f"""
+                        INSERT INTO {table_ref} (
                             interval_start,
                             interval_end,
                             total_pedestrians,
@@ -916,10 +956,24 @@ class VideoWorker:
 # ─────────────────────────────────────────────────────────────────────────────
 def create_live_detection_app(server, prefix: str = "/live/"):
     """Attach the live detection Dash app to the shared Flask server."""
-    worker = VideoWorker(RTSP_URL, MODEL_PATH)
-    initial_crosswalks = worker.get_crosswalk_config()
+    workers = {
+        key: VideoWorker(config["rtsp_url"], MODEL_PATH, config["table_name"])
+        for key, config in LIVE_DETECTION_LOCATIONS.items()
+    }
+
+    def _get_worker(search: Optional[str]) -> VideoWorker:
+        location_key = _resolve_location_key(search)
+        return workers[location_key]
+
+    def _get_location_config(search: Optional[str]) -> Dict[str, str]:
+        location_key = _resolve_location_key(search)
+        return LIVE_DETECTION_LOCATIONS[location_key]
+
+    initial_crosswalks = _get_worker(None).get_crosswalk_config()
 
     def _video_feed():
+        search = f"?{request.query_string.decode()}" if request.query_string else ""
+        worker = _get_worker(search)
         worker.start()
         boundary = "frame"
 
@@ -943,8 +997,10 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         server.add_url_rule(route_path, endpoint=endpoint_name, view_func=_video_feed)
 
     def _download_counts():
+        search = f"?{request.query_string.decode()}" if request.query_string else ""
+        location_config = _get_location_config(search)
         try:
-            payload = _build_counts_csv_bytes()
+            payload = _build_counts_csv_bytes(location_config["table_name"])
         except Exception as exc:
             _LOGGER.exception("Failed to load saved detection counts: %s", exc)
             return f"Failed to load counts: {exc}", 500
@@ -1320,7 +1376,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     video_panel = dbc.Card(
         html.Div(
             html.Img(
-                src=route_path,
+                id="video-feed",
                 className="w-100 h-100",
                 style={
                     "width": "100%",
@@ -1340,7 +1396,11 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         [
             card(
                 [
-                    html.H3("N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay, WI"),
+                    dcc.Location(id="url", refresh=False),
+                    html.H3(
+                        _get_location_config(None)["title"],
+                        id="location-title",
+                    ),
                     html.P(
                         "NOTE: Only pedestrians and cyclists are counted when they cross the virtual countline.",
                     ),
@@ -1360,6 +1420,15 @@ def create_live_detection_app(server, prefix: str = "/live/"):
 
     # ── Live-updating counter ────────────────────────────────────────────────
     @app.callback(
+        Output("video-feed", "src"),
+        Output("location-title", "children"),
+        Input("url", "search"),
+    )
+    def _update_video_source(search):
+        location_config = _get_location_config(search)
+        return f"{route_path}{search or ''}", location_config["title"]
+
+    @app.callback(
         Output("ped-count", "children"),
         Output("cyc-count", "children"),
         Output("start-time", "children"),
@@ -1372,9 +1441,11 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             for cw in initial_crosswalks
         ],
         Input("stat-timer", "n_intervals"),
+        State("url", "search"),
         prevent_initial_call=False,
     )
-    def _update_stats(_):
+    def _update_stats(_, search):
+        worker = _get_worker(search)
         worker.start()
         ped, cyc, start_str, crosswalk_counts = worker.get_stats()
         outputs: List[str] = [str(ped), str(cyc), (start_str or "—")]
@@ -1393,14 +1464,16 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     @app.callback(
         Output("counts-download", "data"),
         Input("download-counts-btn", "n_clicks"),
+        State("url", "search"),
         prevent_initial_call=True,
     )
-    def _trigger_counts_download(n_clicks):
+    def _trigger_counts_download(n_clicks, search):
         if not n_clicks:
             raise dash.exceptions.PreventUpdate
 
+        location_config = _get_location_config(search)
         try:
-            payload = _build_counts_csv_bytes()
+            payload = _build_counts_csv_bytes(location_config["table_name"])
         except Exception as exc:
             _LOGGER.exception("Failed to trigger counts download: %s", exc)
             return dash.no_update
@@ -1410,10 +1483,12 @@ def create_live_detection_app(server, prefix: str = "/live/"):
 
     @app.callback(
         Output("crosswalk-config-store", "data"),
-        [*button_inputs],
+        [*button_inputs, Input("url", "search")],
         prevent_initial_call=False,
     )
     def _apply_crosswalk_adjustments(*_unused):
+        search = _unused[-1] if _unused else None
+        worker = _get_worker(search)
         worker.start()
         ctx = dash.callback_context
         config_snapshot = worker.get_crosswalk_config()
@@ -1435,6 +1510,21 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             ]
 
         triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        if triggered_id == "url":
+            return [
+                {
+                    "key": item["key"],
+                    "name": item["name"],
+                    "p1": [item["p1"][0], item["p1"][1]],
+                    "p2": [item["p2"][0], item["p2"][1]],
+                    "label": (
+                        [item["label"][0], item["label"][1]]
+                        if item.get("label")
+                        else None
+                    ),
+                }
+                for item in config_snapshot
+            ]
         target = button_lookup.get(triggered_id)
         if not target:
             return [
