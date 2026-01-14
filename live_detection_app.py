@@ -145,7 +145,7 @@ def _ensure_live_detection_table(engine: Optional[Any] = None) -> None:
                         interval_end TIMESTAMPTZ NOT NULL,
                         total_pedestrians INTEGER NOT NULL,
                         total_cyclists INTEGER NOT NULL,
-                        crosswalk_counts JSONB NOT NULL DEFAULT '{}'::jsonb
+                        crosswalk_counts JSONB NOT NULL DEFAULT '{{}}'::jsonb
                     )
                     """
                 )
