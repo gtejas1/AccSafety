@@ -13,6 +13,7 @@ import requests
 import dash
 from dash import dcc, html, Input, Output, State, dash_table
 import dash_bootstrap_components as dbc
+from flask import request as flask_request
 
 from theme import card, dash_page
 from pbc_eco_app import MODE_TABLE as ECO_MODE_TABLE
@@ -1009,8 +1010,9 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if limit not in (None, ""):
             params["limit"] = limit
 
+        api_url = urllib.parse.urljoin(flask_request.host_url, "api/unified-search")
         try:
-            response = requests.get("/api/unified-search", params=params, timeout=15)
+            response = requests.get(api_url, params=params, timeout=15)
             response.raise_for_status()
             payload = response.json()
         except Exception:
