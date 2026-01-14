@@ -120,7 +120,8 @@ _LOGGER = logging.getLogger(__name__)
 
 
 def _quote_table_name(table_name: str) -> str:
-    return f"\"{table_name.replace('\"', '\"\"')}\""
+    escaped = table_name.replace('"', '""')
+    return f"\"{escaped}\""
 
 
 def _resolve_location_key(search: Optional[str]) -> str:
