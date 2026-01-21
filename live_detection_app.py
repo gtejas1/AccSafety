@@ -31,10 +31,10 @@ from theme import card, dash_page
 # ── Config ────────────────────────────────────────────────────────────────────
 RTSP_URL = os.getenv(
     "YOLO_RTSP_URL",
-    "http://root:Wisdot2018!@63.43.111.221:8881/axis-cgi/media.cgi?"
-    "audiocodec=aac&audiosamplerate=16000&audiobitrate=32000&camera=1&"
-    "videoframeskipmode=empty&videozprofile=classic&resolution=640x480&fps=30&"
-    "audiodeviceid=0&audioinputid=0&timestamp=0&videocodec=h264&container=mp4",
+    "http://166.139.32.25/axis-cgi/media.cgi?audiocodec=aac&audiosamplerate=16000&"
+    "audiobitrate=32000&camera=1&videoframeskipmode=empty&videozprofile=classic&"
+    "resolution=1920x1080&fps=30&audiodeviceid=0&audioinputid=0&timestamp=2&"
+    "videocodec=h264&container=mp4",
 )
 MODEL_PATH = os.getenv("YOLO_MODEL", "yolo11n.pt")
 TARGET_WIDTH = int(os.getenv("YOLO_TARGET_WIDTH", 960))
@@ -44,6 +44,7 @@ READ_TIMEOUT_SEC = float(os.getenv("YOLO_READ_TIMEOUT", 8))
 SAVE_INTERVAL_SEC = int(os.getenv("YOLO_SAVE_INTERVAL_SEC", 300))
 DB_URL = os.getenv("YOLO_DB_URL", "postgresql://postgres:gw2ksoft@localhost/TrafficDB")
 DB_RETRY_BACKOFF_SEC = 5.0
+COUNTS_TABLE = "WStarinRd_N_Prairie_St_UW-Whitewater_counts"
 
 # Virtual crosswalk definitions expressed as normalized coordinates (x, y)
 # relative to the incoming frame. These were calibrated against the public
@@ -137,14 +138,14 @@ def _ensure_live_detection_table(engine: Optional[Any] = None) -> None:
         with engine.begin() as conn:
             conn.execute(
                 text(
-                    """
-                    CREATE TABLE IF NOT EXISTS live_detection_counts (
+                    f"""
+                    CREATE TABLE IF NOT EXISTS "{COUNTS_TABLE}" (
                         id SERIAL PRIMARY KEY,
                         interval_start TIMESTAMPTZ NOT NULL,
                         interval_end TIMESTAMPTZ NOT NULL,
                         total_pedestrians INTEGER NOT NULL,
                         total_cyclists INTEGER NOT NULL,
-                        crosswalk_counts JSONB NOT NULL DEFAULT '{}'::jsonb
+                        crosswalk_counts JSONB NOT NULL DEFAULT '{{}}'::jsonb
                     )
                     """
                 )
@@ -164,14 +165,14 @@ def _build_counts_csv_bytes() -> bytes:
     with engine.connect() as conn:
         rows = conn.execute(
             text(
-                """
+                f"""
                 SELECT
                     interval_start,
                     interval_end,
                     total_pedestrians,
                     total_cyclists,
                     crosswalk_counts
-                FROM live_detection_counts
+                FROM "{COUNTS_TABLE}"
                 ORDER BY interval_start
                 """
             )
@@ -437,17 +438,17 @@ class VideoWorker:
             with engine.connect() as conn:
                 totals_row = conn.execute(
                     text(
-                        """
+                        f"""
                         SELECT
                             COALESCE(SUM(total_pedestrians), 0) AS ped,
                             COALESCE(SUM(total_cyclists), 0) AS cyc,
                             MIN(interval_start) AS start_ts
-                        FROM live_detection_counts
+                        FROM "{COUNTS_TABLE}"
                         """
                     )
                 ).mappings().one()
                 crosswalk_payloads = conn.execute(
-                    text("SELECT crosswalk_counts FROM live_detection_counts")
+                    text(f'SELECT crosswalk_counts FROM "{COUNTS_TABLE}"')
                 ).scalars().all()
         except Exception:
             return
@@ -539,8 +540,8 @@ class VideoWorker:
             with engine.begin() as conn:
                 conn.execute(
                     text(
-                        """
-                        INSERT INTO live_detection_counts (
+                        f"""
+                        INSERT INTO "{COUNTS_TABLE}" (
                             interval_start,
                             interval_end,
                             total_pedestrians,
@@ -975,7 +976,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         suppress_callback_exceptions=True,
         assets_url_path=f"{prefix.rstrip('/')}/assets",
     )
-    app.title = "Live Object Detection"
+    app.title = "W Starin Rd & N Prairie St - UW-Whitewater"
 
     # ── UI Layout: Video + cumulative stats ───────────────────────────────────
     crosswalk_cards: List[dbc.Col] = []
@@ -1340,7 +1341,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         [
             card(
                 [
-                    html.H3("N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay, WI"),
+                    html.H3("W Starin Rd & N Prairie St - UW-Whitewater"),
                     html.P(
                         "NOTE: Only pedestrians and cyclists are counted when they cross the virtual countline.",
                     ),
