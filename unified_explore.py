@@ -1012,7 +1012,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
         api_url = urllib.parse.urljoin(flask_request.host_url, "api/unified-search")
         try:
-            response = requests.get(api_url, params=params, timeout=15)
+            response = requests.get(
+                api_url,
+                params=params,
+                timeout=15,
+                cookies=flask_request.cookies,
+            )
             response.raise_for_status()
             payload = response.json()
         except Exception:
