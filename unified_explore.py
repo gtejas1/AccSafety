@@ -11,8 +11,9 @@ from sqlalchemy import create_engine
 
 import requests
 import dash
-from dash import dcc, html, Input, Output, dash_table
+from dash import dcc, html, Input, Output, State, dash_table
 import dash_bootstrap_components as dbc
+from flask import request as flask_request
 
 from theme import card, dash_page
 from pbc_eco_app import MODE_TABLE as ECO_MODE_TABLE
@@ -402,6 +403,18 @@ def _build_view_link(row: pd.Series) -> str:
     return "[Open](https://uwm.edu/ipit/wisconsin-pedestrian-volume-model/)"
 
 
+def _parse_markdown_link(markdown: str) -> tuple[str | None, str | None]:
+    if not isinstance(markdown, str):
+        return None, None
+    markdown = markdown.strip()
+    if not markdown.startswith("[") or "](" not in markdown or not markdown.endswith(")"):
+        return None, None
+    label, remainder = markdown.split("](", 1)
+    url = remainder[:-1]
+    label = label[1:]
+    return (label or None), (url or None)
+
+
 def _mode_opts(vals) -> list[dict]:
     uniq = sorted({v for v in vals if isinstance(v, str) and v.strip()})
     return [
@@ -783,6 +796,75 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
     base_df = _fetch_all()
 
+    search_block = card(
+        [
+            html.H2("Location Search"),
+            html.P("Search by location name to see available datasets and nearby sites."),
+            html.Div(
+                [
+                    dcc.Input(
+                        id="unified-search-query",
+                        type="text",
+                        placeholder="Enter a location name",
+                        debounce=True,
+                        className="form-control",
+                    ),
+                    html.Div(
+                        [
+                            html.Div(
+                                [
+                                    html.Label("Radius (miles)", className="form-label"),
+                                    dcc.Input(
+                                        id="unified-search-radius",
+                                        type="number",
+                                        min=0,
+                                        step=0.5,
+                                        value=5,
+                                        className="form-control",
+                                    ),
+                                ],
+                                className="flex-grow-1",
+                            ),
+                            html.Div(
+                                [
+                                    html.Label("Limit", className="form-label"),
+                                    dcc.Input(
+                                        id="unified-search-limit",
+                                        type="number",
+                                        min=1,
+                                        step=1,
+                                        value=10,
+                                        className="form-control",
+                                    ),
+                                ],
+                                className="flex-grow-1",
+                            ),
+                        ],
+                        className="d-flex gap-2",
+                    ),
+                    dbc.Button(
+                        "Search",
+                        id="unified-search-button",
+                        color="primary",
+                        className="align-self-start",
+                    ),
+                ],
+                className="d-flex flex-column gap-2",
+            ),
+            html.Div(id="unified-search-status", className="app-muted small mt-2"),
+            dcc.Loading(
+                type="default",
+                children=html.Div(
+                    [
+                        html.Div(id="unified-search-results", className="mt-3"),
+                        html.Div(id="unified-search-nearby", className="mt-3"),
+                    ]
+                ),
+            ),
+        ],
+        class_name="mb-3",
+    )
+
     # Left: Filters
     filter_block = card(
         [
@@ -880,6 +962,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 [
                     dbc.Col(
                         [
+                            search_block,
                             filter_block,
                             html.Div(id="wrap-desc", children=[desc_block], style={"display": "none"}),
                         ],
@@ -903,6 +986,135 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             html.Div(id="wrap-results", style={"display": "none"}),
         ],
     )
+
+    @app.callback(
+        Output("unified-search-results", "children"),
+        Output("unified-search-nearby", "children"),
+        Output("unified-search-status", "children"),
+        Input("unified-search-button", "n_clicks"),
+        Input("unified-search-query", "n_submit"),
+        State("unified-search-query", "value"),
+        State("unified-search-radius", "value"),
+        State("unified-search-limit", "value"),
+        prevent_initial_call=True,
+    )
+    def _run_location_search(n_clicks, n_submit, query, radius, limit):
+        del n_clicks, n_submit
+        query = (query or "").strip()
+        if not query:
+            return [], [], "Enter a location name to search."
+
+        params = {"q": query}
+        if radius not in (None, ""):
+            params["radius_miles"] = radius
+        if limit not in (None, ""):
+            params["limit"] = limit
+
+        api_url = urllib.parse.urljoin(flask_request.host_url, "api/unified-search")
+        try:
+            response = requests.get(
+                api_url,
+                params=params,
+                timeout=15,
+                cookies=flask_request.cookies,
+            )
+            response.raise_for_status()
+            payload = response.json()
+        except Exception:
+            return [], [], "Unable to load location search results."
+
+        matches = payload.get("matches") or []
+        nearby = payload.get("nearby") or []
+
+        if not matches:
+            status = "No locations matched your search."
+            return [], [], status
+
+        status = f"{len(matches)} location(s) matched."
+
+        def _format_counts(value) -> str:
+            if value in (None, "", "nan"):
+                return "Counts: N/A"
+            try:
+                value = float(value)
+            except Exception:
+                return "Counts: N/A"
+            if value.is_integer():
+                return f"Counts: {int(value):,}"
+            return f"Counts: {value:,.2f}"
+
+        match_cards = []
+        for match in matches:
+            location = match.get("Location") or "Unknown location"
+            datasets = match.get("datasets") or []
+            dataset_items = []
+            for dataset in datasets:
+                row = pd.Series(
+                    {
+                        "Location": location,
+                        "Source": dataset.get("Source"),
+                        "Mode": dataset.get("Mode"),
+                    }
+                )
+                view_md = _build_view_link(row)
+                label, url = _parse_markdown_link(view_md)
+                meta = " • ".join(
+                    filter(
+                        None,
+                        [
+                            dataset.get("Source"),
+                            dataset.get("Facility type"),
+                            dataset.get("Mode"),
+                        ],
+                    )
+                )
+                dataset_items.append(
+                    html.Li(
+                        [
+                            html.Span(meta or "Dataset", className="fw-semibold"),
+                            html.Span(f" — {_format_counts(dataset.get('Total counts'))}", className="app-muted"),
+                            html.Span(" "),
+                            html.A(label or "Open", href=url, target="_self")
+                            if url
+                            else html.Span(""),
+                        ]
+                    )
+                )
+            match_cards.append(
+                html.Div(
+                    [
+                        html.H4(location, className="h6 mb-2"),
+                        html.Ul(dataset_items, className="mb-0"),
+                    ],
+                    className="mb-3",
+                )
+            )
+
+        nearby_block = []
+        if nearby:
+            nearby_items = []
+            for item in nearby:
+                sources = sorted(
+                    {dataset.get("Source") for dataset in (item.get("datasets") or []) if dataset.get("Source")}
+                )
+                source_text = ", ".join(sources) if sources else "Unknown source"
+                distance = item.get("distance_miles")
+                distance_text = f"{distance:.2f} mi" if isinstance(distance, (int, float)) else "Distance N/A"
+                nearby_items.append(
+                    html.Li(
+                        [
+                            html.Span(item.get("Location") or "Unknown location", className="fw-semibold"),
+                            html.Span(f" — {distance_text}", className="app-muted"),
+                            html.Div(source_text, className="app-muted"),
+                        ]
+                    )
+                )
+            nearby_block = [
+                html.H4("Nearby Locations", className="h6 mb-2"),
+                html.Ul(nearby_items, className="mb-0"),
+            ]
+
+        return match_cards, nearby_block, status
 
     # ---------- Progressive options ----------
     @app.callback(
@@ -1459,4 +1671,3 @@ if __name__ == "__main__":
     _server = dash.Dash(__name__).server
     _app = create_unified_explore(_server, prefix="/")
     _app.run_server(host="127.0.0.1", port=8068, debug=True)
-
