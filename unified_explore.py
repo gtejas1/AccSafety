@@ -855,21 +855,25 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         class_name="mb-3",
     )
 
-    search_results_block = card(
-        [
-            html.H3("Location Results", className="h5"),
-            html.Div(id="unified-search-status", className="app-muted small"),
-            dcc.Loading(
-                type="default",
-                children=html.Div(
-                    [
-                        html.Div(id="unified-search-results", className="mt-3"),
-                        html.Div(id="unified-search-nearby", className="mt-3"),
-                    ]
+    search_results_block = html.Div(
+        card(
+            [
+                html.H3("Location Results", className="h5"),
+                html.Div(id="unified-search-status", className="app-muted small"),
+                dcc.Loading(
+                    type="default",
+                    children=html.Div(
+                        [
+                            html.Div(id="unified-search-results", className="mt-3"),
+                            html.Div(id="unified-search-nearby", className="mt-3"),
+                        ]
+                    ),
                 ),
-            ),
-        ],
-        class_name="mb-3",
+            ],
+            class_name="mb-3",
+        ),
+        id="unified-search-results-card",
+        style={"display": "none"},
     )
 
     # Left: Filters
@@ -929,16 +933,21 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     ),
                 ],
                 className="d-flex align-items-center gap-2 mb-2",
+                id="pf-map-info",
             ),
-            dcc.Loading(
-                type="default",
-                children=html.Div(
-                    "Search to see locations on the map.",
-                    id="unified-search-map",
-                    className="app-muted small mb-3",
+            html.Div(
+                dcc.Loading(
+                    type="default",
+                    children=html.Div(
+                        "Search to see locations on the map.",
+                        id="unified-search-map",
+                        className="app-muted small mb-3",
+                    ),
                 ),
+                id="unified-search-map-wrapper",
+                style={"display": "none"},
             ),
-            html.Div(id="pf-map", children=[]),
+            html.Div(id="pf-map-wrapper", children=[html.Div(id="pf-map", children=[])]),
         ],
         class_name="mb-3",
     )
@@ -1000,6 +1009,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             ),
             # sentinel to keep older show/hide logic happy (no children needed)
             html.Div(id="wrap-results", style={"display": "none"}),
+            dcc.Store(id="unified-search-active", data=False),
         ],
     )
 
@@ -1008,6 +1018,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         Output("unified-search-nearby", "children"),
         Output("unified-search-status", "children"),
         Output("unified-search-map", "children"),
+        Output("unified-search-active", "data"),
         Input("unified-search-button", "n_clicks"),
         Input("unified-search-query", "n_submit"),
         State("unified-search-query", "value"),
@@ -1019,9 +1030,15 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         del n_clicks, n_submit
         query = (query or "").strip()
         if not query:
-            return [], [], "Enter a location name to search.", html.Div(
-                "Search to see locations on the map.",
-                className="app-muted small",
+            return (
+                [],
+                [],
+                "Enter a location name to search.",
+                html.Div(
+                    "Search to see locations on the map.",
+                    className="app-muted small",
+                ),
+                False,
             )
 
         def _build_location_map(matches, nearby):
@@ -1070,7 +1087,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         lat=[p["lat"] for p in match_points],
                         lon=[p["lon"] for p in match_points],
                         mode="markers",
-                        marker={"size": 12, "color": "#2563eb"},
+                        marker={"size": 12, "color": "#dc2626"},
                         text=[p["label"] for p in match_points],
                         name="Matches",
                     )
@@ -1081,7 +1098,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         lat=[p["lat"] for p in nearby_points],
                         lon=[p["lon"] for p in nearby_points],
                         mode="markers",
-                        marker={"size": 9, "color": "#94a3b8"},
+                        marker={"size": 9, "color": "#fecaca"},
                         text=[p["label"] for p in nearby_points],
                         name="Nearby",
                     )
@@ -1125,6 +1142,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 [],
                 "Unable to load location search results.",
                 html.Div("Unable to load map data.", className="app-muted small"),
+                False,
             )
 
         matches = payload.get("matches") or []
@@ -1132,7 +1150,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
         if not matches:
             status = "No locations matched your search."
-            return [], [], status, _build_location_map(matches, nearby)
+            return [], [], status, _build_location_map(matches, nearby), True
 
         status = f"{len(matches)} location(s) matched."
 
@@ -1218,7 +1236,19 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 html.Ul(nearby_items, className="mb-0"),
             ]
 
-        return match_cards, nearby_block, status, _build_location_map(matches, nearby)
+        return match_cards, nearby_block, status, _build_location_map(matches, nearby), True
+
+    @app.callback(
+        Output("unified-search-map-wrapper", "style"),
+        Output("pf-map-wrapper", "style"),
+        Output("pf-map-info", "style"),
+        Output("unified-search-results-card", "style"),
+        Input("unified-search-active", "data"),
+    )
+    def _toggle_search_display(search_active):
+        if search_active:
+            return {"display": "block"}, {"display": "none"}, {"display": "none"}, {"display": "block"}
+        return {"display": "none"}, {"display": "block"}, {"display": "flex"}, {"display": "none"}
 
     # ---------- Progressive options ----------
     @app.callback(
