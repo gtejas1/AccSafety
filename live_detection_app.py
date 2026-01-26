@@ -53,6 +53,7 @@ LIVE_DETECTION_LOCATIONS = {
         "title": "N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay, WI",
         "rtsp_url": RTSP_URL,
         "table_name": DEFAULT_TABLE_NAME,
+        "crosswalk_config_path": CROSSWALK_CONFIG_PATH,
     },
     "uw-whitewater": {
         "title": "W Starin Rd & N Prairie St - UW-Whitewater",
@@ -63,6 +64,9 @@ LIVE_DETECTION_LOCATIONS = {
             "&videocodec=h264&container=mp4"
         ),
         "table_name": "WStarinRd_N_Prairie_St_UW-Whitewater_counts",
+        "crosswalk_config_path": os.path.join(
+            os.path.dirname(__file__), "crosswalk_config_uw_whitewater.json"
+        ),
     },
 }
 DEFAULT_LOCATION_KEY = "whitefish-bay"
@@ -320,7 +324,13 @@ def _find_allowed_class_ids(model: YOLO) -> Tuple[List[int], Dict[int, str]]:
 class VideoWorker:
     """Background thread that maintains a connection to the video stream."""
 
-    def __init__(self, rtsp_url: str, model_path: str, table_name: str) -> None:
+    def __init__(
+        self,
+        rtsp_url: str,
+        model_path: str,
+        table_name: str,
+        crosswalk_config_path: Optional[str] = None,
+    ) -> None:
         self.rtsp_url = rtsp_url
         self.model = YOLO(model_path)
         self.allowed_class_ids, self.class_group = _find_allowed_class_ids(self.model)
@@ -355,7 +365,7 @@ class VideoWorker:
         self._crosswalk_cache_pixels: List[
             Tuple[str, str, Tuple[int, int], Tuple[int, int], Optional[Tuple[int, int]], float]
         ] = []
-        self.crosswalk_config_path = CROSSWALK_CONFIG_PATH
+        self.crosswalk_config_path = crosswalk_config_path or CROSSWALK_CONFIG_PATH
         self._config_io_lock = threading.Lock()
 
         saved_crosswalks = self._load_saved_crosswalk_config()
@@ -958,7 +968,12 @@ class VideoWorker:
 def create_live_detection_app(server, prefix: str = "/live/"):
     """Attach the live detection Dash app to the shared Flask server."""
     workers = {
-        key: VideoWorker(config["rtsp_url"], MODEL_PATH, config["table_name"])
+        key: VideoWorker(
+            config["rtsp_url"],
+            MODEL_PATH,
+            config["table_name"],
+            config.get("crosswalk_config_path"),
+        )
         for key, config in LIVE_DETECTION_LOCATIONS.items()
     }
 
