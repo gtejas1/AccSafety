@@ -285,6 +285,18 @@ def _encode_location_for_href(text: str) -> str:
         return ""
     return urllib.parse.quote(urllib.parse.unquote(text), safe="")
 
+def _build_explore_filters_link(mode: str | None, facility: str | None, source: str | None) -> str | None:
+    if not (mode and facility and source):
+        return None
+    params = urllib.parse.urlencode(
+        {
+            "mode": mode,
+            "facility": facility,
+            "source": source,
+        }
+    )
+    return f"/explore/?{params}"
+
 def _viv_headers():
     return {"x-vivacity-api-key": VIV_API_KEY} if VIV_API_KEY else {}
 
@@ -982,6 +994,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     app.layout = dash_page(
         "Explore",
         [
+            dcc.Location(id="explore-url"),
             dbc.Row(
                 [
                     dbc.Col(
@@ -1178,8 +1191,11 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         "Mode": dataset.get("Mode"),
                     }
                 )
-                view_md = _build_view_link(row)
-                label, url = _parse_markdown_link(view_md)
+                explore_url = _build_explore_filters_link(
+                    dataset.get("Mode"),
+                    dataset.get("Facility type"),
+                    dataset.get("Source"),
+                )
                 meta = " • ".join(
                     filter(
                         None,
@@ -1196,8 +1212,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                             html.Span(meta or "Dataset", className="fw-semibold"),
                             html.Span(f" — {_format_counts(dataset.get('Total counts'))}", className="app-muted"),
                             html.Span(" "),
-                            html.A(label or "Open", href=url, target="_self")
-                            if url
+                            html.A("Open", href=explore_url, target="_self")
+                            if explore_url
                             else html.Span(""),
                         ]
                     )
@@ -1249,6 +1265,23 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if search_active:
             return {"display": "block"}, {"display": "none"}, {"display": "none"}, {"display": "block"}
         return {"display": "none"}, {"display": "block"}, {"display": "flex"}, {"display": "none"}
+
+    @app.callback(
+        Output("pf-mode", "value"),
+        Output("pf-facility", "value"),
+        Output("pf-source", "value"),
+        Input("explore-url", "search"),
+    )
+    def _seed_filters_from_url(search):
+        if not search:
+            return dash.no_update, dash.no_update, dash.no_update
+        params = urllib.parse.parse_qs(search.lstrip("?"))
+        mode = params.get("mode", [None])[0]
+        facility = params.get("facility", [None])[0]
+        source = params.get("source", [None])[0]
+        if not any([mode, facility, source]):
+            return dash.no_update, dash.no_update, dash.no_update
+        return mode, facility, source
 
     # ---------- Progressive options ----------
     @app.callback(
