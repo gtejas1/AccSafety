@@ -758,7 +758,7 @@ def create_server():
                     <div class="status-feed-extra status-feed-extra--photo" aria-hidden="true">
                       <img
                         class="status-feed-photo"
-                        src="/static/img/whitefish-bay-intersection.jpg"
+                        src="/static/img/Whitewater-intersection.jpg"
                         alt=""
                         loading="lazy"
                       >

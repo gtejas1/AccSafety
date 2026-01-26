@@ -53,14 +53,14 @@ LIVE_DETECTION_LOCATIONS = {
         "title": "N Santa Monica Blvd & Silver Spring Drive - Whitefish Bay, WI",
         "rtsp_url": RTSP_URL,
         "table_name": DEFAULT_TABLE_NAME,
-        "crosswalk_config_path": CROSSWALK_CONFIG_PATH,
+        "crosswalk_config_path": "crosswalk_config.json",
     },
     "uw-whitewater": {
         "title": "W Starin Rd & N Prairie St - UW-Whitewater",
         "rtsp_url": (
-            "http://166.139.32.25/axis-cgi/media.cgi?audiocodec=aac&audiosamplerate=16000"
+            "http://root:Wisdot2018!@166.139.32.25/axis-cgi/media.cgi?audiocodec=aac&audiosamplerate=16000"
             "&audiobitrate=32000&camera=1&videoframeskipmode=empty&videozprofile=classic"
-            "&resolution=1920x1080&fps=30&audiodeviceid=0&audioinputid=0&timestamp=2"
+            "&resolution=640x480&fps=30&audiodeviceid=0&audioinputid=0&timestamp=2"
             "&videocodec=h264&container=mp4"
         ),
         "table_name": "WStarinRd_N_Prairie_St_UW-Whitewater_counts",
