@@ -26,6 +26,7 @@ from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore, ENGINE
 from flask import current_app
 from auth.user_store import UserStore
+from chatbot.service import ChatService
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -421,6 +422,7 @@ def load_whats_new_entries(limit: int = 15):
 def create_server():
     server = Flask(__name__)
     server.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_secret_key")
+    chat_service = ChatService()
 
     # ---- Global Auth Guard ----
     @server.before_request
@@ -1378,6 +1380,51 @@ def create_server():
                 "nearby": nearby,
             }
         )
+
+    @server.post("/api/chat")
+    def api_chat():
+        current_user = _current_user()
+        if not current_user:
+            return jsonify({"error": "Authentication required."}), 401
+
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            return jsonify({"error": "Invalid JSON payload."}), 400
+
+        message = payload.get("message")
+        if not isinstance(message, str) or not message.strip():
+            return jsonify({"error": "`message` must be a non-empty string."}), 400
+
+        history = payload.get("history", [])
+        if history is None:
+            history = []
+        if not isinstance(history, list):
+            return jsonify({"error": "`history` must be a list when provided."}), 400
+
+        for entry in history:
+            if not isinstance(entry, dict):
+                return jsonify({"error": "Each `history` item must be an object."}), 400
+            role = entry.get("role")
+            content = entry.get("content")
+            if not isinstance(role, str) or not isinstance(content, str):
+                return jsonify({"error": "Each `history` item must include string `role` and `content`."}), 400
+
+        mode = payload.get("mode")
+        if mode is not None and not isinstance(mode, str):
+            return jsonify({"error": "`mode` must be a string when provided."}), 400
+
+        response_payload = chat_service.generate_reply(
+            message=message.strip(),
+            history=history,
+            user_context={
+                "username": current_user.username,
+                "roles": current_user.roles or [],
+                "approved": bool(current_user.approved),
+            },
+            mode=mode.strip() if isinstance(mode, str) else None,
+        )
+        http_status = 200 if response_payload.get("status") == "ok" else 503
+        return jsonify(response_payload), http_status
 
     # Convenience redirects
     for p in ["trail","eco","vivacity","live","wisdot","se-wi-trails"]:
