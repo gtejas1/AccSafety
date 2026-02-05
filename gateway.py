@@ -2,6 +2,8 @@
 import json
 import math
 import os
+import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List
 from pathlib import Path
@@ -25,6 +27,7 @@ from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore, ENGINE
 from flask import current_app
 from auth.user_store import UserStore
+from chatbot.logging import ChatAuditLogger, ChatLogRecord
 from chatbot.service import ChatService
 
 
@@ -354,6 +357,41 @@ def _is_admin(user) -> bool:
         return False
     return "admin" in (user.roles or [])
 
+
+def _parse_csv_set(value: str | None) -> set[str]:
+    if not value:
+        return set()
+    return {item.strip().lower() for item in value.split(",") if item.strip()}
+
+
+def _chat_access_allowed(user) -> bool:
+    if not user:
+        return False
+
+    if os.environ.get("CHATBOT_ENABLED", "1").strip().lower() in {"0", "false", "no", "off"}:
+        return False
+
+    approved_only = os.environ.get("CHATBOT_REQUIRE_APPROVED", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    if approved_only and not bool(user.approved):
+        return False
+
+    approved_users = _parse_csv_set(os.environ.get("CHATBOT_APPROVED_USERS"))
+    if approved_users and user.username.lower() not in approved_users:
+        return False
+
+    allowed_roles = _parse_csv_set(os.environ.get("CHATBOT_ALLOWED_ROLES"))
+    if allowed_roles:
+        user_roles = {str(role).strip().lower() for role in (user.roles or []) if str(role).strip()}
+        if not user_roles.intersection(allowed_roles):
+            return False
+
+    return True
+
 def load_whats_new_entries(limit: int = 15):
     """Load What's New entries from a manually curated JSON file."""
 
@@ -422,6 +460,7 @@ def create_server():
     server = Flask(__name__)
     server.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_secret_key")
     chat_service = ChatService()
+    chat_logger = ChatAuditLogger()
 
     # ---- Global Auth Guard ----
     @server.before_request
@@ -650,9 +689,13 @@ def create_server():
 
     @server.post("/api/chat")
     def api_chat():
+        request_started = time.perf_counter()
+        request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         current_user = _current_user()
         if not current_user:
             return jsonify({"error": "Authentication required."}), 401
+        if not _chat_access_allowed(current_user):
+            return jsonify({"error": "Chatbot is not enabled for this account."}), 403
 
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
@@ -690,6 +733,37 @@ def create_server():
             },
             mode=mode.strip() if isinstance(mode, str) else None,
         )
+
+        latency_ms = response_payload.get("latency_ms")
+        if latency_ms is None:
+            latency_ms = int((time.perf_counter() - request_started) * 1000)
+
+        retrieval_hits = 0
+        retrieval = response_payload.get("retrieval")
+        if isinstance(retrieval, dict):
+            raw_hits = retrieval.get("evidence_count", 0)
+            try:
+                retrieval_hits = int(raw_hits)
+            except Exception:
+                retrieval_hits = 0
+
+        token_usage = response_payload.get("usage")
+        if not isinstance(token_usage, dict):
+            token_usage = None
+
+        chat_logger.log_chat_event(
+            ChatLogRecord(
+                request_id=request_id,
+                username=current_user.username,
+                latency_ms=latency_ms,
+                token_usage=token_usage,
+                model=response_payload.get("model"),
+                retrieval_hits=retrieval_hits,
+                status=str(response_payload.get("status") or "unknown"),
+            )
+        )
+
+        response_payload["request_id"] = request_id
         http_status = 200 if response_payload.get("status") == "ok" else 503
         return jsonify(response_payload), http_status
 

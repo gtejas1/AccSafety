@@ -5,6 +5,7 @@ import time
 from typing import Any
 
 from .providers import BaseChatProvider, ChatProviderError, build_provider_from_env
+from .policy import build_system_policy_text, evaluate_user_request, refusal_text
 from .retrieval import EvidenceRetriever, RetrievalResult
 
 
@@ -47,6 +48,7 @@ class ChatService:
             "If the evidence does not support a claim, say so explicitly.",
             f"Detected intent: {intent}.",
             "Cite evidence by source and location names when summarizing.",
+            build_system_policy_text(),
             "Evidence:",
         ]
         for idx, item in enumerate(retrieval.evidence[:12], start=1):
@@ -62,6 +64,21 @@ class ChatService:
         mode: str | None = None,
     ) -> dict[str, Any]:
         started = time.perf_counter()
+        policy_decision = evaluate_user_request(message=message, history=history)
+        if not policy_decision.allowed:
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            return {
+                "answer": refusal_text(policy_decision.reason),
+                "sources": [],
+                "citations": [],
+                "retrieval": {"stats": {}, "evidence_count": 0},
+                "intent": "refusal",
+                "latency_ms": latency_ms,
+                "model": None,
+                "status": "refused",
+                "refusal_reason": policy_decision.reason,
+            }
+
         intent = self._classify_intent(message)
         retrieval = self.retriever.retrieve(message=message, intent=intent)
 
