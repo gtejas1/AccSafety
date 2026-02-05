@@ -75,3 +75,41 @@ def test_chat_success(monkeypatch):
     assert captured["history"] == [{"role": "user", "content": "previous question"}]
     assert captured["user_context"]["username"] == "admin"
     assert captured["mode"] == "concise"
+
+
+def test_chat_forbidden_when_role_not_allowed(monkeypatch):
+    monkeypatch.setenv("CHATBOT_ALLOWED_ROLES", "admin")
+    app = create_server()
+    app.testing = True
+    client = app.test_client()
+    with client.session_transaction() as session:
+        session["user"] = "ipit"
+        session["roles"] = ["user"]
+
+    response = client.post("/api/chat", json={"message": "hello"})
+
+    assert response.status_code == 403
+
+
+def test_chat_includes_request_id(monkeypatch):
+    def fake_generate_reply(self, *, message, history=None, user_context=None, mode=None):
+        return {
+            "answer": "ok",
+            "sources": [],
+            "latency_ms": 1,
+            "model": "mock-model",
+            "status": "ok",
+            "retrieval": {"evidence_count": 1},
+        }
+
+    monkeypatch.setattr("chatbot.service.ChatService.generate_reply", fake_generate_reply)
+    app = create_server()
+    app.testing = True
+    client = app.test_client()
+    _login(client)
+
+    response = client.post("/api/chat", json={"message": "hello"}, headers={"X-Request-ID": "req-123"})
+    payload = response.get_json()
+
+    assert response.status_code == 200
+    assert payload["request_id"] == "req-123"
