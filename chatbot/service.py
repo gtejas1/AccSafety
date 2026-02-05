@@ -1,19 +1,57 @@
 from __future__ import annotations
 
+import re
 import time
 from typing import Any
 
 from .providers import BaseChatProvider, ChatProviderError, build_provider_from_env
+from .retrieval import EvidenceRetriever, RetrievalResult
+
+
+NO_EVIDENCE_MESSAGE = (
+    "I couldn't find matching evidence in the available transportation safety datasets. "
+    "Please refine the location, source, facility type, or travel mode and try again."
+)
 
 
 class ChatService:
-    def __init__(self, provider: BaseChatProvider | None = None) -> None:
+    def __init__(
+        self,
+        provider: BaseChatProvider | None = None,
+        retriever: EvidenceRetriever | None = None,
+    ) -> None:
         self.provider = provider
+        self.retriever = retriever or EvidenceRetriever()
 
     def _provider(self) -> BaseChatProvider:
         if self.provider is None:
             self.provider = build_provider_from_env()
         return self.provider
+
+    def _classify_intent(self, message: str) -> str:
+        text = message.strip().lower()
+        if not text:
+            return "help"
+        if re.search(r"\b(help|how|what can you do|usage|options)\b", text):
+            return "help"
+        if re.search(r"\b(compare|versus|vs\.?|difference|higher|lower|between)\b", text):
+            return "compare"
+        if re.search(r"\b(why|explain|reason|interpret|insight)\b", text):
+            return "explain"
+        return "search"
+
+    def _build_constraint_prompt(self, retrieval: RetrievalResult, intent: str) -> str:
+        lines = [
+            "You are an assistant for transportation safety analytics.",
+            "Answer strictly using the provided evidence snippets.",
+            "If the evidence does not support a claim, say so explicitly.",
+            f"Detected intent: {intent}.",
+            "Cite evidence by source and location names when summarizing.",
+            "Evidence:",
+        ]
+        for idx, item in enumerate(retrieval.evidence[:12], start=1):
+            lines.append(f"{idx}. [{item['source']}] {item['title']}: {item['snippet']}")
+        return "\n".join(lines)
 
     def generate_reply(
         self,
@@ -24,17 +62,44 @@ class ChatService:
         mode: str | None = None,
     ) -> dict[str, Any]:
         started = time.perf_counter()
+        intent = self._classify_intent(message)
+        retrieval = self.retriever.retrieve(message=message, intent=intent)
+
+        if not retrieval.evidence:
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            return {
+                "answer": NO_EVIDENCE_MESSAGE,
+                "sources": [],
+                "citations": [],
+                "retrieval": {"stats": retrieval.stats, "evidence_count": 0},
+                "intent": intent,
+                "latency_ms": latency_ms,
+                "model": None,
+                "status": "no_evidence",
+            }
+
+        constraint_prompt = self._build_constraint_prompt(retrieval, intent)
+        model_history = list(history or [])
+        model_history.insert(0, {"role": "system", "content": constraint_prompt})
+
         try:
             provider_response = self._provider().generate_reply(
                 message=message,
-                history=history,
+                history=model_history,
                 user_context=user_context,
                 mode=mode,
             )
             latency_ms = int((time.perf_counter() - started) * 1000)
+            sources = provider_response.sources or retrieval.citations
             return {
                 "answer": provider_response.answer,
-                "sources": provider_response.sources,
+                "sources": sources,
+                "citations": retrieval.citations,
+                "retrieval": {
+                    "stats": retrieval.stats,
+                    "evidence_count": len(retrieval.evidence),
+                },
+                "intent": intent,
                 "latency_ms": latency_ms,
                 "model": provider_response.model,
                 "status": "ok",
@@ -43,7 +108,13 @@ class ChatService:
             latency_ms = int((time.perf_counter() - started) * 1000)
             return {
                 "answer": exc.public_message,
-                "sources": [],
+                "sources": retrieval.citations,
+                "citations": retrieval.citations,
+                "retrieval": {
+                    "stats": retrieval.stats,
+                    "evidence_count": len(retrieval.evidence),
+                },
+                "intent": intent,
                 "latency_ms": latency_ms,
                 "model": None,
                 "status": exc.code,
