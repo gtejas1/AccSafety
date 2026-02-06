@@ -2,7 +2,10 @@ flask
 dash
 dash_bootstrap_components
 pandas
+pdfplumber
 plotly
+python-docx
+pypdf
 sqlalchemy
 psycopg2-binary
 requests
