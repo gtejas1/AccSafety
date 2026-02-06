@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -8,6 +9,13 @@ from typing import Any
 import pandas as pd
 
 from unified_explore import ENGINE
+
+from .document_rag import (
+    DocumentRAGIndex,
+    build_document_evidence,
+    build_embedder_from_env,
+)
+from .providers import ChatProviderError
 
 UNIFIED_SEARCH_SQL = """
     SELECT
@@ -235,17 +243,45 @@ def _extract_location_hint(message: str) -> str:
 
 
 class EvidenceRetriever:
+    def __init__(self) -> None:
+        index_path = os.environ.get("CHAT_DOCUMENT_INDEX", "").strip()
+        self.document_index = DocumentRAGIndex.load(index_path) if index_path else DocumentRAGIndex([])
+        self._embedder = None
+
+    def _document_results(self, query: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, list[dict[str, Any]]]]:
+        if not self.document_index.chunks:
+            return [], [], {"by_source": [], "by_facility": [], "by_mode": []}
+        if self._embedder is None:
+            try:
+                self._embedder = build_embedder_from_env()
+            except ChatProviderError:
+                return [], [], {"by_source": [], "by_facility": [], "by_mode": []}
+
+        try:
+            embedding = self._embedder.embed([query])[0]
+            results = self.document_index.search(embedding, top_k=8)
+            return build_document_evidence(results)
+        except ChatProviderError:
+            return [], [], {"by_source": [], "by_facility": [], "by_mode": []}
+
     def retrieve(self, *, message: str, intent: str) -> RetrievalResult:
         query = _extract_location_hint(message)
         if not query:
             return RetrievalResult(evidence=[], citations=[], stats={"by_source": [], "by_facility": [], "by_mode": []})
 
         matches = location_matches(query)
-        if not matches:
-            return RetrievalResult(evidence=[], citations=[], stats={"by_source": [], "by_facility": [], "by_mode": []})
-
-        nearby = nearest_sites(matches)
+        nearby = nearest_sites(matches) if matches else []
         combined_matches = matches + nearby if intent in {"compare", "search"} else matches
-        evidence, citations = _evidence_from_matches(combined_matches)
-        stats = summary_stats(combined_matches)
-        return RetrievalResult(evidence=evidence, citations=citations, stats=stats)
+        evidence, citations = _evidence_from_matches(combined_matches) if combined_matches else ([], [])
+        stats = summary_stats(combined_matches) if combined_matches else {"by_source": [], "by_facility": [], "by_mode": []}
+
+        doc_evidence, doc_citations, doc_stats = self._document_results(query)
+        merged_evidence = evidence + doc_evidence
+        merged_citations = citations + doc_citations
+        merged_stats = {
+            "by_source": (stats.get("by_source") or []) + (doc_stats.get("by_source") or []),
+            "by_facility": stats.get("by_facility") or [],
+            "by_mode": stats.get("by_mode") or [],
+        }
+
+        return RetrievalResult(evidence=merged_evidence, citations=merged_citations, stats=merged_stats)
