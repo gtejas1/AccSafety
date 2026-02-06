@@ -7,5 +7,7 @@ sqlalchemy
 psycopg2-binary
 requests
 openpyxl
+pdfplumber
+python-docx
 opencv-python
 ultralytics
