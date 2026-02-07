@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import time
 from typing import Any
@@ -7,6 +8,7 @@ from typing import Any
 from .providers import BaseChatProvider, ChatProviderError, build_provider_from_env
 from .policy import build_system_policy_text, evaluate_user_request, refusal_text
 from .retrieval import EvidenceRetriever, RetrievalResult
+from .rag_retrieval import DocumentRetriever
 
 
 NO_EVIDENCE_MESSAGE = (
@@ -19,10 +21,17 @@ class ChatService:
     def __init__(
         self,
         provider: BaseChatProvider | None = None,
-        retriever: EvidenceRetriever | None = None,
+        retriever: EvidenceRetriever | DocumentRetriever | None = None,
     ) -> None:
         self.provider = provider
-        self.retriever = retriever or EvidenceRetriever()
+        self.retriever = retriever or self._build_retriever_from_env()
+
+    @staticmethod
+    def _build_retriever_from_env() -> EvidenceRetriever | DocumentRetriever:
+        mode = os.environ.get("RAG_MODE", "").strip().lower()
+        if mode == "documents":
+            return DocumentRetriever()
+        return EvidenceRetriever()
 
     def _provider(self) -> BaseChatProvider:
         if self.provider is None:
