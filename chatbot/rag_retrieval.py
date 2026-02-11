@@ -14,6 +14,7 @@ from .retrieval import RetrievalResult
 logger = logging.getLogger(__name__)
 
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-large"
+DEFAULT_EMBEDDING_BASE_URL = "https://api.openai.com/v1/embeddings"
 
 
 def _load_json_records(path: Path) -> list[dict[str, Any]]:
@@ -50,22 +51,45 @@ class DocumentRetriever:
         embeddings_path: str | Path | None = None,
         top_k: int | None = None,
         embedding_model: str | None = None,
+        embedding_base_url: str | None = None,
         openai_api_key: str | None = None,
     ) -> None:
         self.manifest_path = Path(
-            manifest_path or os.environ.get("RAG_MANIFEST_PATH", "rag_manifest.jsonl")
+            manifest_path
+            or os.environ.get("RAG_CHUNK_STORE_PATH")
+            or os.environ.get("RAG_MANIFEST_PATH", "rag_manifest.jsonl")
         )
         self.embeddings_path = Path(
-            embeddings_path or os.environ.get("RAG_EMBEDDINGS_PATH", "rag_embeddings.jsonl")
+            embeddings_path
+            or os.environ.get("RAG_INDEX_PATH")
+            or os.environ.get("RAG_EMBEDDINGS_PATH", "rag_embeddings.jsonl")
         )
         self.top_k = top_k or int(os.environ.get("RAG_TOP_K", "8"))
         self.embedding_model = embedding_model or os.environ.get(
-            "RAG_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL
+            "EMBEDDING_MODEL",
+            os.environ.get("RAG_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL),
+        )
+        self.embedding_base_url = embedding_base_url or os.environ.get(
+            "EMBEDDING_BASE_URL", DEFAULT_EMBEDDING_BASE_URL
         )
         self.openai_api_key = openai_api_key or os.environ.get("OPENAI_API_KEY")
 
+        self._validate_paths()
         self._chunks = self._load_chunks()
         self._embeddings = self._load_embeddings()
+
+    def _validate_paths(self) -> None:
+        missing = []
+        if not self.embeddings_path.exists():
+            missing.append(
+                f"RAG index missing at {self.embeddings_path} (set RAG_INDEX_PATH)."
+            )
+        if not self.manifest_path.exists():
+            missing.append(
+                f"RAG chunk store missing at {self.manifest_path} (set RAG_CHUNK_STORE_PATH)."
+            )
+        if missing:
+            raise RuntimeError(" ".join(missing))
 
     def _load_chunks(self) -> dict[str, dict[str, Any]]:
         entries = {}
@@ -96,7 +120,7 @@ class DocumentRetriever:
         if not self.openai_api_key:
             raise RuntimeError("OPENAI_API_KEY is required for document retrieval.")
         response = requests.post(
-            "https://api.openai.com/v1/embeddings",
+            self.embedding_base_url,
             headers={"Authorization": f"Bearer {self.openai_api_key}"},
             json={"model": self.embedding_model, "input": text},
             timeout=30,
