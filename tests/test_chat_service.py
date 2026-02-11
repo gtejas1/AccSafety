@@ -94,3 +94,23 @@ def test_generate_reply_refuses_prompt_injection_before_retrieval():
     assert payload["status"] == "refused"
     assert payload["intent"] == "refusal"
     assert provider.calls == []
+
+
+def test_help_intent_returns_help_text_without_citations():
+    provider = StubProvider()
+    retriever = StubRetriever(
+        RetrievalResultStub(
+            evidence=[{"title": "ignored", "snippet": "ignored", "source": "ignored", "metadata": {}}],
+            citations=[{"title": "ignored", "source": "ignored"}],
+            stats={"by_source": [], "by_facility": [], "by_mode": []},
+        )
+    )
+    service = ChatService(provider=provider, retriever=retriever)
+
+    payload = service.generate_reply(message="what can you do?", history=[])
+
+    assert payload["status"] == "ok"
+    assert payload["intent"] == "help"
+    assert payload["sources"] == []
+    assert payload["citations"] == []
+    assert provider.calls == []

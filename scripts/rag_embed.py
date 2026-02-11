@@ -10,7 +10,7 @@ from typing import Any
 import requests
 
 DEFAULT_EMBEDDING_MODEL = "text-embedding-3-large"
-EMBEDDINGS_URL = "https://api.openai.com/v1/embeddings"
+DEFAULT_EMBEDDING_BASE_URL = "https://api.openai.com/v1/embeddings"
 
 
 def _load_json_records(path: Path) -> list[dict]:
@@ -147,6 +147,7 @@ def _embed_batch(
     *,
     model: str,
     api_key: str,
+    base_url: str,
 ) -> list[list[float]]:
     """
     Embed a batch of texts in one API call.
@@ -158,7 +159,7 @@ def _embed_batch(
     }
     payload = {"model": model, "input": texts}
 
-    data = _post_with_retries(session, EMBEDDINGS_URL, headers=headers, json_body=payload, timeout=60)
+    data = _post_with_retries(session, base_url, headers=headers, json_body=payload, timeout=60)
     # API returns list of {index, embedding, ...}; sort by index to be safe
     items = sorted(data["data"], key=lambda d: d.get("index", 0))
     return [it["embedding"] for it in items]
@@ -168,18 +169,32 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build RAG embeddings JSONL from a manifest.")
     parser.add_argument(
         "--manifest-path",
-        default=os.environ.get("RAG_MANIFEST_PATH", "rag_manifest.jsonl"),
-        help="Input manifest JSONL path (env: RAG_MANIFEST_PATH).",
+        default=os.environ.get(
+            "RAG_CHUNK_STORE_PATH",
+            os.environ.get("RAG_MANIFEST_PATH", "rag_manifest.jsonl"),
+        ),
+        help="Input manifest JSONL path (env: RAG_CHUNK_STORE_PATH).",
     )
     parser.add_argument(
         "--embeddings-path",
-        default=os.environ.get("RAG_EMBEDDINGS_PATH", "rag_embeddings.jsonl"),
-        help="Output embeddings JSONL path (env: RAG_EMBEDDINGS_PATH).",
+        default=os.environ.get(
+            "RAG_INDEX_PATH",
+            os.environ.get("RAG_EMBEDDINGS_PATH", "rag_embeddings.jsonl"),
+        ),
+        help="Output embeddings JSONL path (env: RAG_INDEX_PATH).",
     )
     parser.add_argument(
         "--embedding-model",
-        default=os.environ.get("RAG_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL),
-        help="OpenAI embedding model name (env: RAG_EMBEDDING_MODEL).",
+        default=os.environ.get(
+            "EMBEDDING_MODEL",
+            os.environ.get("RAG_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL),
+        ),
+        help="OpenAI embedding model name (env: EMBEDDING_MODEL).",
+    )
+    parser.add_argument(
+        "--embedding-base-url",
+        default=os.environ.get("EMBEDDING_BASE_URL", DEFAULT_EMBEDDING_BASE_URL),
+        help="Embedding API base URL (env: EMBEDDING_BASE_URL).",
     )
     parser.add_argument(
         "--batch-size",
@@ -252,7 +267,8 @@ def main() -> None:
 
     print(
         f"[INFO] Embedding {len(work)} chunks using batch_size={args.batch_size} "
-        f"max_chars_per_chunk={args.max_chars_per_chunk} model={args.embedding_model}"
+        f"max_chars_per_chunk={args.max_chars_per_chunk} model={args.embedding_model} "
+        f"base_url={args.embedding_base_url}"
     )
     if skipped_empty:
         print(f"[INFO] Skipped {skipped_empty} empty/invalid chunks.")
@@ -269,7 +285,13 @@ def main() -> None:
             texts = [b["text"] for b in batch]
             chunk_ids = [b["chunk_id"] for b in batch]
 
-            embeddings = _embed_batch(session, texts, model=args.embedding_model, api_key=api_key)
+            embeddings = _embed_batch(
+                session,
+                texts,
+                model=args.embedding_model,
+                api_key=api_key,
+                base_url=args.embedding_base_url,
+            )
 
             for cid, emb in zip(chunk_ids, embeddings):
                 handle.write(json.dumps({"chunk_id": cid, "embedding": emb}) + "\n")

@@ -318,8 +318,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--manifest-path",
-        default=os.environ.get("RAG_MANIFEST_PATH", "rag_manifest.jsonl"),
-        help="Output JSONL manifest path (env: RAG_MANIFEST_PATH).",
+        default=os.environ.get(
+            "RAG_CHUNK_STORE_PATH",
+            os.environ.get("RAG_MANIFEST_PATH", "rag_manifest.jsonl"),
+        ),
+        help="Output JSONL manifest path (env: RAG_CHUNK_STORE_PATH).",
     )
     parser.add_argument(
         "--chunk-tokens",

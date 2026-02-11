@@ -16,6 +16,11 @@ NO_EVIDENCE_MESSAGE = (
     "Please refine the location, source, facility type, or travel mode and try again."
 )
 
+HELP_MESSAGE = (
+    "I can help with transportation safety analytics questions based on the available datasets. "
+    "Try asking about crash trends, activity at a site, comparisons across locations, or what data sources are available."
+)
+
 
 class ChatService:
     def __init__(
@@ -89,6 +94,20 @@ class ChatService:
             }
 
         intent = self._classify_intent(message)
+
+        if intent == "help":
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            return {
+                "answer": HELP_MESSAGE,
+                "sources": [],
+                "citations": [],
+                "retrieval": {"stats": {}, "evidence_count": 0},
+                "intent": intent,
+                "latency_ms": latency_ms,
+                "model": None,
+                "status": "ok",
+            }
+
         retrieval = self.retriever.retrieve(message=message, intent=intent)
 
         if not retrieval.evidence:
