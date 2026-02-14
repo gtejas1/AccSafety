@@ -163,6 +163,8 @@ def test_build_counts_csv_bytes_serializes_rows(live_detection):
 
 
 def test_download_counts_route_returns_csv(monkeypatch, live_detection):
+    starts = {"count": 0}
+
     class _Worker:
         def __init__(self, *_):
             self._config = [
@@ -170,6 +172,7 @@ def test_download_counts_route_returns_csv(monkeypatch, live_detection):
             ]
 
         def start(self):
+            starts["count"] += 1
             return None
 
         def get_crosswalk_config(self):
@@ -200,6 +203,7 @@ def test_download_counts_route_returns_csv(monkeypatch, live_detection):
     live_detection._ENGINE_LAST_FAIL_TS = 0
 
     live_detection.create_live_detection_app(server, prefix="/dl/")
+    assert starts["count"] == len(live_detection.LIVE_DETECTION_LOCATIONS)
     endpoint = server.view_functions["live_detection_download_dl"]
 
     with server.test_request_context():

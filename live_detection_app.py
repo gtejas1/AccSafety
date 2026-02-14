@@ -977,6 +977,11 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         for key, config in LIVE_DETECTION_LOCATIONS.items()
     }
 
+    # Start all location workers during app initialization so detection begins
+    # even before the live dashboard route is opened.
+    for worker in workers.values():
+        worker.start()
+
     def _get_worker(search: Optional[str]) -> VideoWorker:
         location_key = _resolve_location_key(search)
         return workers[location_key]
