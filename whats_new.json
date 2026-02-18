@@ -1,5 +1,17 @@
 [
   {
+    "version": "1.8",
+    "date": "2026-02-18",
+    "highlights": [
+      "Live Detection reliability improved with stronger database resiliency, safer JSON binding, reliable counts downloads, and startup worker initialization so counting services are ready as the app launches.",
+      "Administration and account workflows were refreshed with a roomier admin users layout and clearer guidance for managing approvals and role updates.",
+      "Location search and mapping were expanded with a unified search endpoint/UI, authenticated API requests, updated result-card and map layouts, explore-link integration updates, and host/query fixes.",
+      "UW-Whitewater support was added across the portal, including dedicated intersection/live-detection coverage and per-location crosswalk configuration options.",
+      "A full authenticated chatbot experience was introduced, including provider-backed chat APIs, a portal chat widget, retrieval-first answer flow, policy guardrails, access checks, audit logging, and close-action UX fixes.",
+      "Document assistant tooling was significantly expanded with ingestion manifest generation, embedding and retrieval pipelines, citation-aware retrievers, evaluation fixtures/tests, and RAG environment/reindex helpers, including cleaner help-intent responses that omit unnecessary citations."
+    ]
+  },
+  {
     "version": "1.7",
     "date": "2025-12-12",
     "highlights": [
@@ -30,7 +42,7 @@
     "date": "2025-11-05",
     "highlights": [
       "Added logo to the portal header for stronger branding."
-      ]
+    ]
   },
   {
     "version": "1.3",
