@@ -117,6 +117,15 @@ CROSSWALK_CONFIG_PATH = os.getenv(
     os.path.join(os.path.dirname(__file__), "crosswalk_config.json"),
 )
 
+DIRECTION_KEYS = ("neg_to_pos", "pos_to_neg")
+LEGACY_DIRECTION_KEY = "undirected"
+DEFAULT_DIRECTION_LABELS = {
+    "neg_to_pos": "Neg → Pos",
+    "pos_to_neg": "Pos → Neg",
+    LEGACY_DIRECTION_KEY: "Undirected (legacy)",
+}
+CROSSWALK_DIRECTION_LABELS: Dict[str, Dict[str, str]] = {}
+
 ENGINE: Optional[Any] = None
 _ENGINE_LOCK = threading.Lock()
 _ENGINE_LAST_FAIL_TS = 0.0
@@ -227,16 +236,20 @@ def _build_counts_csv_bytes(table_name: str = DEFAULT_TABLE_NAME) -> bytes:
             "total_pedestrians",
             "total_cyclists",
             "crosswalk_counts",
+            "crosswalk_counts_by_direction",
         ]
     )
     for row in rows:
+        normalized = _normalize_crosswalk_payload(row.get("crosswalk_counts"))
+        aggregated = _aggregate_crosswalk_counts(normalized)
         writer.writerow(
             [
                 row.get("interval_start"),
                 row.get("interval_end"),
                 row.get("total_pedestrians"),
                 row.get("total_cyclists"),
-                json.dumps(row.get("crosswalk_counts") or {}),
+                json.dumps(aggregated),
+                json.dumps(normalized),
             ]
         )
 
@@ -257,6 +270,95 @@ def _point_side_of_line(point: Tuple[float, float], p1: Tuple[int, int], p2: Tup
     x1, y1 = p1
     x2, y2 = p2
     return (x - x1) * (y2 - y1) - (y - y1) * (x2 - x1)
+
+
+def _empty_direction_counts() -> Dict[str, Dict[str, int]]:
+    return {key: {"pedestrians": 0, "cyclists": 0} for key in DIRECTION_KEYS}
+
+
+def _normalize_direction_counts(
+    counts: Optional[Dict[str, Any]]
+) -> Dict[str, Dict[str, int]]:
+    normalized = _empty_direction_counts()
+    if not isinstance(counts, dict):
+        return normalized
+
+    if any(key in counts for key in DIRECTION_KEYS):
+        for direction_key in DIRECTION_KEYS:
+            direction_counts = counts.get(direction_key)
+            if not isinstance(direction_counts, dict):
+                continue
+            normalized[direction_key]["pedestrians"] = int(
+                direction_counts.get("pedestrians", 0) or 0
+            )
+            normalized[direction_key]["cyclists"] = int(
+                direction_counts.get("cyclists", 0) or 0
+            )
+        for direction_key, direction_counts in counts.items():
+            if direction_key in normalized:
+                continue
+            if not isinstance(direction_counts, dict):
+                continue
+            if "pedestrians" not in direction_counts and "cyclists" not in direction_counts:
+                continue
+            normalized[direction_key] = {
+                "pedestrians": int(direction_counts.get("pedestrians", 0) or 0),
+                "cyclists": int(direction_counts.get("cyclists", 0) or 0),
+            }
+        return normalized
+
+    if "pedestrians" in counts or "cyclists" in counts:
+        normalized[LEGACY_DIRECTION_KEY] = {
+            "pedestrians": int(counts.get("pedestrians", 0) or 0),
+            "cyclists": int(counts.get("cyclists", 0) or 0),
+        }
+    return normalized
+
+
+def _normalize_crosswalk_payload(
+    payload: Optional[Dict[str, Any]]
+) -> Dict[str, Dict[str, Dict[str, int]]]:
+    if not isinstance(payload, dict):
+        return {}
+    normalized: Dict[str, Dict[str, Dict[str, int]]] = {}
+    for key, counts in payload.items():
+        normalized[key] = _normalize_direction_counts(
+            counts if isinstance(counts, dict) else None
+        )
+    return normalized
+
+
+def _aggregate_crosswalk_counts(
+    crosswalk_counts: Dict[str, Dict[str, Dict[str, int]]]
+) -> Dict[str, Dict[str, int]]:
+    aggregated: Dict[str, Dict[str, int]] = {}
+    for key, direction_counts in crosswalk_counts.items():
+        totals = {"pedestrians": 0, "cyclists": 0}
+        if not isinstance(direction_counts, dict):
+            aggregated[key] = totals
+            continue
+        for counts in direction_counts.values():
+            if not isinstance(counts, dict):
+                continue
+            totals["pedestrians"] += int(counts.get("pedestrians", 0) or 0)
+            totals["cyclists"] += int(counts.get("cyclists", 0) or 0)
+        aggregated[key] = totals
+    return aggregated
+
+
+def _direction_key_for_crossing(prev_side: int, side: int) -> Optional[str]:
+    if prev_side < 0 < side:
+        return "neg_to_pos"
+    if prev_side > 0 > side:
+        return "pos_to_neg"
+    return None
+
+
+def _direction_label_for_crosswalk(crosswalk_key: str, direction_key: str) -> str:
+    return (
+        CROSSWALK_DIRECTION_LABELS.get(crosswalk_key, {}).get(direction_key)
+        or DEFAULT_DIRECTION_LABELS.get(direction_key, direction_key.replace("_", " ").title())
+    )
 
 
 def _rotate_point(
@@ -347,7 +449,7 @@ class VideoWorker:
         self.start_time: Optional[datetime] = None
         self.crosswalk_lock = threading.Lock()
         self.crosswalk_config: List[Dict[str, object]] = []
-        self.crosswalk_counts: Dict[str, Dict[str, int]] = {}
+        self.crosswalk_counts: Dict[str, Dict[str, Dict[str, int]]] = {}
         self._counted_ids: Dict[str, set[int]] = {}
         self._track_sides: Dict[int, Dict[str, int]] = {}
         self._track_last_seen: Dict[int, float] = {}
@@ -355,7 +457,7 @@ class VideoWorker:
         self.save_interval = SAVE_INTERVAL_SEC
         self._last_save_ts = time.time()
         self._pending_totals = {"pedestrians": 0, "cyclists": 0}
-        self._pending_crosswalk_counts: Dict[str, Dict[str, int]] = {}
+        self._pending_crosswalk_counts: Dict[str, Dict[str, Dict[str, int]]] = {}
         self._interval_start: Optional[datetime] = None
 
         self.stop_flag = threading.Event()
@@ -506,16 +608,23 @@ class VideoWorker:
         cyc = int(totals_row.get("cyc") or 0)
         start_ts = totals_row.get("start_ts")
 
-        crosswalk_totals: Dict[str, Dict[str, int]] = {}
+        crosswalk_totals: Dict[str, Dict[str, Dict[str, int]]] = {}
         for payload in crosswalk_payloads:
-            if not isinstance(payload, dict):
-                continue
-            for key, counts in payload.items():
+            normalized = _normalize_crosswalk_payload(payload)
+            for key, counts_by_direction in normalized.items():
                 aggregated = crosswalk_totals.setdefault(
-                    key, {"pedestrians": 0, "cyclists": 0}
+                    key, _empty_direction_counts()
                 )
-                aggregated["pedestrians"] += int(counts.get("pedestrians", 0) or 0)
-                aggregated["cyclists"] += int(counts.get("cyclists", 0) or 0)
+                for direction_key, counts in counts_by_direction.items():
+                    direction_totals = aggregated.setdefault(
+                        direction_key, {"pedestrians": 0, "cyclists": 0}
+                    )
+                    direction_totals["pedestrians"] += int(
+                        counts.get("pedestrians", 0) or 0
+                    )
+                    direction_totals["cyclists"] += int(
+                        counts.get("cyclists", 0) or 0
+                    )
 
         with self.stats_lock:
             self.total_counts = {"pedestrians": ped, "cyclists": cyc}
@@ -524,19 +633,26 @@ class VideoWorker:
             for key in list(self.crosswalk_counts.keys()):
                 saved_counts = crosswalk_totals.get(key)
                 if saved_counts:
-                    self.crosswalk_counts[key] = saved_counts.copy()
+                    self.crosswalk_counts[key] = {
+                        direction: counts.copy()
+                        for direction, counts in saved_counts.items()
+                    }
 
     def _record_pending_deltas_locked(
         self,
         totals_delta: Dict[str, int],
-        crosswalk_deltas: Dict[str, Dict[str, int]],
+        crosswalk_deltas: Dict[str, Dict[str, Dict[str, int]]],
     ) -> None:
         if not totals_delta and not crosswalk_deltas:
             return
 
         had_pending = any(self._pending_totals.values()) or any(
-            (counts.get("pedestrians", 0) or counts.get("cyclists", 0))
-            for counts in self._pending_crosswalk_counts.values()
+            (
+                direction_counts.get("pedestrians", 0)
+                or direction_counts.get("cyclists", 0)
+            )
+            for crosswalk_counts in self._pending_crosswalk_counts.values()
+            for direction_counts in crosswalk_counts.values()
         )
 
         for group, delta in totals_delta.items():
@@ -546,10 +662,18 @@ class VideoWorker:
 
         for key, delta_counts in crosswalk_deltas.items():
             pending = self._pending_crosswalk_counts.setdefault(
-                key, {"pedestrians": 0, "cyclists": 0}
+                key, _empty_direction_counts()
             )
-            pending["pedestrians"] += int(delta_counts.get("pedestrians", 0) or 0)
-            pending["cyclists"] += int(delta_counts.get("cyclists", 0) or 0)
+            for direction_key, direction_counts in delta_counts.items():
+                direction_pending = pending.setdefault(
+                    direction_key, {"pedestrians": 0, "cyclists": 0}
+                )
+                direction_pending["pedestrians"] += int(
+                    direction_counts.get("pedestrians", 0) or 0
+                )
+                direction_pending["cyclists"] += int(
+                    direction_counts.get("cyclists", 0) or 0
+                )
 
         if self._interval_start is None:
             self._interval_start = datetime.utcnow()
@@ -567,8 +691,12 @@ class VideoWorker:
 
         totals_pending = any(self._pending_totals.values())
         crosswalk_pending = any(
-            (counts.get("pedestrians", 0) or counts.get("cyclists", 0))
-            for counts in self._pending_crosswalk_counts.values()
+            (
+                direction_counts.get("pedestrians", 0)
+                or direction_counts.get("cyclists", 0)
+            )
+            for crosswalk_counts in self._pending_crosswalk_counts.values()
+            for direction_counts in crosswalk_counts.values()
         )
         if not totals_pending and not crosswalk_pending:
             return
@@ -643,7 +771,7 @@ class VideoWorker:
             self._track_sides = {}
             self._track_last_seen = {}
             self.crosswalk_counts = {
-                cw["key"]: {"pedestrians": 0, "cyclists": 0} for cw in config_snapshot
+                cw["key"]: _empty_direction_counts() for cw in config_snapshot
             }
             self._pending_totals = {"pedestrians": 0, "cyclists": 0}
             self._pending_crosswalk_counts = {}
@@ -680,12 +808,12 @@ class VideoWorker:
 
         with self.stats_lock:
             prev_counts = {
-                key: {"pedestrians": counts.get("pedestrians", 0), "cyclists": counts.get("cyclists", 0)}
+                key: _normalize_direction_counts(counts)
                 for key, counts in self.crosswalk_counts.items()
             }
             self.crosswalk_counts = {
                 cw["key"]: prev_counts.get(
-                    cw["key"], {"pedestrians": 0, "cyclists": 0}
+                    cw["key"], _empty_direction_counts()
                 )
                 for cw in normalized
             }
@@ -787,7 +915,7 @@ class VideoWorker:
             pass
         else:
             deltas = {"pedestrians": 0, "cyclists": 0}
-            crosswalk_deltas: Dict[str, Dict[str, int]] = {}
+            crosswalk_deltas: Dict[str, Dict[str, Dict[str, int]]] = {}
             with self.stats_lock:
                 timestamp = time.time()
                 for cid, track_id, center in zip(classes, track_ids, centers):
@@ -822,22 +950,28 @@ class VideoWorker:
                             continue
                         if prev_side != side:
                             track_crosswalk_state[key] = side
+                            direction_key = _direction_key_for_crossing(prev_side, side)
+                            if direction_key is None:
+                                continue
                             counts_for_crosswalk = self.crosswalk_counts.setdefault(
                                 key,
-                                {"pedestrians": 0, "cyclists": 0},
+                                _empty_direction_counts(),
+                            )
+                            direction_counts = counts_for_crosswalk.setdefault(
+                                direction_key, {"pedestrians": 0, "cyclists": 0}
+                            )
+                            delta_entry = crosswalk_deltas.setdefault(
+                                key, _empty_direction_counts()
+                            )
+                            delta_direction = delta_entry.setdefault(
+                                direction_key, {"pedestrians": 0, "cyclists": 0}
                             )
                             if group == "pedestrian":
-                                counts_for_crosswalk["pedestrians"] += 1
-                                delta_entry = crosswalk_deltas.setdefault(
-                                    key, {"pedestrians": 0, "cyclists": 0}
-                                )
-                                delta_entry["pedestrians"] += 1
+                                direction_counts["pedestrians"] += 1
+                                delta_direction["pedestrians"] += 1
                             elif group == "cyclist":
-                                counts_for_crosswalk["cyclists"] += 1
-                                delta_entry = crosswalk_deltas.setdefault(
-                                    key, {"pedestrians": 0, "cyclists": 0}
-                                )
-                                delta_entry["cyclists"] += 1
+                                direction_counts["cyclists"] += 1
+                                delta_direction["cyclists"] += 1
 
                 for key, delta in deltas.items():
                     if delta:
@@ -924,14 +1058,17 @@ class VideoWorker:
         with self.frame_lock:
             return self.latest_jpeg
 
-    def get_stats(self) -> Tuple[int, int, Optional[str], Dict[str, Dict[str, int]]]:
+    def get_stats(
+        self,
+    ) -> Tuple[int, int, Optional[str], Dict[str, Dict[str, Dict[str, int]]]]:
         """Return cumulative totals and start time string."""
         with self.stats_lock:
             ped = self.total_counts.get("pedestrians", 0)
             cyc = self.total_counts.get("cyclists", 0)
             st = self.start_time
             crosswalk_snapshot = {
-                key: counts.copy() for key, counts in self.crosswalk_counts.items()
+                key: {direction: counts.copy() for direction, counts in directions.items()}
+                for key, directions in self.crosswalk_counts.items()
             }
         start_str = st.strftime("%Y-%m-%d %H:%M:%S") if st else None
         return ped, cyc, start_str, crosswalk_snapshot
@@ -1058,44 +1195,58 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     crosswalk_cards: List[dbc.Col] = []
     crosswalk_name_style = {"fontSize": "0.85rem"}
     crosswalk_value_style = {"fontSize": "1.15rem"}
+    crosswalk_direction_style = {"fontSize": "0.7rem", "letterSpacing": "0.03em"}
+    direction_display_keys = list(DIRECTION_KEYS) + [LEGACY_DIRECTION_KEY]
     for cw in initial_crosswalks:
         key = cw["key"]
+        direction_blocks = []
+        for direction_key in direction_display_keys:
+            direction_blocks.extend(
+                [
+                    html.Div(
+                        _direction_label_for_crosswalk(key, direction_key),
+                        className="text-uppercase text-muted mt-2",
+                        style=crosswalk_direction_style,
+                    ),
+                    html.Div(
+                        [
+                            html.Span(
+                                "Pedestrians",
+                                className="small text-uppercase text-muted",
+                            ),
+                            html.Span(
+                                "0",
+                                id=f"crosswalk-{key}-{direction_key}-ped",
+                                className="fw-bold text-primary",
+                                style=crosswalk_value_style,
+                            ),
+                        ],
+                        className="d-flex justify-content-between align-items-baseline mt-1",
+                    ),
+                    html.Div(
+                        [
+                            html.Span(
+                                "Cyclists",
+                                className="small text-uppercase text-muted",
+                            ),
+                            html.Span(
+                                "0",
+                                id=f"crosswalk-{key}-{direction_key}-cyc",
+                                className="fw-bold text-success",
+                                style=crosswalk_value_style,
+                            ),
+                        ],
+                        className="d-flex justify-content-between align-items-baseline",
+                    ),
+                ]
+            )
         crosswalk_cards.append(
             dbc.Col(
                 dbc.Card(
                     dbc.CardBody(
                         [
                             html.Div(cw["name"], className="text-muted", style=crosswalk_name_style),
-                            html.Div(
-                                [
-                                    html.Span(
-                                        "Pedestrians",
-                                        className="small text-uppercase text-muted",
-                                    ),
-                                    html.Span(
-                                        "0",
-                                        id=f"crosswalk-{key}-ped",
-                                        className="fw-bold text-primary",
-                                        style=crosswalk_value_style,
-                                    ),
-                                ],
-                                className="d-flex justify-content-between align-items-baseline mt-2",
-                            ),
-                            html.Div(
-                                [
-                                    html.Span(
-                                        "Cyclists",
-                                        className="small text-uppercase text-muted",
-                                    ),
-                                    html.Span(
-                                        "0",
-                                        id=f"crosswalk-{key}-cyc",
-                                        className="fw-bold text-success",
-                                        style=crosswalk_value_style,
-                                    ),
-                                ],
-                                className="d-flex justify-content-between align-items-baseline",
-                            ),
+                            *direction_blocks,
                         ]
                     ),
                     className="shadow-sm h-100",
@@ -1378,7 +1529,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     className="d-flex justify-content-end",
                 ),
                 html.Div(
-                    "Crosswalk Counts (both directions)",
+                    "Crosswalk Counts (by direction)",
                     className="text-muted fw-semibold",
                     style={"fontSize": "0.9rem"},
                 ),
@@ -1454,12 +1605,14 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         Output("cyc-count", "children"),
         Output("start-time", "children"),
         *[
-            Output(f"crosswalk-{cw['key']}-ped", "children")
+            Output(f"crosswalk-{cw['key']}-{direction}-ped", "children")
             for cw in initial_crosswalks
+            for direction in direction_display_keys
         ],
         *[
-            Output(f"crosswalk-{cw['key']}-cyc", "children")
+            Output(f"crosswalk-{cw['key']}-{direction}-cyc", "children")
             for cw in initial_crosswalks
+            for direction in direction_display_keys
         ],
         Input("stat-timer", "n_intervals"),
         State("url", "search"),
@@ -1471,15 +1624,23 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         ped, cyc, start_str, crosswalk_counts = worker.get_stats()
         outputs: List[str] = [str(ped), str(cyc), (start_str or "—")]
         for cw in initial_crosswalks:
-            counts = crosswalk_counts.get(
-                cw["key"], {"pedestrians": 0, "cyclists": 0}
+            counts_by_direction = crosswalk_counts.get(
+                cw["key"], _empty_direction_counts()
             )
-            outputs.append(str(counts.get("pedestrians", 0)))
+            for direction_key in direction_display_keys:
+                direction_counts = counts_by_direction.get(
+                    direction_key, {"pedestrians": 0, "cyclists": 0}
+                )
+                outputs.append(str(direction_counts.get("pedestrians", 0)))
         for cw in initial_crosswalks:
-            counts = crosswalk_counts.get(
-                cw["key"], {"pedestrians": 0, "cyclists": 0}
+            counts_by_direction = crosswalk_counts.get(
+                cw["key"], _empty_direction_counts()
             )
-            outputs.append(str(counts.get("cyclists", 0)))
+            for direction_key in direction_display_keys:
+                direction_counts = counts_by_direction.get(
+                    direction_key, {"pedestrians": 0, "cyclists": 0}
+                )
+                outputs.append(str(direction_counts.get("cyclists", 0)))
         return outputs
 
     @app.callback(

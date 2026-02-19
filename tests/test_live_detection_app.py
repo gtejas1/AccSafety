@@ -125,8 +125,14 @@ def test_persist_counts_logs_and_resets_engine_on_failure(live_detection, caplog
     worker = object.__new__(live_detection.VideoWorker)
     worker._last_save_ts = 0
     worker.save_interval = 0
+    worker.table_name = "dummy_table"
     worker._pending_totals = {"pedestrians": 1, "cyclists": 2}
-    worker._pending_crosswalk_counts = {"north": {"pedestrians": 1, "cyclists": 0}}
+    worker._pending_crosswalk_counts = {
+        "north": {
+            "neg_to_pos": {"pedestrians": 1, "cyclists": 0},
+            "pos_to_neg": {"pedestrians": 0, "cyclists": 0},
+        }
+    }
     worker._interval_start = datetime.utcnow()
 
     live_detection.ENGINE = _DummyEngine(should_fail=True)
@@ -137,7 +143,12 @@ def test_persist_counts_logs_and_resets_engine_on_failure(live_detection, caplog
     assert any("Failed to persist live detection counts" in rec.message for rec in caplog.records)
     assert live_detection.ENGINE is None
     assert worker._pending_totals == {"pedestrians": 1, "cyclists": 2}
-    assert worker._pending_crosswalk_counts == {"north": {"pedestrians": 1, "cyclists": 0}}
+    assert worker._pending_crosswalk_counts == {
+        "north": {
+            "neg_to_pos": {"pedestrians": 1, "cyclists": 0},
+            "pos_to_neg": {"pedestrians": 0, "cyclists": 0},
+        }
+    }
     assert live_detection._ENGINE_LAST_FAIL_TS > 0
 
 
@@ -148,7 +159,12 @@ def test_build_counts_csv_bytes_serializes_rows(live_detection):
             "interval_end": datetime(2024, 1, 1, 0, 5, 0),
             "total_pedestrians": 3,
             "total_cyclists": 1,
-            "crosswalk_counts": {"north": {"pedestrians": 3, "cyclists": 1}},
+            "crosswalk_counts": {
+                "north": {
+                    "neg_to_pos": {"pedestrians": 2, "cyclists": 0},
+                    "pos_to_neg": {"pedestrians": 1, "cyclists": 1},
+                }
+            },
         }
     ]
 
@@ -159,6 +175,7 @@ def test_build_counts_csv_bytes_serializes_rows(live_detection):
 
     text = payload.decode("utf-8")
     assert "interval_start" in text
+    assert "crosswalk_counts_by_direction" in text
     assert "north" in text
 
 
@@ -196,7 +213,12 @@ def test_download_counts_route_returns_csv(monkeypatch, live_detection):
             "interval_end": datetime(2024, 1, 1, 0, 5, 0),
             "total_pedestrians": 2,
             "total_cyclists": 0,
-            "crosswalk_counts": {"north": {"pedestrians": 2, "cyclists": 0}},
+            "crosswalk_counts": {
+                "north": {
+                    "neg_to_pos": {"pedestrians": 2, "cyclists": 0},
+                    "pos_to_neg": {"pedestrians": 0, "cyclists": 0},
+                }
+            },
         }
     ]
     live_detection.ENGINE = _DummyEngine(rows=rows)
@@ -213,3 +235,4 @@ def test_download_counts_route_returns_csv(monkeypatch, live_detection):
     assert resp.mimetype == "text/csv"
     resp.direct_passthrough = False
     assert b"interval_start" in resp.get_data()
+    assert b"crosswalk_counts_by_direction" in resp.get_data()
