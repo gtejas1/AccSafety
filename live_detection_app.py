@@ -1059,8 +1059,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
 
     # ── UI Layout: Video + cumulative stats ───────────────────────────────────
     crosswalk_cards: List[dbc.Col] = []
-    crosswalk_name_style = {"fontSize": "0.85rem"}
-    crosswalk_value_style = {"fontSize": "1.15rem"}
+    crosswalk_name_style = {"fontSize": "0.78rem"}
+    crosswalk_value_style = {"fontSize": "1.0rem"}
     for cw in initial_crosswalks:
         key = cw["key"]
         crosswalk_cards.append(
@@ -1082,7 +1082,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                                         style=crosswalk_value_style,
                                     ),
                                 ],
-                                className="d-flex justify-content-between align-items-baseline mt-2",
+                                className="d-flex justify-content-between align-items-baseline mt-1",
                             ),
                             html.Div(
                                 [
@@ -1274,7 +1274,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         for cw in initial_crosswalks
     ]
 
-    panel_height = "min(66vh, 640px)"
+    panel_height = "calc(100vh - 190px)"
 
     crosswalk_line_controls = dbc.Card(
         dbc.CardBody(
@@ -1366,7 +1366,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     )
 
     trend_graph_style = {
-        "height": "260px",
+        "height": "190px",
         "border": "1px solid rgba(0, 0, 0, 0.08)",
         "borderRadius": "0.5rem",
         "backgroundColor": "#ffffff",
@@ -1410,7 +1410,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 ),
                 dbc.Row(
                     crosswalk_cards,
-                    class_name="g-3 row-cols-1 row-cols-sm-2",
+                    class_name="g-2 row-cols-2",
                 ),
                 dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
             ],
@@ -1428,11 +1428,12 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 style={
                     "width": "100%",
                     "height": "100%",
-                    "objectFit": "cover",
+                    "objectFit": "contain",
                     "objectPosition": "center",
                 },
             ),
             className="w-100 h-100 overflow-hidden",
+            style={"backgroundColor": "#000"},
         ),
         className="shadow-sm h-100 w-100 overflow-hidden",
         style={"height": panel_height},
