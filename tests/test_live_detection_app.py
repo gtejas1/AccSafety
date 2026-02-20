@@ -161,6 +161,8 @@ def test_build_counts_csv_bytes_serializes_rows(live_detection):
     text = payload.decode("utf-8")
     assert "interval_start" in text
     assert "north" in text
+    assert "crosswalk_counts" not in text
+    assert text.strip().splitlines()[1].endswith(",4")
 
 
 def test_download_counts_route_returns_csv(monkeypatch, live_detection):

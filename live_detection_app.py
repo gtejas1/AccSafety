@@ -220,6 +220,14 @@ def _build_counts_csv_bytes(table_name: str = DEFAULT_TABLE_NAME) -> bytes:
             )
         ).mappings().all()
 
+    crosswalk_keys = sorted(
+        {
+            str(key)
+            for row in rows
+            for key in (row.get("crosswalk_counts") or {}).keys()
+        }
+    )
+
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(
@@ -228,17 +236,22 @@ def _build_counts_csv_bytes(table_name: str = DEFAULT_TABLE_NAME) -> bytes:
             "interval_end",
             "total_pedestrians",
             "total_cyclists",
-            "crosswalk_counts",
+            *crosswalk_keys,
         ]
     )
     for row in rows:
+        crosswalk_counts = row.get("crosswalk_counts") or {}
         writer.writerow(
             [
                 row.get("interval_start"),
                 row.get("interval_end"),
                 row.get("total_pedestrians"),
                 row.get("total_cyclists"),
-                json.dumps(row.get("crosswalk_counts") or {}),
+                *[
+                    int((crosswalk_counts.get(key) or {}).get("pedestrians", 0))
+                    + int((crosswalk_counts.get(key) or {}).get("cyclists", 0))
+                    for key in crosswalk_keys
+                ],
             ]
         )
 
