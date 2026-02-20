@@ -12,6 +12,7 @@ import time
 import threading
 import math
 import json
+from collections import deque
 from typing import Optional, List, Dict, Tuple, Any
 from datetime import datetime, timedelta
 from urllib.parse import parse_qs
@@ -24,6 +25,7 @@ import dash
 from dash import html, dcc
 from dash.dependencies import Input, Output, State
 import dash_bootstrap_components as dbc
+import plotly.graph_objects as go
 
 from sqlalchemy import JSON, bindparam, create_engine, text
 
@@ -218,6 +220,14 @@ def _build_counts_csv_bytes(table_name: str = DEFAULT_TABLE_NAME) -> bytes:
             )
         ).mappings().all()
 
+    crosswalk_keys = sorted(
+        {
+            str(key)
+            for row in rows
+            for key in (row.get("crosswalk_counts") or {}).keys()
+        }
+    )
+
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(
@@ -226,17 +236,22 @@ def _build_counts_csv_bytes(table_name: str = DEFAULT_TABLE_NAME) -> bytes:
             "interval_end",
             "total_pedestrians",
             "total_cyclists",
-            "crosswalk_counts",
+            *crosswalk_keys,
         ]
     )
     for row in rows:
+        crosswalk_counts = row.get("crosswalk_counts") or {}
         writer.writerow(
             [
                 row.get("interval_start"),
                 row.get("interval_end"),
                 row.get("total_pedestrians"),
                 row.get("total_cyclists"),
-                json.dumps(row.get("crosswalk_counts") or {}),
+                *[
+                    int((crosswalk_counts.get(key) or {}).get("pedestrians", 0))
+                    + int((crosswalk_counts.get(key) or {}).get("cyclists", 0))
+                    for key in crosswalk_keys
+                ],
             ]
         )
 
@@ -991,6 +1006,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         return LIVE_DETECTION_LOCATIONS[location_key]
 
     initial_crosswalks = _get_worker(None).get_crosswalk_config()
+    trend_history: Dict[str, deque] = {}
 
     def _video_feed():
         search = f"?{request.query_string.decode()}" if request.query_string else ""
@@ -1056,8 +1072,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
 
     # ── UI Layout: Video + cumulative stats ───────────────────────────────────
     crosswalk_cards: List[dbc.Col] = []
-    crosswalk_name_style = {"fontSize": "0.85rem"}
-    crosswalk_value_style = {"fontSize": "1.15rem"}
+    crosswalk_name_style = {"fontSize": "0.78rem"}
+    crosswalk_value_style = {"fontSize": "1.0rem"}
     for cw in initial_crosswalks:
         key = cw["key"]
         crosswalk_cards.append(
@@ -1079,7 +1095,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                                         style=crosswalk_value_style,
                                     ),
                                 ],
-                                className="d-flex justify-content-between align-items-baseline mt-2",
+                                className="d-flex justify-content-between align-items-baseline mt-1",
                             ),
                             html.Div(
                                 [
@@ -1271,7 +1287,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         for cw in initial_crosswalks
     ]
 
-    panel_height = "72vh"
+    panel_height = "calc(100vh - 190px)"
 
     crosswalk_line_controls = dbc.Card(
         dbc.CardBody(
@@ -1321,7 +1337,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         dbc.CardBody(
             [
                 html.Small(
-                    "Pedestrians Detected",
+                    "Total Pedestrians",
                     className="text-muted text-uppercase",
                     style=metric_title_style,
                 ),
@@ -1340,7 +1356,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         dbc.CardBody(
             [
                 html.Small(
-                    "Cyclists Detected",
+                    "Total Cyclists",
                     className="text-muted text-uppercase",
                     style=metric_title_style,
                 ),
@@ -1362,6 +1378,14 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         className="ms-auto",
     )
 
+    trend_graph_style = {
+        "height": "190px",
+        "border": "1px solid rgba(0, 0, 0, 0.08)",
+        "borderRadius": "0.5rem",
+        "backgroundColor": "#ffffff",
+        "padding": "0.25rem",
+    }
+
     counts_panel = dbc.Card(
         dbc.CardBody(
             [
@@ -1378,17 +1402,32 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     className="d-flex justify-content-end",
                 ),
                 html.Div(
+                    "Last 24 Hours Trend",
+                    className="text-muted fw-semibold",
+                    style={"fontSize": "0.9rem"},
+                ),
+                dcc.Graph(
+                    id="counts-trend-graph",
+                    style=trend_graph_style,
+                    config={"displayModeBar": False, "responsive": True},
+                ),
+                html.Div(
                     "Crosswalk Counts (both directions)",
                     className="text-muted fw-semibold",
                     style={"fontSize": "0.9rem"},
                 ),
+                dcc.Graph(
+                    id="crosswalk-trend-graph",
+                    style=trend_graph_style,
+                    config={"displayModeBar": False, "responsive": True},
+                ),
                 dbc.Row(
                     crosswalk_cards,
-                    class_name="g-3 row-cols-1 row-cols-sm-2",
+                    class_name="g-2 row-cols-2",
                 ),
                 dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
             ],
-            className="d-flex flex-column gap-3",
+            className="d-flex flex-column gap-2",
         ),
         className="shadow-sm h-100 w-100",
         style={"height": panel_height, "overflowY": "auto"},
@@ -1402,11 +1441,12 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 style={
                     "width": "100%",
                     "height": "100%",
-                    "objectFit": "cover",
+                    "objectFit": "contain",
                     "objectPosition": "center",
                 },
             ),
             className="w-100 h-100 overflow-hidden",
+            style={"backgroundColor": "#000"},
         ),
         className="shadow-sm h-100 w-100 overflow-hidden",
         style={"height": panel_height},
@@ -1427,11 +1467,11 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     ),
                     dbc.Row(
                         [
-                            dbc.Col(video_panel, lg=5, className="d-flex"),
-                            dbc.Col(counts_panel, lg=4, className="d-flex"),
-                            dbc.Col(crosswalk_line_controls, lg=3, className="d-flex"),
+                            dbc.Col(video_panel, lg=12, xl=5, className="d-flex"),
+                            dbc.Col(counts_panel, lg=6, xl=4, className="d-flex"),
+                            dbc.Col(crosswalk_line_controls, lg=6, xl=3, className="d-flex"),
                         ],
-                        class_name="g-3 gy-4 gy-lg-0 align-items-stretch",
+                        class_name="g-3 gy-3 align-items-stretch",
                     ),
                 ],
                 class_name="app-card--wide",
@@ -1453,6 +1493,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         Output("ped-count", "children"),
         Output("cyc-count", "children"),
         Output("start-time", "children"),
+        Output("counts-trend-graph", "figure"),
+        Output("crosswalk-trend-graph", "figure"),
         *[
             Output(f"crosswalk-{cw['key']}-ped", "children")
             for cw in initial_crosswalks
@@ -1466,10 +1508,87 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         prevent_initial_call=False,
     )
     def _update_stats(_, search):
+        def _base_trend_figure(title: str) -> go.Figure:
+            figure = go.Figure()
+            figure.update_layout(
+                title={"text": title, "x": 0.01, "xanchor": "left", "font": {"size": 13}},
+                plot_bgcolor="#ffffff",
+                paper_bgcolor="#ffffff",
+                margin={"l": 42, "r": 16, "t": 44, "b": 36},
+                hovermode="x unified",
+                legend={"orientation": "h", "yanchor": "bottom", "y": 1.03, "x": 0},
+                xaxis={"title": "Time", "showgrid": True, "gridcolor": "rgba(30, 41, 59, 0.08)"},
+                yaxis={"title": "Count", "showgrid": True, "gridcolor": "rgba(30, 41, 59, 0.08)"},
+            )
+            return figure
+
         worker = _get_worker(search)
         worker.start()
-        ped, cyc, start_str, crosswalk_counts = worker.get_stats()
-        outputs: List[str] = [str(ped), str(cyc), (start_str or "—")]
+        _ped, _cyc, start_str, crosswalk_counts = worker.get_stats()
+
+        total_ped = sum(counts.get("pedestrians", 0) for counts in crosswalk_counts.values())
+        total_cyc = sum(counts.get("cyclists", 0) for counts in crosswalk_counts.values())
+
+        location_key = _resolve_location_key(search)
+        now = datetime.utcnow()
+        history = trend_history.setdefault(location_key, deque(maxlen=2000))
+        history.append(
+            {
+                "timestamp": now,
+                "pedestrians": total_ped,
+                "cyclists": total_cyc,
+                "crosswalk_total": sum(
+                    (counts.get("pedestrians", 0) + counts.get("cyclists", 0))
+                    for counts in crosswalk_counts.values()
+                ),
+            }
+        )
+        cutoff = now - timedelta(hours=24)
+        filtered = [point for point in history if point["timestamp"] >= cutoff]
+
+        counts_fig = _base_trend_figure("Last 24 Hours Trend")
+        crosswalk_fig = _base_trend_figure("Crosswalk Activity")
+
+        if filtered:
+            timestamps = [point["timestamp"] for point in filtered]
+            counts_fig.add_trace(
+                go.Scatter(
+                    x=timestamps,
+                    y=[point["pedestrians"] for point in filtered],
+                    mode="lines+markers",
+                    name="Pedestrians",
+                    line={"color": "#0d6efd", "width": 2.4, "shape": "spline", "smoothing": 0.5},
+                    marker={"size": 5},
+                )
+            )
+            counts_fig.add_trace(
+                go.Scatter(
+                    x=timestamps,
+                    y=[point["cyclists"] for point in filtered],
+                    mode="lines+markers",
+                    name="Cyclists",
+                    line={"color": "#198754", "width": 2.4, "shape": "spline", "smoothing": 0.5},
+                    marker={"size": 5},
+                )
+            )
+            crosswalk_fig.add_trace(
+                go.Scatter(
+                    x=timestamps,
+                    y=[point["crosswalk_total"] for point in filtered],
+                    mode="lines+markers",
+                    name="Crosswalk Total",
+                    line={"color": "#6f42c1", "width": 2.2, "shape": "spline", "smoothing": 0.45},
+                    marker={"size": 4},
+                )
+            )
+
+        outputs: List[Any] = [
+            str(total_ped),
+            str(total_cyc),
+            (start_str or "—"),
+            counts_fig,
+            crosswalk_fig,
+        ]
         for cw in initial_crosswalks:
             counts = crosswalk_counts.get(
                 cw["key"], {"pedestrians": 0, "cyclists": 0}
