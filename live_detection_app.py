@@ -1274,7 +1274,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         for cw in initial_crosswalks
     ]
 
-    panel_height = "72vh"
+    panel_height = "min(66vh, 640px)"
 
     crosswalk_line_controls = dbc.Card(
         dbc.CardBody(
@@ -1366,7 +1366,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     )
 
     trend_graph_style = {
-        "height": "290px",
+        "height": "260px",
         "border": "1px solid rgba(0, 0, 0, 0.08)",
         "borderRadius": "0.5rem",
         "backgroundColor": "#ffffff",
@@ -1414,7 +1414,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 ),
                 dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
             ],
-            className="d-flex flex-column gap-3",
+            className="d-flex flex-column gap-2",
         ),
         className="shadow-sm h-100 w-100",
         style={"height": panel_height, "overflowY": "auto"},
@@ -1453,11 +1453,11 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     ),
                     dbc.Row(
                         [
-                            dbc.Col(video_panel, lg=5, className="d-flex"),
-                            dbc.Col(counts_panel, lg=4, className="d-flex"),
-                            dbc.Col(crosswalk_line_controls, lg=3, className="d-flex"),
+                            dbc.Col(video_panel, lg=12, xl=5, className="d-flex"),
+                            dbc.Col(counts_panel, lg=6, xl=4, className="d-flex"),
+                            dbc.Col(crosswalk_line_controls, lg=6, xl=3, className="d-flex"),
                         ],
-                        class_name="g-3 gy-4 gy-lg-0 align-items-stretch",
+                        class_name="g-3 gy-3 align-items-stretch",
                     ),
                 ],
                 class_name="app-card--wide",
