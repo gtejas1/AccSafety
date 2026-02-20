@@ -533,7 +533,7 @@ class VideoWorker:
                 aggregated["cyclists"] += int(counts.get("cyclists", 0) or 0)
 
         with self.stats_lock:
-            self.total_counts = {"pedestrians": total_ped, "cyclists": cyc}
+            self.total_counts = {"pedestrians": ped, "cyclists": cyc}
             if start_ts and self.start_time is None:
                 self.start_time = start_ts
             for key in list(self.crosswalk_counts.keys()):
