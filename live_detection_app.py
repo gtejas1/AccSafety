@@ -520,7 +520,7 @@ class VideoWorker:
                 aggregated["cyclists"] += int(counts.get("cyclists", 0) or 0)
 
         with self.stats_lock:
-            self.total_counts = {"pedestrians": ped, "cyclists": cyc}
+            self.total_counts = {"pedestrians": total_ped, "cyclists": cyc}
             if start_ts and self.start_time is None:
                 self.start_time = start_ts
             for key in list(self.crosswalk_counts.keys()):
@@ -1324,7 +1324,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         dbc.CardBody(
             [
                 html.Small(
-                    "Pedestrians Detected",
+                    "Total Pedestrians",
                     className="text-muted text-uppercase",
                     style=metric_title_style,
                 ),
@@ -1343,7 +1343,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         dbc.CardBody(
             [
                 html.Small(
-                    "Cyclists Detected",
+                    "Total Cyclists",
                     className="text-muted text-uppercase",
                     style=metric_title_style,
                 ),
@@ -1511,7 +1511,10 @@ def create_live_detection_app(server, prefix: str = "/live/"):
 
         worker = _get_worker(search)
         worker.start()
-        ped, cyc, start_str, crosswalk_counts = worker.get_stats()
+        _ped, _cyc, start_str, crosswalk_counts = worker.get_stats()
+
+        total_ped = sum(counts.get("pedestrians", 0) for counts in crosswalk_counts.values())
+        total_cyc = sum(counts.get("cyclists", 0) for counts in crosswalk_counts.values())
 
         location_key = _resolve_location_key(search)
         now = datetime.utcnow()
@@ -1519,8 +1522,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         history.append(
             {
                 "timestamp": now,
-                "pedestrians": ped,
-                "cyclists": cyc,
+                "pedestrians": total_ped,
+                "cyclists": total_cyc,
                 "crosswalk_total": sum(
                     (counts.get("pedestrians", 0) + counts.get("cyclists", 0))
                     for counts in crosswalk_counts.values()
@@ -1567,8 +1570,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             )
 
         outputs: List[Any] = [
-            str(ped),
-            str(cyc),
+            str(total_ped),
+            str(total_cyc),
             (start_str or "—"),
             counts_fig,
             crosswalk_fig,
