@@ -128,6 +128,7 @@ def test_persist_counts_logs_and_resets_engine_on_failure(live_detection, caplog
     worker._pending_totals = {"pedestrians": 1, "cyclists": 2}
     worker._pending_crosswalk_counts = {"north": {"pedestrians": 1, "cyclists": 0}}
     worker._interval_start = datetime.utcnow()
+    worker.table_name = live_detection.DEFAULT_TABLE_NAME
 
     live_detection.ENGINE = _DummyEngine(should_fail=True)
     live_detection._ENGINE_LAST_FAIL_TS = 0
@@ -160,6 +161,8 @@ def test_build_counts_csv_bytes_serializes_rows(live_detection):
     text = payload.decode("utf-8")
     assert "interval_start" in text
     assert "north" in text
+    assert "crosswalk_counts" not in text
+    assert text.strip().splitlines()[1].endswith(",4")
 
 
 def test_download_counts_route_returns_csv(monkeypatch, live_detection):
