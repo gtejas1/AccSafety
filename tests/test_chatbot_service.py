@@ -49,7 +49,7 @@ def test_retrieval_empty_returns_no_evidence_and_skips_provider():
     assert provider.calls == []
 
 
-def test_citations_present_when_evidence_exists():
+def test_citations_hidden_when_evidence_exists():
     provider = StubProvider(
         response=ChatProviderResponse(answer="Found one site.", model="stub", sources=[])
     )
@@ -79,8 +79,7 @@ def test_citations_present_when_evidence_exists():
     payload = service.generate_reply(message="show counts at Main St", history=[])
 
     assert payload["status"] == "ok"
-    assert payload["citations"]
-    assert payload["citations"][0]["source"] == "Portal Source"
+    assert payload["citations"] == []
     assert provider.calls
 
 

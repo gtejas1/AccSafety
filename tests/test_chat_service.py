@@ -45,7 +45,7 @@ def test_generate_reply_no_evidence_short_circuits_provider():
     assert provider.calls == []
 
 
-def test_generate_reply_includes_constraint_prompt_and_citations():
+def test_generate_reply_includes_constraint_prompt_without_citations():
     provider = StubProvider()
     retriever = StubRetriever(
         RetrievalResultStub(
@@ -71,7 +71,7 @@ def test_generate_reply_includes_constraint_prompt_and_citations():
     )
 
     assert payload["status"] == "ok"
-    assert payload["citations"] == [{"title": "Sample Site", "source": "Sample Source"}]
+    assert payload["citations"] == []
     assert provider.calls
     first_history = provider.calls[0]["history"]
     assert first_history[0]["role"] == "system"

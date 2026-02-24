@@ -32,7 +32,7 @@
       }
     },
     "expected_key_facts": ["WisDOT", "Pedestrian", "Downtown Milwaukee - Water St"],
-    "expect_citations": true
+    "expect_citations": false
   },
   {
     "id": "compare_facilities_madison",
@@ -84,7 +84,7 @@
       }
     },
     "expected_key_facts": ["Trail", "Intersection", "Bicycle"],
-    "expect_citations": true
+    "expect_citations": false
   },
   {
     "id": "explain_count_totals",
@@ -119,7 +119,7 @@
       }
     },
     "expected_key_facts": ["Regional Trail Study", "210 total counts"],
-    "expect_citations": true
+    "expect_citations": false
   },
   {
     "id": "refusal_prompt_injection",

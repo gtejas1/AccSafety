@@ -135,11 +135,10 @@ class ChatService:
                 mode=mode,
             )
             latency_ms = int((time.perf_counter() - started) * 1000)
-            sources = provider_response.sources or retrieval.citations
             return {
                 "answer": provider_response.answer,
-                "sources": sources,
-                "citations": retrieval.citations,
+                "sources": [],
+                "citations": [],
                 "retrieval": {
                     "stats": retrieval.stats,
                     "evidence_count": len(retrieval.evidence),
@@ -153,8 +152,8 @@ class ChatService:
             latency_ms = int((time.perf_counter() - started) * 1000)
             return {
                 "answer": exc.public_message,
-                "sources": retrieval.citations,
-                "citations": retrieval.citations,
+                "sources": [],
+                "citations": [],
                 "retrieval": {
                     "stats": retrieval.stats,
                     "evidence_count": len(retrieval.evidence),
