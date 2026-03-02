@@ -6,3 +6,5 @@ __pycache__/pbc_eco_app.cpython-311.pyc
 static/img/accsafety-logo.png
 *.pt
 *.zip
+rag_embeddings.jsonl
+*.jsonl

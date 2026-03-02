@@ -128,6 +128,7 @@ def test_persist_counts_logs_and_resets_engine_on_failure(live_detection, caplog
     worker._pending_totals = {"pedestrians": 1, "cyclists": 2}
     worker._pending_crosswalk_counts = {"north": {"pedestrians": 1, "cyclists": 0}}
     worker._interval_start = datetime.utcnow()
+    worker.table_name = live_detection.DEFAULT_TABLE_NAME
 
     live_detection.ENGINE = _DummyEngine(should_fail=True)
     live_detection._ENGINE_LAST_FAIL_TS = 0
@@ -160,9 +161,13 @@ def test_build_counts_csv_bytes_serializes_rows(live_detection):
     text = payload.decode("utf-8")
     assert "interval_start" in text
     assert "north" in text
+    assert "crosswalk_counts" not in text
+    assert text.strip().splitlines()[1].endswith(",4")
 
 
 def test_download_counts_route_returns_csv(monkeypatch, live_detection):
+    starts = {"count": 0}
+
     class _Worker:
         def __init__(self, *_):
             self._config = [
@@ -170,6 +175,7 @@ def test_download_counts_route_returns_csv(monkeypatch, live_detection):
             ]
 
         def start(self):
+            starts["count"] += 1
             return None
 
         def get_crosswalk_config(self):
@@ -200,6 +206,7 @@ def test_download_counts_route_returns_csv(monkeypatch, live_detection):
     live_detection._ENGINE_LAST_FAIL_TS = 0
 
     live_detection.create_live_detection_app(server, prefix="/dl/")
+    assert starts["count"] == len(live_detection.LIVE_DETECTION_LOCATIONS)
     endpoint = server.view_functions["live_detection_download_dl"]
 
     with server.test_request_context():

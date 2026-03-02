@@ -1,5 +1,15 @@
 [
   {
+    "version": "1.8",
+    "date": "2026-02-18",
+    "highlights": [
+      "Location search and mapping were enhanced with a more seamless search experience.",
+      "UW–Whitewater support was added across the portal, including dedicated live detection coverage and customizable crosswalk settings for each intersection.",
+      "A secure in-portal chatbot experience was introduced, providing authenticated, context-aware answers with appropriate access controls and activity logging.",
+      "Live Detection is now more reliable and stable, with improved data handling, smoother count downloads, and automatic startup so counting services are ready as soon as the app launches."
+    ]
+  },
+  {
     "version": "1.7",
     "date": "2025-12-12",
     "highlights": [
@@ -30,7 +40,7 @@
     "date": "2025-11-05",
     "highlights": [
       "Added logo to the portal header for stronger branding."
-      ]
+    ]
   },
   {
     "version": "1.3",
