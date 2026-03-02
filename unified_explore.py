@@ -442,6 +442,21 @@ def _arcgis_embedded_map_component(
     srcdoc = f"""<!doctype html>
 <html lang="en">
   <head>
+<!-- Matomo -->
+<script>
+  var _paq = window._paq = window._paq || [];
+  /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+  _paq.push(['trackPageView']);
+  _paq.push(['enableLinkTracking']);
+  (function() {{
+    var u="//129.89.34.10/";
+    _paq.push(['setTrackerUrl', u+'matomo.php']);
+    _paq.push(['setSiteId', '1']);
+    var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+    g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+  }})();
+</script>
+<!-- End Matomo Code -->
     <meta charset="utf-8"/>
     <meta name="viewport" content="width=device-width,initial-scale=1"/>
     <script type="module" src="{ARCGIS_EMBED_SCRIPT_SRC}"></script>
@@ -501,6 +516,21 @@ def _trail_crossing_embedded_map(container_id: str = "trail-crossing-map") -> ht
     srcdoc = f"""<!doctype html>
 <html lang=\"en\">
   <head>
+  <!-- Matomo -->
+  <script>
+    var _paq = window._paq = window._paq || [];
+    /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+    _paq.push(['trackPageView']);
+    _paq.push(['enableLinkTracking']);
+    (function() {{
+      var u="//129.89.34.10/";
+      _paq.push(['setTrackerUrl', u+'matomo.php']);
+      _paq.push(['setSiteId', '1']);
+      var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+      g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+    }})();
+  </script>
+  <!-- End Matomo Code -->
     <meta charset=\"utf-8\"/>
     <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>
     <script type=\"module\" src=\"{TRAIL_CROSS_SCRIPT_SRC}\"></script>
@@ -538,6 +568,21 @@ def _pilot_intersection_map(container_id: str = "bicyclist-pilot-map") -> html.I
     srcdoc = f"""<!doctype html>
 <html lang=\"en\">
   <head>
+  <!-- Matomo -->
+  <script>
+    var _paq = window._paq = window._paq || [];
+    /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+    _paq.push(['trackPageView']);
+    _paq.push(['enableLinkTracking']);
+    (function() {{
+      var u="//129.89.34.10/";
+      _paq.push(['setTrackerUrl', u+'matomo.php']);
+      _paq.push(['setSiteId', '1']);
+      var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+      g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+    }})();
+  </script>
+  <!-- End Matomo Code -->
     <meta charset=\"utf-8\"/>
     <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>
     <script type=\"module\" src=\"{BICYCLIST_PILOT_SCRIPT_SRC}\"></script>
@@ -583,6 +628,21 @@ def _pilot_arcgis_map(
     srcdoc = f"""<!doctype html>
 <html lang=\"en\">
   <head>
+  <!-- Matomo -->
+  <script>
+    var _paq = window._paq = window._paq || [];
+    /* tracker methods like "setCustomDimension" should be called before "trackPageView" */
+    _paq.push(['trackPageView']);
+    _paq.push(['enableLinkTracking']);
+    (function() {{
+      var u="//129.89.34.10/";
+      _paq.push(['setTrackerUrl', u+'matomo.php']);
+      _paq.push(['setSiteId', '1']);
+      var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];
+      g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);
+    }})();
+  </script>
+  <!-- End Matomo Code -->
     <meta charset=\"utf-8\"/>
     <meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"/>
     <script type=\"module\" src=\"{script_src}\"></script>
