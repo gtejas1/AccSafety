@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from urllib.parse import parse_qs
 
 import cv2
-from flask import Response, send_file, request
+from flask import Response, send_file, request, session as flask_session
 from ultralytics import YOLO
 
 import dash
@@ -123,6 +123,13 @@ ENGINE: Optional[Any] = None
 _ENGINE_LOCK = threading.Lock()
 _ENGINE_LAST_FAIL_TS = 0.0
 _LOGGER = logging.getLogger(__name__)
+
+
+def _current_user_is_admin() -> bool:
+    roles = flask_session.get("roles") or []
+    if isinstance(roles, str):
+        roles = [roles]
+    return any(str(role).strip().lower() == "admin" for role in roles)
 
 
 def _quote_table_name(table_name: str) -> str:
@@ -1340,6 +1347,12 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     "Use the controls below to move, rotate, or resize each crosswalk line in small increments.",
                     className="text-muted",
                 ),
+                html.Div(
+                    "Admin access required to adjust crosswalk lines.",
+                    id="crosswalk-admin-message",
+                    className="text-muted",
+                    style={"display": "none"},
+                ),
                 dbc.Accordion(
                     control_items,
                     start_collapsed=True,
@@ -1349,6 +1362,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 dcc.Store(id="crosswalk-config-store", data=crosswalk_store_payload),
             ]
         ),
+        id="crosswalk-line-controls",
         className="shadow-sm h-100 w-100",
         style={"height": panel_height, "overflowY": "auto"},
     )
@@ -1533,6 +1547,21 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         return f"{route_path}{search or ''}", location_config["title"]
 
     @app.callback(
+        Output("crosswalk-line-controls", "style"),
+        Output("crosswalk-adjust-accordion", "style"),
+        Output("crosswalk-admin-message", "style"),
+        Input("url", "search"),
+        prevent_initial_call=False,
+    )
+    def _update_crosswalk_control_visibility(_search):
+        base_style = {"height": panel_height, "overflowY": "auto"}
+        if _current_user_is_admin():
+            return base_style, {"display": "block"}, {"display": "none"}
+        hidden_style = dict(base_style)
+        hidden_style["display"] = "none"
+        return hidden_style, {"display": "none"}, {"display": "none"}
+
+    @app.callback(
         Output("ped-count", "children"),
         Output("cyc-count", "children"),
         Output("start-time", "children"),
@@ -1670,6 +1699,9 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         prevent_initial_call=False,
     )
     def _apply_crosswalk_adjustments(*_unused):
+        if not _current_user_is_admin():
+            raise dash.exceptions.PreventUpdate
+
         search = _unused[-1] if _unused else None
         worker = _get_worker(search)
         worker.start()
