@@ -274,6 +274,21 @@ def _point_side_of_line(point: Tuple[float, float], p1: Tuple[int, int], p2: Tup
     return (x - x1) * (y2 - y1) - (y - y1) * (x2 - x1)
 
 
+def _ccw(a: Tuple[float, float], b: Tuple[float, float], c: Tuple[float, float]) -> bool:
+    """Return True if the points a->b->c are arranged counter-clockwise."""
+    return (c[1] - a[1]) * (b[0] - a[0]) > (b[1] - a[1]) * (c[0] - a[0])
+
+
+def _segments_intersect(
+    a: Tuple[float, float],
+    b: Tuple[float, float],
+    c: Tuple[float, float],
+    d: Tuple[float, float],
+) -> bool:
+    """Return True if line segment AB intersects line segment CD."""
+    return (_ccw(a, c, d) != _ccw(b, c, d)) and (_ccw(a, b, c) != _ccw(a, b, d))
+
+
 def _rotate_point(
     point: Tuple[float, float],
     center: Tuple[float, float],
@@ -366,6 +381,8 @@ class VideoWorker:
         self._counted_ids: Dict[str, set[int]] = {}
         self._track_sides: Dict[int, Dict[str, int]] = {}
         self._track_last_seen: Dict[int, float] = {}
+        self._track_prev_center: Dict[int, Tuple[float, float]] = {}
+        self._track_crossed: Dict[int, set[str]] = {}
         self._reset_tracker_history()
         self.save_interval = SAVE_INTERVAL_SEC
         self._last_save_ts = time.time()
@@ -645,6 +662,8 @@ class VideoWorker:
             self._counted_ids = {group: set() for group in groups}
             self._track_sides = {}
             self._track_last_seen = {}
+            self._track_prev_center = {}
+            self._track_crossed = {}
 
     def clear_totals(self) -> None:
         """Clear cumulative counts and tracker history."""
@@ -657,6 +676,8 @@ class VideoWorker:
             self._counted_ids = {group: set() for group in groups}
             self._track_sides = {}
             self._track_last_seen = {}
+            self._track_prev_center = {}
+            self._track_crossed = {}
             self.crosswalk_counts = {
                 cw["key"]: {"pedestrians": 0, "cyclists": 0} for cw in config_snapshot
             }
@@ -706,6 +727,8 @@ class VideoWorker:
             }
             self._track_sides = {}
             self._track_last_seen = {}
+            self._track_prev_center = {}
+            self._track_crossed = {}
 
         self._persist_crosswalk_config(persist_snapshot)
 
@@ -821,38 +844,56 @@ class VideoWorker:
                     if track_id < 0 or center is None:
                         continue
 
+                    # Per-track crosswalk counting:
+                    # Count a crossing when the track's trajectory segment (prev_center -> center)
+                    # intersects the crosswalk segment, and only once per (track_id, crosswalk).
                     self._track_last_seen[track_id] = timestamp
-                    track_crosswalk_state = self._track_sides.setdefault(track_id, {})
+
+                    prev_center = self._track_prev_center.get(track_id)
+                    self._track_prev_center[track_id] = center
+
+                    if prev_center is None:
+                        continue
+
+                    crossed_set = self._track_crossed.setdefault(track_id, set())
+
                     for key, _, p1, p2, _, length in crosswalk_pixels:
-                        side_val = _point_side_of_line(center, p1, p2)
-                        if side_val == 0:
+                        if key in crossed_set:
                             continue
-                        distance = abs(side_val) / length
+
+                        # Require the *current* center to be near the line to avoid
+                        # far-away segment intersections from noisy trajectories.
+                        side_val = _point_side_of_line(center, p1, p2)
+                        distance = abs(side_val) / (length or 1.0)
                         if distance > CROSSWALK_DISTANCE_THRESHOLD:
                             continue
-                        side = 1 if side_val > 0 else -1
-                        prev_side = track_crosswalk_state.get(key)
-                        if prev_side is None:
-                            track_crosswalk_state[key] = side
+
+                        if not _segments_intersect(
+                            prev_center,
+                            center,
+                            (float(p1[0]), float(p1[1])),
+                            (float(p2[0]), float(p2[1])),
+                        ):
                             continue
-                        if prev_side != side:
-                            track_crosswalk_state[key] = side
-                            counts_for_crosswalk = self.crosswalk_counts.setdefault(
-                                key,
-                                {"pedestrians": 0, "cyclists": 0},
+
+                        crossed_set.add(key)
+
+                        counts_for_crosswalk = self.crosswalk_counts.setdefault(
+                            key,
+                            {"pedestrians": 0, "cyclists": 0},
+                        )
+                        if group == "pedestrian":
+                            counts_for_crosswalk["pedestrians"] += 1
+                            delta_entry = crosswalk_deltas.setdefault(
+                                key, {"pedestrians": 0, "cyclists": 0}
                             )
-                            if group == "pedestrian":
-                                counts_for_crosswalk["pedestrians"] += 1
-                                delta_entry = crosswalk_deltas.setdefault(
-                                    key, {"pedestrians": 0, "cyclists": 0}
-                                )
-                                delta_entry["pedestrians"] += 1
-                            elif group == "cyclist":
-                                counts_for_crosswalk["cyclists"] += 1
-                                delta_entry = crosswalk_deltas.setdefault(
-                                    key, {"pedestrians": 0, "cyclists": 0}
-                                )
-                                delta_entry["cyclists"] += 1
+                            delta_entry["pedestrians"] += 1
+                        elif group == "cyclist":
+                            counts_for_crosswalk["cyclists"] += 1
+                            delta_entry = crosswalk_deltas.setdefault(
+                                key, {"pedestrians": 0, "cyclists": 0}
+                            )
+                            delta_entry["cyclists"] += 1
 
                 for key, delta in deltas.items():
                     if delta:
@@ -869,7 +910,7 @@ class VideoWorker:
         return
 
     def _prune_stale_tracks_locked(self, now_ts: float) -> None:
-        """Remove cached per-track crosswalk state after a timeout."""
+        """Remove cached per-track state after a timeout."""
         stale = [
             track_id
             for track_id, last_seen in self._track_last_seen.items()
@@ -878,6 +919,8 @@ class VideoWorker:
         for track_id in stale:
             self._track_last_seen.pop(track_id, None)
             self._track_sides.pop(track_id, None)
+            self._track_prev_center.pop(track_id, None)
+            self._track_crossed.pop(track_id, None)
 
     def loop(self) -> None:
         """Continuously read frames, run YOLO inference, and update totals."""
