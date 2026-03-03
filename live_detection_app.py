@@ -1611,17 +1611,20 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 "timestamp": now,
                 "pedestrians": total_ped,
                 "cyclists": total_cyc,
-                "crosswalk_total": sum(
-                    (counts.get("pedestrians", 0) + counts.get("cyclists", 0))
-                    for counts in crosswalk_counts.values()
-                ),
+                "crosswalk_totals": {
+                    cw["key"]: (
+                        crosswalk_counts.get(cw["key"], {}).get("pedestrians", 0)
+                        + crosswalk_counts.get(cw["key"], {}).get("cyclists", 0)
+                    )
+                    for cw in initial_crosswalks
+                },
             }
         )
         cutoff = now - timedelta(hours=24)
         filtered = [point for point in history if point["timestamp"] >= cutoff]
 
         counts_fig = _base_trend_figure("Last 24 Hours Trend")
-        crosswalk_fig = _base_trend_figure("Crosswalk Activity")
+        crosswalk_fig = _base_trend_figure("Crosswalk Trend Comparison")
 
         if filtered:
             timestamps = [point["timestamp"] for point in filtered]
@@ -1645,16 +1648,26 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     marker={"size": 5},
                 )
             )
-            crosswalk_fig.add_trace(
-                go.Scatter(
-                    x=timestamps,
-                    y=[point["crosswalk_total"] for point in filtered],
-                    mode="lines+markers",
-                    name="Crosswalk Total",
-                    line={"color": "#6f42c1", "width": 2.2, "shape": "spline", "smoothing": 0.45},
-                    marker={"size": 4},
+            crosswalk_colors = ["#6f42c1", "#0d6efd", "#dc3545", "#198754"]
+            for idx, cw in enumerate(initial_crosswalks):
+                crosswalk_fig.add_trace(
+                    go.Scatter(
+                        x=timestamps,
+                        y=[
+                            (point.get("crosswalk_totals") or {}).get(cw["key"], 0)
+                            for point in filtered
+                        ],
+                        mode="lines+markers",
+                        name=cw["name"],
+                        line={
+                            "color": crosswalk_colors[idx % len(crosswalk_colors)],
+                            "width": 2.2,
+                            "shape": "spline",
+                            "smoothing": 0.45,
+                        },
+                        marker={"size": 4},
+                    )
                 )
-            )
 
         outputs: List[Any] = [
             str(total_ped),
