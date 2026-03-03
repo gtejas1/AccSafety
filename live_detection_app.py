@@ -1347,12 +1347,6 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     "Use the controls below to move, rotate, or resize each crosswalk line in small increments.",
                     className="text-muted",
                 ),
-                html.Div(
-                    "Admin access required to adjust crosswalk lines.",
-                    id="crosswalk-admin-message",
-                    className="text-muted",
-                    style={"display": "none"},
-                ),
                 dbc.Accordion(
                     control_items,
                     start_collapsed=True,
@@ -1524,9 +1518,15 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     ),
                     dbc.Row(
                         [
-                            dbc.Col(video_panel, lg=12, xl=5, className="d-flex"),
-                            dbc.Col(counts_panel, lg=6, xl=4, className="d-flex"),
-                            dbc.Col(crosswalk_line_controls, lg=6, xl=3, className="d-flex"),
+                            dbc.Col(video_panel, id="video-panel-col", lg=12, xl=5, className="d-flex"),
+                            dbc.Col(counts_panel, id="counts-panel-col", lg=6, xl=4, className="d-flex"),
+                            dbc.Col(
+                                crosswalk_line_controls,
+                                id="crosswalk-controls-col",
+                                lg=6,
+                                xl=3,
+                                className="d-flex",
+                            ),
                         ],
                         class_name="g-3 gy-3 align-items-stretch",
                     ),
@@ -1547,19 +1547,21 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         return f"{route_path}{search or ''}", location_config["title"]
 
     @app.callback(
+        Output("counts-panel-col", "lg"),
+        Output("counts-panel-col", "xl"),
+        Output("crosswalk-controls-col", "style"),
         Output("crosswalk-line-controls", "style"),
         Output("crosswalk-adjust-accordion", "style"),
-        Output("crosswalk-admin-message", "style"),
         Input("url", "search"),
         prevent_initial_call=False,
     )
     def _update_crosswalk_control_visibility(_search):
         base_style = {"height": panel_height, "overflowY": "auto"}
         if _current_user_is_admin():
-            return base_style, {"display": "block"}, {"display": "none"}
+            return 6, 4, {}, base_style, {"display": "block"}
         hidden_style = dict(base_style)
         hidden_style["display"] = "none"
-        return hidden_style, {"display": "none"}, {"display": "none"}
+        return 12, 7, {"display": "none"}, hidden_style, {"display": "none"}
 
     @app.callback(
         Output("ped-count", "children"),
