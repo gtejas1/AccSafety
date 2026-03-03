@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from urllib.parse import parse_qs
 
 import cv2
-from flask import Response, send_file, request
+from flask import Response, send_file, request, session as flask_session
 from ultralytics import YOLO
 
 import dash
@@ -123,6 +123,13 @@ ENGINE: Optional[Any] = None
 _ENGINE_LOCK = threading.Lock()
 _ENGINE_LAST_FAIL_TS = 0.0
 _LOGGER = logging.getLogger(__name__)
+
+
+def _current_user_is_admin() -> bool:
+    roles = flask_session.get("roles") or []
+    if isinstance(roles, str):
+        roles = [roles]
+    return any(str(role).strip().lower() == "admin" for role in roles)
 
 
 def _quote_table_name(table_name: str) -> str:
@@ -1349,6 +1356,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 dcc.Store(id="crosswalk-config-store", data=crosswalk_store_payload),
             ]
         ),
+        id="crosswalk-line-controls",
         className="shadow-sm h-100 w-100",
         style={"height": panel_height, "overflowY": "auto"},
     )
@@ -1510,9 +1518,15 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     ),
                     dbc.Row(
                         [
-                            dbc.Col(video_panel, lg=12, xl=5, className="d-flex"),
-                            dbc.Col(counts_panel, lg=6, xl=4, className="d-flex"),
-                            dbc.Col(crosswalk_line_controls, lg=6, xl=3, className="d-flex"),
+                            dbc.Col(video_panel, id="video-panel-col", lg=12, xl=5, className="d-flex"),
+                            dbc.Col(counts_panel, id="counts-panel-col", lg=6, xl=4, className="d-flex"),
+                            dbc.Col(
+                                crosswalk_line_controls,
+                                id="crosswalk-controls-col",
+                                lg=6,
+                                xl=3,
+                                className="d-flex",
+                            ),
                         ],
                         class_name="g-3 gy-3 align-items-stretch",
                     ),
@@ -1531,6 +1545,23 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     def _update_video_source(search):
         location_config = _get_location_config(search)
         return f"{route_path}{search or ''}", location_config["title"]
+
+    @app.callback(
+        Output("counts-panel-col", "lg"),
+        Output("counts-panel-col", "xl"),
+        Output("crosswalk-controls-col", "style"),
+        Output("crosswalk-line-controls", "style"),
+        Output("crosswalk-adjust-accordion", "style"),
+        Input("url", "search"),
+        prevent_initial_call=False,
+    )
+    def _update_crosswalk_control_visibility(_search):
+        base_style = {"height": panel_height, "overflowY": "auto"}
+        if _current_user_is_admin():
+            return 6, 4, {}, base_style, {"display": "block"}
+        hidden_style = dict(base_style)
+        hidden_style["display"] = "none"
+        return 12, 7, {"display": "none"}, hidden_style, {"display": "none"}
 
     @app.callback(
         Output("ped-count", "children"),
@@ -1580,17 +1611,20 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 "timestamp": now,
                 "pedestrians": total_ped,
                 "cyclists": total_cyc,
-                "crosswalk_total": sum(
-                    (counts.get("pedestrians", 0) + counts.get("cyclists", 0))
-                    for counts in crosswalk_counts.values()
-                ),
+                "crosswalk_totals": {
+                    cw["key"]: (
+                        crosswalk_counts.get(cw["key"], {}).get("pedestrians", 0)
+                        + crosswalk_counts.get(cw["key"], {}).get("cyclists", 0)
+                    )
+                    for cw in initial_crosswalks
+                },
             }
         )
         cutoff = now - timedelta(hours=24)
         filtered = [point for point in history if point["timestamp"] >= cutoff]
 
         counts_fig = _base_trend_figure("Last 24 Hours Trend")
-        crosswalk_fig = _base_trend_figure("Crosswalk Activity")
+        crosswalk_fig = _base_trend_figure("Crosswalk Trend Comparison")
 
         if filtered:
             timestamps = [point["timestamp"] for point in filtered]
@@ -1614,16 +1648,26 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     marker={"size": 5},
                 )
             )
-            crosswalk_fig.add_trace(
-                go.Scatter(
-                    x=timestamps,
-                    y=[point["crosswalk_total"] for point in filtered],
-                    mode="lines+markers",
-                    name="Crosswalk Total",
-                    line={"color": "#6f42c1", "width": 2.2, "shape": "spline", "smoothing": 0.45},
-                    marker={"size": 4},
+            crosswalk_colors = ["#6f42c1", "#0d6efd", "#dc3545", "#198754"]
+            for idx, cw in enumerate(initial_crosswalks):
+                crosswalk_fig.add_trace(
+                    go.Scatter(
+                        x=timestamps,
+                        y=[
+                            (point.get("crosswalk_totals") or {}).get(cw["key"], 0)
+                            for point in filtered
+                        ],
+                        mode="lines+markers",
+                        name=cw["name"],
+                        line={
+                            "color": crosswalk_colors[idx % len(crosswalk_colors)],
+                            "width": 2.2,
+                            "shape": "spline",
+                            "smoothing": 0.45,
+                        },
+                        marker={"size": 4},
+                    )
                 )
-            )
 
         outputs: List[Any] = [
             str(total_ped),
@@ -1670,6 +1714,9 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         prevent_initial_call=False,
     )
     def _apply_crosswalk_adjustments(*_unused):
+        if not _current_user_is_admin():
+            raise dash.exceptions.PreventUpdate
+
         search = _unused[-1] if _unused else None
         worker = _get_worker(search)
         worker.start()
