@@ -111,6 +111,29 @@ def test_help_intent_returns_help_text_without_citations():
 
     assert payload["status"] == "ok"
     assert payload["intent"] == "help"
+    assert "portal navigation" in payload["answer"].lower()
     assert payload["sources"] == []
     assert payload["citations"] == []
+    assert provider.calls == []
+
+
+def test_navigation_intent_returns_portal_routes_without_retrieval_or_provider_calls():
+    provider = StubProvider()
+    retriever = StubRetriever(
+        RetrievalResultStub(
+            evidence=[{"title": "ignored", "snippet": "ignored", "source": "ignored", "metadata": {}}],
+            citations=[{"title": "ignored", "source": "ignored"}],
+            stats={"by_source": [], "by_facility": [], "by_mode": []},
+        )
+    )
+    service = ChatService(provider=provider, retriever=retriever)
+
+    payload = service.generate_reply(message="Where do I login and open the explorer page?", history=[])
+
+    assert payload["status"] == "ok"
+    assert payload["intent"] == "navigation"
+    assert "/login" in payload["answer"]
+    assert "/explore/" in payload["answer"]
+    assert "/live/" in payload["answer"]
+    assert payload["retrieval"]["evidence_count"] == 0
     assert provider.calls == []
