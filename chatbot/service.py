@@ -17,8 +17,27 @@ NO_EVIDENCE_MESSAGE = (
 )
 
 HELP_MESSAGE = (
-    "I can help with transportation safety analytics questions based on the available datasets. "
-    "Try asking about crash trends, activity at a site, comparisons across locations, or what data sources are available."
+    "I can help with transportation safety analytics and portal navigation. "
+    "Ask about crash trends, activity at a site, comparisons across locations, data sources, "
+    "or how to find pages like explorer, guide, live counts, and login."
+)
+
+NAVIGATION_MESSAGE = (
+    "Portal navigation quick guide:\n"
+    "\n"
+    "Canonical routes:\n"
+    "- Home: `/`\n"
+    "- Guide: `/guide`\n"
+    "- Explorer: `/explore/`\n"
+    "- Vivacity analytics: `/vivacity/`\n"
+    "- Live monitor: `/live/`\n"
+    "- What's new: `/whats-new`\n"
+    "- Login: `/login`\n"
+    "\n"
+    "Common flows:\n"
+    "- Login: open `/login`, enter your credentials, then return to the page you want.\n"
+    "- Open explorer: go to `/explore/`, then choose filters or a location to start browsing.\n"
+    "- Open live monitor: open `/live/` to view current/live counts and map updates."
 )
 
 
@@ -47,6 +66,11 @@ class ChatService:
         text = message.strip().lower()
         if not text:
             return "help"
+        if re.search(
+            r"\b(navigate|navigation|page|pages|menu|click|where|login|log in|guide|live counts?|explorer|portal|route|path)\b",
+            text,
+        ):
+            return "navigation"
         if re.search(r"\b(help|how|what can you do|usage|options)\b", text):
             return "help"
         if re.search(r"\b(compare|versus|vs\.?|difference|higher|lower|between)\b", text):
@@ -99,6 +123,19 @@ class ChatService:
             latency_ms = int((time.perf_counter() - started) * 1000)
             return {
                 "answer": HELP_MESSAGE,
+                "sources": [],
+                "citations": [],
+                "retrieval": {"stats": {}, "evidence_count": 0},
+                "intent": intent,
+                "latency_ms": latency_ms,
+                "model": None,
+                "status": "ok",
+            }
+
+        if intent == "navigation":
+            latency_ms = int((time.perf_counter() - started) * 1000)
+            return {
+                "answer": NAVIGATION_MESSAGE,
                 "sources": [],
                 "citations": [],
                 "retrieval": {"stats": {}, "evidence_count": 0},
