@@ -681,7 +681,7 @@ def create_server():
 
         def _parse_limit(value, default: int) -> int:
             try:
-                limit_val = int(value)
+                limit_val = int(float(value))
             except Exception:
                 return default
             limit_val = max(1, limit_val)
@@ -717,6 +717,8 @@ def create_server():
             )
 
         matches = _aggregate_locations(matches_df)
+        if matches:
+            matches = matches[:limit]
 
         all_locations: list[dict] = []
         if matches or len(query.strip()) >= 3:
@@ -741,7 +743,7 @@ def create_server():
             matches = _fuzzy_match_locations(
                 query,
                 all_locations,
-                limit=max(limit, 10),
+                limit=limit,
             )
 
         nearby: list[dict] = []

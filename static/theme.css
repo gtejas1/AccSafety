@@ -1393,3 +1393,172 @@ body {
     max-height: min(76vh, 560px);
   }
 }
+
+/* Explore location search results */
+.search-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.search-status--ok {
+  color: #166534;
+  background: rgba(34, 197, 94, 0.16);
+  border-color: rgba(22, 163, 74, 0.28);
+}
+
+.search-status--empty {
+  color: #92400e;
+  background: rgba(251, 191, 36, 0.18);
+  border-color: rgba(217, 119, 6, 0.32);
+}
+
+.search-results-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.search-location-card {
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  border-radius: 14px;
+  padding: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.92));
+}
+
+.search-location-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.search-location-count {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.12);
+  border: 1px solid rgba(37, 99, 235, 0.26);
+  border-radius: 999px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+
+.search-dataset-list {
+  display: grid;
+  gap: 10px;
+}
+
+.search-dataset-item {
+  border: 1px solid rgba(148, 163, 184, 0.36);
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.search-dataset-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.search-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.search-pill--source {
+  color: #1e293b;
+  background: rgba(148, 163, 184, 0.2);
+  border-color: rgba(100, 116, 139, 0.36);
+}
+
+.search-pill--facility {
+  color: #0f766e;
+  background: rgba(45, 212, 191, 0.18);
+  border-color: rgba(13, 148, 136, 0.32);
+}
+
+.search-pill--mode {
+  color: #7c2d12;
+  background: rgba(251, 146, 60, 0.2);
+  border-color: rgba(234, 88, 12, 0.34);
+}
+
+.search-pill--nearby {
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.14);
+  border-color: rgba(37, 99, 235, 0.28);
+}
+
+.search-dataset-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.search-count {
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.search-open-link {
+  text-decoration: none;
+  font-weight: 700;
+  color: #0b66c3;
+  border: 1px solid rgba(11, 102, 195, 0.34);
+  border-radius: 999px;
+  padding: 4px 10px;
+  line-height: 1.2;
+}
+
+.search-open-link:hover,
+.search-open-link:focus {
+  background: rgba(11, 102, 195, 0.1);
+  text-decoration: none;
+}
+
+.search-dataset-desc {
+  min-height: 16px;
+}
+
+.search-nearby-card {
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 14px;
+  background: rgba(248, 250, 252, 0.95);
+  padding: 12px 14px;
+}
+
+.search-nearby-list {
+  display: grid;
+  gap: 8px;
+}
+
+.search-nearby-item {
+  border-radius: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: #fff;
+  padding: 9px 10px;
+  display: grid;
+  gap: 6px;
+}
+
+@media (max-width: 768px) {
+  .search-location-header,
+  .search-dataset-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
