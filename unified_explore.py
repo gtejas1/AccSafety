@@ -1207,6 +1207,11 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 lon = item.get("Longitude")
                 if lat is None or lon is None:
                     continue
+                try:
+                    lat = float(lat)
+                    lon = float(lon)
+                except (TypeError, ValueError):
+                    continue
                 datasets = item.get("datasets") or []
                 top_dataset = datasets[0] if datasets else {}
                 top_source = top_dataset.get("Source") or "Unknown source"
@@ -1229,6 +1234,11 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 lat = item.get("Latitude")
                 lon = item.get("Longitude")
                 if lat is None or lon is None:
+                    continue
+                try:
+                    lat = float(lat)
+                    lon = float(lon)
+                except (TypeError, ValueError):
                     continue
                 nearby_points.append(
                     {
@@ -1336,11 +1346,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             lon_span = lon_max - lon_min
             dynamic_zoom = _dynamic_zoom(len(points), lat_span, lon_span)
 
-            mapbox_layout = {
-                "style": "open-street-map",
-                "center": {"lat": center_lat, "lon": center_lon},
-                "zoom": dynamic_zoom if len(points) > 1 else 12,
-            }
+            mapbox_layout = {"style": "open-street-map"}
             if len(points) > 1:
                 lat_pad = max(lat_span * 0.12, 0.01)
                 lon_pad = max(lon_span * 0.12, 0.01)
@@ -1350,6 +1356,9 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     "south": lat_min - lat_pad,
                     "north": lat_max + lat_pad,
                 }
+            else:
+                mapbox_layout["center"] = {"lat": center_lat, "lon": center_lon}
+                mapbox_layout["zoom"] = dynamic_zoom
 
             fig.update_layout(
                 mapbox=mapbox_layout,
@@ -1358,9 +1367,27 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 legend={"orientation": "h", "yanchor": "bottom", "y": 0.01, "x": 0.01},
             )
 
-            return dcc.Graph(
-                figure=fig,
-                config={"scrollZoom": True, "displayModeBar": True},
+            return html.Div(
+                [
+                    dcc.Graph(
+                        id=f"unified-search-graph-{time.time_ns()}",
+                        figure=fig,
+                        config={"scrollZoom": True, "displayModeBar": True},
+                    ),
+                    html.Div(
+                        [
+                            html.Span("(c) OpenStreetMap contributors - Data available under ODbL - "),
+                            html.A(
+                                "https://www.openstreetmap.org/copyright",
+                                href="https://www.openstreetmap.org/copyright",
+                                target="_blank",
+                                rel="noopener noreferrer",
+                            ),
+                        ],
+                        className="app-muted small",
+                        style={"padding": "0 6px 6px"},
+                    ),
+                ]
             )
         params = {"q": query}
         if radius not in (None, ""):
