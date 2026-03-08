@@ -1010,7 +1010,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     type="default",
                     children=html.Div(
                         [
-                            html.Div(id="unified-search-results", className="mt-3"),
+                            html.Div(id="unified-search-results", className="mt-3 search-results-grid"),
                             html.Div(id="unified-search-nearby", className="mt-3"),
                         ]
                     ),
@@ -1188,19 +1188,40 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             )
 
         def _build_location_map(matches, nearby):
+            def _compact_counts(value) -> str:
+                if value in (None, "", "nan"):
+                    return "Counts: N/A"
+                try:
+                    value = float(value)
+                except Exception:
+                    return "Counts: N/A"
+                if value.is_integer():
+                    return f"Counts: {int(value):,}"
+                return f"Counts: {value:,.2f}"
+
             points = []
             match_points = []
             nearby_points = []
-            for item in matches:
+            for idx, item in enumerate(matches, start=1):
                 lat = item.get("Latitude")
                 lon = item.get("Longitude")
                 if lat is None or lon is None:
                     continue
+                datasets = item.get("datasets") or []
+                top_dataset = datasets[0] if datasets else {}
+                top_source = top_dataset.get("Source") or "Unknown source"
+                top_mode = MODE_LABEL_OVERRIDES.get(top_dataset.get("Mode"), top_dataset.get("Mode") or "Unknown mode")
+                top_counts = _compact_counts(top_dataset.get("Total counts"))
                 match_points.append(
                     {
                         "lat": lat,
                         "lon": lon,
                         "label": item.get("Location") or "Matched location",
+                        "rank": str(idx),
+                        "datasets": len(datasets),
+                        "top_source": top_source,
+                        "top_mode": top_mode,
+                        "top_counts": top_counts,
                     }
                 )
                 points.append((lat, lon))
@@ -1214,6 +1235,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         "lat": lat,
                         "lon": lon,
                         "label": item.get("Location") or "Nearby location",
+                        "datasets": len(item.get("datasets") or []),
                     }
                 )
                 points.append((lat, lon))
@@ -1226,15 +1248,63 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
             center_lat = sum(lat for lat, _ in points) / len(points)
             center_lon = sum(lon for _, lon in points) / len(points)
+
+            def _dynamic_zoom(point_count: int, lat_span: float, lon_span: float) -> float:
+                # Prioritize full coverage, then tighten for smaller result sets.
+                span = max(lat_span, lon_span * 0.75)
+                if span > 20:
+                    zoom = 3.0
+                elif span > 10:
+                    zoom = 4.0
+                elif span > 5:
+                    zoom = 5.0
+                elif span > 2:
+                    zoom = 6.0
+                elif span > 1:
+                    zoom = 7.0
+                elif span > 0.5:
+                    zoom = 8.0
+                elif span > 0.2:
+                    zoom = 9.0
+                elif span > 0.08:
+                    zoom = 10.0
+                else:
+                    zoom = 11.0
+
+                if point_count >= 100:
+                    zoom -= 2.0
+                elif point_count >= 50:
+                    zoom -= 1.5
+                elif point_count >= 25:
+                    zoom -= 1.0
+                elif point_count >= 12:
+                    zoom -= 0.5
+
+                return max(3.0, min(13.0, zoom))
             fig = go.Figure()
             if match_points:
                 fig.add_trace(
                     go.Scattermapbox(
                         lat=[p["lat"] for p in match_points],
                         lon=[p["lon"] for p in match_points],
-                        mode="markers",
-                        marker={"size": 12, "color": "#dc2626"},
-                        text=[p["label"] for p in match_points],
+                        mode="markers+text",
+                        marker={"size": 18, "color": "#dc2626"},
+                        text=[p["rank"] for p in match_points],
+                        textposition="middle center",
+                        textfont={"size": 11, "color": "#ffffff"},
+                        customdata=[
+                            [p["label"], p["datasets"], p["top_source"], p["top_mode"], p["top_counts"]]
+                            for p in match_points
+                        ],
+                        hovertemplate=(
+                            "<b>#%{text} %{customdata[0]}</b><br>"
+                            "Datasets: %{customdata[1]}<br>"
+                            "Top source: %{customdata[2]}<br>"
+                            "Top mode: %{customdata[3]}<br>"
+                            "%{customdata[4]}"
+                            "<extra></extra>"
+                        ),
+                        cluster={"enabled": True, "maxzoom": 11, "size": 24, "step": 30},
                         name="Matches",
                     )
                 )
@@ -1244,18 +1314,45 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         lat=[p["lat"] for p in nearby_points],
                         lon=[p["lon"] for p in nearby_points],
                         mode="markers",
-                        marker={"size": 9, "color": "#2563eb"},
-                        text=[p["label"] for p in nearby_points],
+                        marker={"size": 10, "color": "#2563eb", "opacity": 0.85},
+                        customdata=[[p["label"], p["datasets"]] for p in nearby_points],
+                        hovertemplate=(
+                            "<b>%{customdata[0]}</b><br>"
+                            "Nearby datasets: %{customdata[1]}"
+                            "<extra></extra>"
+                        ),
+                        cluster={"enabled": True, "maxzoom": 11, "size": 22, "step": 35},
                         name="Nearby",
                     )
                 )
 
+            lats = [lat for lat, _ in points]
+            lons = [lon for _, lon in points]
+            lat_min = min(lats)
+            lat_max = max(lats)
+            lon_min = min(lons)
+            lon_max = max(lons)
+            lat_span = lat_max - lat_min
+            lon_span = lon_max - lon_min
+            dynamic_zoom = _dynamic_zoom(len(points), lat_span, lon_span)
+
+            mapbox_layout = {
+                "style": "open-street-map",
+                "center": {"lat": center_lat, "lon": center_lon},
+                "zoom": dynamic_zoom if len(points) > 1 else 12,
+            }
+            if len(points) > 1:
+                lat_pad = max(lat_span * 0.12, 0.01)
+                lon_pad = max(lon_span * 0.12, 0.01)
+                mapbox_layout["bounds"] = {
+                    "west": lon_min - lon_pad,
+                    "east": lon_max + lon_pad,
+                    "south": lat_min - lat_pad,
+                    "north": lat_max + lat_pad,
+                }
+
             fig.update_layout(
-                mapbox={
-                    "style": "open-street-map",
-                    "center": {"lat": center_lat, "lon": center_lon},
-                    "zoom": 9,
-                },
+                mapbox=mapbox_layout,
                 margin={"l": 0, "r": 0, "t": 0, "b": 0},
                 height=420,
                 legend={"orientation": "h", "yanchor": "bottom", "y": 0.01, "x": 0.01},
@@ -1265,7 +1362,6 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 figure=fig,
                 config={"scrollZoom": True, "displayModeBar": True},
             )
-
         params = {"q": query}
         if radius not in (None, ""):
             params["radius_miles"] = radius
@@ -1295,10 +1391,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         nearby = payload.get("nearby") or []
 
         if not matches:
-            status = "No locations matched your search."
+            status = html.Span("No locations matched your search.", className="search-status search-status--empty")
             return [], [], status, _build_location_map(matches, nearby), True
 
-        status = f"{len(matches)} location(s) matched."
+        status = html.Span(f"{len(matches)} location(s) matched.", className="search-status search-status--ok")
 
         def _format_counts(value) -> str:
             if value in (None, "", "nan"):
@@ -1327,16 +1423,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 )
                 view_md = _build_view_link(row)
                 label, url = _parse_markdown_link(view_md)
-                meta = " • ".join(
-                    filter(
-                        None,
-                        [
-                            dataset.get("Source"),
-                            dataset.get("Facility type"),
-                            dataset.get("Mode"),
-                        ],
-                    )
-                )
+                source_label = dataset.get("Source") or "Unknown source"
+                facility_label = dataset.get("Facility type") or "Unknown facility"
+                mode_value = dataset.get("Mode")
+                mode_label = MODE_LABEL_OVERRIDES.get(mode_value, mode_value or "Unknown mode")
                 description = _project_description_for_dataset(
                     dataset.get("Mode"),
                     dataset.get("Facility type"),
@@ -1346,13 +1436,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 if description:
                     target_id = f"unified-search-desc-{match_idx}-{dataset_idx}"
                     description_link = [
-                        html.Span(" "),
-                        html.Span(
-                            "Project description",
-                            id=target_id,
-                            className="small text-decoration-underline",
-                            style={"cursor": "pointer"},
-                        ),
+                        html.Span("Project description", id=target_id, className="small text-decoration-underline", style={"cursor": "pointer"}),
                         dbc.Popover(
                             dbc.PopoverBody(
                                 html.Div(
@@ -1366,25 +1450,44 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         ),
                     ]
                 dataset_items.append(
-                    html.Li(
+                    html.Div(
                         [
-                            html.Span(meta or "Dataset", className="fw-semibold"),
-                            html.Span(f" — {_format_counts(dataset.get('Total counts'))}", className="app-muted"),
-                            html.Span(" "),
-                            html.A(label or "Open", href=url, target="_self")
-                            if url
-                            else html.Span(""),
-                            *description_link,
-                        ]
+                            html.Div(
+                                [
+                                    html.Span(source_label, className="search-pill search-pill--source"),
+                                    html.Span(facility_label, className="search-pill search-pill--facility"),
+                                    html.Span(mode_label, className="search-pill search-pill--mode"),
+                                ],
+                                className="search-dataset-meta",
+                            ),
+                            html.Div(
+                                [
+                                    html.Span(_format_counts(dataset.get("Total counts")), className="search-count"),
+                                    html.A(label or "Open dataset", href=url, target="_self", className="search-open-link")
+                                    if url
+                                    else html.Span("No view link", className="app-muted small"),
+                                ],
+                                className="search-dataset-footer",
+                            ),
+                            html.Div(description_link, className="search-dataset-desc"),
+                        ],
+                        className="search-dataset-item",
                     )
                 )
             match_cards.append(
                 html.Div(
                     [
-                        html.H4(location, className="h6 mb-2"),
-                        html.Ul(dataset_items, className="mb-0"),
+                        html.Div(
+                            [
+                                html.H4(location, className="h6 mb-0"),
+                                html.Span(f"#{match_idx + 1}", className="search-location-count"),
+                                html.Span(f"{len(datasets)} dataset(s)", className="search-location-count"),
+                            ],
+                            className="search-location-header",
+                        ),
+                        html.Div(dataset_items, className="search-dataset-list"),
                     ],
-                    className="mb-3",
+                    className="search-location-card",
                 )
             )
 
@@ -1399,19 +1502,27 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 distance = item.get("distance_miles")
                 distance_text = f"{distance:.2f} mi" if isinstance(distance, (int, float)) else "Distance N/A"
                 nearby_items.append(
-                    html.Li(
+                    html.Div(
                         [
-                            html.Span(item.get("Location") or "Unknown location", className="fw-semibold"),
-                            html.Span(f" — {distance_text}", className="app-muted"),
-                            html.Div(source_text, className="app-muted"),
-                        ]
+                            html.Div(item.get("Location") or "Unknown location", className="fw-semibold"),
+                            html.Div(
+                                [
+                                    html.Span(distance_text, className="search-pill search-pill--nearby"),
+                                    html.Span(source_text, className="app-muted small"),
+                                ],
+                                className="d-flex flex-wrap gap-2 align-items-center",
+                            ),
+                        ],
+                        className="search-nearby-item",
                     )
                 )
-            nearby_block = [
-                html.H4("Nearby Locations", className="h6 mb-2"),
-                html.Ul(nearby_items, className="mb-0"),
-            ]
-
+            nearby_block = html.Div(
+                [
+                    html.H4("Nearby Locations", className="h6 mb-2"),
+                    html.Div(nearby_items, className="search-nearby-list"),
+                ],
+                className="search-nearby-card",
+            )
         return match_cards, nearby_block, status, _build_location_map(matches, nearby), True
 
     @app.callback(
@@ -1911,3 +2022,10 @@ if __name__ == "__main__":
     _server = dash.Dash(__name__).server
     _app = create_unified_explore(_server, prefix="/")
     _app.run_server(host="127.0.0.1", port=8068, debug=True)
+
+
+
+
+
+
+
