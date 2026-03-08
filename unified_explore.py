@@ -400,7 +400,11 @@ def _build_view_link(row: pd.Series) -> str:
         return f"[Open](/eco/dashboard?location={loc_q})"
     if src == "Off-Street Trail (SEWRPC Trail User Counts)":
         return f"[Open](/trail/dashboard?location={loc_q})"
-    return "[Open](https://uwm.edu/ipit/wisconsin-pedestrian-volume-model/)"
+    mode = (row.get("Mode") or "").strip()
+    if mode and mode in ECO_MODE_TABLE:
+        mode_q = _encode_location_for_href(mode)
+        return f"[Open](/eco/dashboard?location={loc_q}&mode={mode_q})"
+    return f"[Open](/eco/dashboard?location={loc_q})"
 
 
 def _parse_markdown_link(markdown: str) -> tuple[str | None, str | None]:
@@ -856,6 +860,88 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
     base_df = _fetch_all()
 
+    def _project_description_for_dataset(mode, facility, source):
+        source_val = str(source or "").strip().casefold()
+        mode_val = str(mode or "").strip().lower()
+        fac_val = str(facility or "").strip().lower()
+
+        if (
+            mode_val == TRAIL_CROSS_MODE.strip().lower()
+            and fac_val == TRAIL_CROSS_FACILITY.strip().lower()
+            and source_val == TRAIL_CROSS_SOURCE.strip().casefold()
+        ):
+            return _trail_crossing_desc()
+
+        if (
+            mode_val == "pedestrian"
+            and fac_val == "intersection"
+            and source_val == PED_INT_AAEC_STATEWIDE.strip().casefold()
+        ):
+            return _ped_int_statewide_aaec_desc()
+
+        if (
+            mode_val == "pedestrian"
+            and fac_val == "mid-block crossing"
+            and source_val == MIDBLOCK_SOURCE.strip().casefold()
+        ):
+            return _midblock_ped_desc()
+
+        bicyclist_combo = (
+            mode_val == "bicyclist"
+            and fac_val == "intersection"
+            and source_val == "wisconsin pilot counting program counts"
+        ) or (
+            mode_val == "bicyclist"
+            and fac_val == "on-street (sidewalk/bike lane)"
+            and source_val == "wisconsin ped/bike database (statewide)"
+        )
+
+        if bicyclist_combo:
+            return _statewide_onstreet_desc() if fac_val != "intersection" else _pilot_counts_desc()
+
+        if (
+            mode_val == "bicyclist"
+            and fac_val == "intersection"
+            and source_val == "wisconsin ped/bike database (statewide)"
+        ):
+            return _statewide_onstreet_desc()
+
+        if (
+            mode_val == "pedestrian"
+            and fac_val == "intersection"
+            and source_val == "wisconsin ped/bike database (statewide)"
+        ):
+            return _ped_statewide_desc()
+
+        if (
+            mode_val == "pedestrian"
+            and fac_val == "on-street (sidewalk)"
+            and source_val == "wisconsin ped/bike database (statewide)"
+        ):
+            return _ped_statewide_desc()
+
+        if (
+            mode_val == "pedestrian"
+            and fac_val == "intersection"
+            and source_val == "wisconsin pilot counting program counts"
+        ):
+            return _pilot_counts_desc()
+
+        if source_val == "wisconsin pilot counting program counts":
+            return _pilot_counts_desc()
+
+        if source_val in {
+            "sewrpc trail user counts",
+            "off-street trail (sewrpc trail user counts)",
+        }:
+            return _sewrpc_trails_desc()
+
+        if source_val == NEW_SOURCE_NAME.strip().casefold():
+            return _custom_mke_estimated_desc()
+
+        return []
+
+
     search_block = card(
         [
             html.H2("Location Search"),
@@ -1158,7 +1244,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         lat=[p["lat"] for p in nearby_points],
                         lon=[p["lon"] for p in nearby_points],
                         mode="markers",
-                        marker={"size": 9, "color": "#fecaca"},
+                        marker={"size": 9, "color": "#2563eb"},
                         text=[p["label"] for p in nearby_points],
                         name="Nearby",
                     )
@@ -1226,11 +1312,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             return f"Counts: {value:,.2f}"
 
         match_cards = []
-        for match in matches:
+
+        for match_idx, match in enumerate(matches):
             location = match.get("Location") or "Unknown location"
             datasets = match.get("datasets") or []
             dataset_items = []
-            for dataset in datasets:
+            for dataset_idx, dataset in enumerate(datasets):
                 row = pd.Series(
                     {
                         "Location": location,
@@ -1250,6 +1337,34 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         ],
                     )
                 )
+                description = _project_description_for_dataset(
+                    dataset.get("Mode"),
+                    dataset.get("Facility type"),
+                    dataset.get("Source"),
+                )
+                description_link = []
+                if description:
+                    target_id = f"unified-search-desc-{match_idx}-{dataset_idx}"
+                    description_link = [
+                        html.Span(" "),
+                        html.Span(
+                            "Project description",
+                            id=target_id,
+                            className="small text-decoration-underline",
+                            style={"cursor": "pointer"},
+                        ),
+                        dbc.Popover(
+                            dbc.PopoverBody(
+                                html.Div(
+                                    description,
+                                    style={"maxWidth": "640px", "maxHeight": "320px", "overflowY": "auto"},
+                                )
+                            ),
+                            target=target_id,
+                            trigger="hover focus",
+                            placement="auto",
+                        ),
+                    ]
                 dataset_items.append(
                     html.Li(
                         [
@@ -1259,6 +1374,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                             html.A(label or "Open", href=url, target="_self")
                             if url
                             else html.Span(""),
+                            *description_link,
                         ]
                     )
                 )
@@ -1543,77 +1659,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 counts_column_name = "Actual Counts"
 
         columns = _get_display_columns(counts_column_name)
-
-        # --- Descriptions by source selection ---
-        mode_val = (mode or "").strip().lower()
-        fac_val  = (facility or "").strip().lower()
-
-        # Trail Crossing Crash Models (Exposure-Based Study)
-        if (
-            mode_val == TRAIL_CROSS_MODE.strip().lower()
-            and fac_val == TRAIL_CROSS_FACILITY.strip().lower()
-            and source_val == TRAIL_CROSS_SOURCE.strip().casefold()
-        ):
-            description = _trail_crossing_desc()
-
-        # NEW: Pedestrian + Intersection + AAEC (Wisconsin Statewide)
-        elif (mode_val == "pedestrian"
-            and fac_val == "intersection"
-            and source_val == PED_INT_AAEC_STATEWIDE.strip().casefold()):
-            description = _ped_int_statewide_aaec_desc()
-
-        elif (
-            mode_val == "pedestrian"
-            and fac_val == "mid-block crossing"
-            and source_val == MIDBLOCK_SOURCE.strip().casefold()
-        ):
-            description = _midblock_ped_desc()
-
-        else:
-            bicyclist_combo = (
-                mode_val == "bicyclist"
-                and fac_val == "intersection" and source_val == "wisconsin pilot counting program counts"
-            ) or (
-                mode_val == "bicyclist"
-                and fac_val == "on-street (sidewalk/bike lane)"
-                and source_val == "wisconsin ped/bike database (statewide)"
-            )
-
-            if bicyclist_combo:
-                description = _statewide_onstreet_desc() if fac_val != "intersection" else _pilot_counts_desc()
-
-            # Statewide + Intersection (Bicyclist)
-            elif (mode_val == "bicyclist"
-                  and fac_val == "intersection"
-                  and source_val == "wisconsin ped/bike database (statewide)"):
-                description = _statewide_onstreet_desc()
-
-            # Statewide + Intersection (Pedestrian)
-            elif (mode_val == "pedestrian"
-                  and fac_val == "intersection"
-                  and source_val == "wisconsin ped/bike database (statewide)"):
-                description = _ped_statewide_desc()
-
-            elif (mode_val == "pedestrian"
-                  and fac_val == "on-street (sidewalk)"
-                  and source_val == "wisconsin ped/bike database (statewide)"):
-                description = _ped_statewide_desc()
-            elif (mode_val == "pedestrian"
-                  and fac_val == "intersection"
-                  and source_val == "wisconsin pilot counting program counts"):
-                description = _pilot_counts_desc()
-            elif source_val == "wisconsin pilot counting program counts":
-                description = _pilot_counts_desc()
-            elif source_val in {
-                "sewrpc trail user counts",
-                "off-street trail (sewrpc trail user counts)",
-            }:
-                description = _sewrpc_trails_desc()
-            elif source_val == NEW_SOURCE_NAME.strip().casefold():
-                description = _custom_mke_estimated_desc()
-            else:
-                # No specific description requested for the Mid-Block dataset
-                description = []
+        description = _project_description_for_dataset(mode, facility, source)
 
         desc_style = {"display": "block"} if description else {"display": "none"}
 

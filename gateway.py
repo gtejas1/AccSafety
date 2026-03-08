@@ -2,9 +2,11 @@
 import json
 import math
 import os
+import re
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from difflib import SequenceMatcher
 from typing import Dict, List
 from pathlib import Path
 from urllib.parse import quote
@@ -261,6 +263,68 @@ def _coerce_float(value):
         return float(value)
     except Exception:
         return None
+
+
+def _normalize_location_key(value: str) -> str:
+    text = str(value or "").strip().lower()
+    text = text.replace("&", " and ")
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _fuzzy_location_score(query_key: str, location_key: str) -> float:
+    if not query_key or not location_key:
+        return 0.0
+    if query_key == location_key:
+        return 1.0
+    if query_key in location_key:
+        return 0.98
+
+    query_tokens = [token for token in query_key.split(" ") if token]
+    location_tokens = [token for token in location_key.split(" ") if token]
+    if not query_tokens or not location_tokens:
+        return 0.0
+
+    token_hits = 0
+    for qtok in query_tokens:
+        for ltok in location_tokens:
+            if ltok.startswith(qtok) or qtok.startswith(ltok):
+                token_hits += 1
+                break
+    token_score = token_hits / len(query_tokens)
+
+    ratio_full = SequenceMatcher(None, query_key, location_key).ratio()
+    ratio_compact = SequenceMatcher(
+        None,
+        query_key.replace(" ", ""),
+        location_key.replace(" ", ""),
+    ).ratio()
+
+    return max(ratio_full, ratio_compact, token_score)
+
+
+def _fuzzy_match_locations(
+    query: str,
+    all_locations: list[dict],
+    *,
+    limit: int,
+    min_score: float = 0.56,
+) -> list[dict]:
+    query_key = _normalize_location_key(query)
+    if not query_key:
+        return []
+
+    scored: list[tuple[float, dict]] = []
+    for item in all_locations:
+        location = _normalize_text(item.get("Location"))
+        location_key = _normalize_location_key(location)
+        score = _fuzzy_location_score(query_key, location_key)
+        if score >= min_score:
+            scored.append((score, item))
+
+    scored.sort(key=lambda pair: (-pair[0], _normalize_text(pair[1].get("Location")).lower()))
+    return [dict(item) for _, item in scored[:limit]]
 
 
 def _aggregate_locations(df: pd.DataFrame) -> list[dict]:
@@ -653,8 +717,9 @@ def create_server():
             )
 
         matches = _aggregate_locations(matches_df)
-        nearby: list[dict] = []
-        if matches:
+
+        all_locations: list[dict] = []
+        if matches or len(query.strip()) >= 3:
             try:
                 all_df = pd.read_sql(UNIFIED_NEARBY_SQL, ENGINE)
             except Exception:
@@ -670,6 +735,17 @@ def create_server():
                     ]
                 )
             all_locations = _aggregate_locations(all_df)
+
+        if not matches and all_locations:
+            # Fuzzy fallback for misspelled location names.
+            matches = _fuzzy_match_locations(
+                query,
+                all_locations,
+                limit=max(limit, 10),
+            )
+
+        nearby: list[dict] = []
+        if matches and all_locations:
             nearby = _compute_nearby_locations(
                 matches,
                 all_locations,
