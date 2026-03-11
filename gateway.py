@@ -1,11 +1,15 @@
 # gateway.py
+import hashlib
 import json
 import math
 import os
 import re
+import secrets
+import smtplib
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
 from difflib import SequenceMatcher
 from typing import Dict, List
 from pathlib import Path
@@ -520,6 +524,91 @@ def load_whats_new_entries(limit: int = 15):
     return normalized_entries
 
 
+def _password_reset_token_ttl_minutes() -> int:
+    raw = (os.environ.get("ACC_RESET_TOKEN_MINUTES") or "60").strip()
+    try:
+        ttl = int(raw)
+    except ValueError:
+        ttl = 60
+    return max(5, ttl)
+
+
+def _smtp_settings() -> Dict[str, object]:
+    port_raw = (os.environ.get("ACC_SMTP_PORT") or "587").strip()
+    try:
+        port = int(port_raw)
+    except ValueError:
+        port = 587
+    return {
+        "host": (os.environ.get("ACC_SMTP_HOST") or "").strip(),
+        "port": port,
+        "username": (os.environ.get("ACC_SMTP_USERNAME") or "").strip(),
+        "password": os.environ.get("ACC_SMTP_PASSWORD") or "",
+        "sender": (os.environ.get("ACC_SMTP_FROM") or "").strip(),
+        "use_tls": (os.environ.get("ACC_SMTP_USE_TLS") or "1").strip().lower() not in {"0", "false", "no", "off"},
+        "reset_base_url": (os.environ.get("ACC_RESET_BASE_URL") or "").strip().rstrip("/"),
+    }
+
+
+def _smtp_ready() -> bool:
+    settings = _smtp_settings()
+    required = ("host", "username", "password", "sender", "reset_base_url")
+    return all(str(settings[key]).strip() for key in required)
+
+
+def _hash_reset_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _parse_iso_datetime(raw: str | None) -> datetime | None:
+    if not raw:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _build_password_reset_url(token: str) -> str:
+    base_url = str(_smtp_settings()["reset_base_url"])
+    if not base_url:
+        raise RuntimeError("ACC_RESET_BASE_URL is not configured")
+    return f"{base_url}/reset-password/{token}"
+
+
+def _send_password_reset_email(recipient_email: str, username: str, reset_token: str) -> None:
+    settings = _smtp_settings()
+    reset_url = _build_password_reset_url(reset_token)
+
+    msg = EmailMessage()
+    msg["Subject"] = "AccSafety password reset"
+    msg["From"] = str(settings["sender"])
+    msg["To"] = recipient_email
+    msg.set_content(
+        "Hello,\n\n"
+        f"We received a password reset request for your AccSafety account ({username}).\n\n"
+        f"Use this link to reset your password: {reset_url}\n\n"
+        f"This link expires in {_password_reset_token_ttl_minutes()} minutes. If you did not request a reset, you can ignore this email.\n"
+    )
+
+    with smtplib.SMTP(str(settings["host"]), int(settings["port"]), timeout=30) as smtp:
+        smtp.ehlo()
+        if settings["use_tls"]:
+            smtp.starttls()
+            smtp.ehlo()
+        smtp.login(str(settings["username"]), str(settings["password"]))
+        smtp.send_message(msg)
+
+
+def _is_reset_token_valid(user) -> bool:
+    flags = dict(getattr(user, "flags", {}) or {})
+    expires_at = _parse_iso_datetime(flags.get("reset_token_expires_at"))
+    return bool(expires_at and expires_at > datetime.now(timezone.utc))
+
+
 def create_server():
     server = Flask(__name__)
     server.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_secret_key")
@@ -530,8 +619,8 @@ def create_server():
     @server.before_request
     def require_login():
         path = request.path or "/"
-        # allow login, registration, logout, favicon, and static assets
-        if path.startswith("/static/") or path in ("/login", "/logout", "/register", "/favicon.ico"):
+        # allow login, registration, password reset, logout, favicon, and static assets
+        if path.startswith("/static/") or path in ("/login", "/logout", "/register", "/forgot-password", "/favicon.ico") or path.startswith("/reset-password/"):
             return None
 
         current_user = _current_user()
@@ -548,6 +637,7 @@ def create_server():
     @server.route("/login", methods=["GET", "POST"])
     def login():
         error = None
+        success = "Your password has been updated. Sign in with your new password." if request.args.get("reset") == "1" else None
         nxt = request.args.get("next", request.form.get("next", "/"))
         if request.method == "POST":
             u = (request.form.get("username") or "").strip()
@@ -570,7 +660,7 @@ def create_server():
                 else:
                     error = "Invalid username or password."
 
-        return render_template("login.html", error=error, nxt=nxt)
+        return render_template("login.html", error=error, success=success, nxt=nxt)
 
     @server.route("/register", methods=["GET", "POST"])
     def register():
@@ -612,6 +702,62 @@ def create_server():
                 form = {"username": "", "email": ""}
 
         return render_template("register.html", error=error, success=success, form=form)
+
+
+    @server.route("/forgot-password", methods=["GET", "POST"])
+    def forgot_password():
+        error = None
+        success = None
+        form = {"email": (request.form.get("email") or "").strip()}
+
+        if request.method == "POST":
+            if not form["email"] or "@" not in form["email"]:
+                error = "A valid email address is required."
+            elif not _smtp_ready():
+                error = "Password reset email is not available because SMTP is not configured."
+            else:
+                success = "If that email address is registered, a password reset link has been sent."
+                reset_user = user_store.get_user_by_email(form["email"])
+                if reset_user:
+                    reset_token = secrets.token_urlsafe(32)
+                    expires_at = datetime.now(timezone.utc) + timedelta(minutes=_password_reset_token_ttl_minutes())
+                    user_store.set_reset_token(reset_user.username, _hash_reset_token(reset_token), expires_at)
+                    try:
+                        _send_password_reset_email(reset_user.email, reset_user.username, reset_token)
+                    except Exception:
+                        current_app.logger.exception("Failed to send password reset email for %s", reset_user.username)
+                        user_store.clear_reset_token(reset_user.username)
+                        error = "Password reset email could not be sent. Please try again later."
+                        success = None
+                if success:
+                    form = {"email": ""}
+
+        return render_template("forgot_password.html", error=error, success=success, form=form)
+
+    @server.route("/reset-password/<token>", methods=["GET", "POST"])
+    def reset_password(token: str):
+        error = None
+        token_hash = _hash_reset_token(token)
+        reset_user = user_store.get_user_by_reset_token(token_hash)
+
+        if not reset_user or not _is_reset_token_valid(reset_user):
+            if reset_user:
+                user_store.clear_reset_token(reset_user.username)
+            return render_template("reset_password.html", error="This password reset link is invalid or has expired.", token_valid=False)
+
+        if request.method == "POST":
+            password = request.form.get("password") or ""
+            confirm_password = request.form.get("confirm_password") or ""
+
+            if len(password) < 8:
+                error = "Password must be at least 8 characters long."
+            elif password != confirm_password:
+                error = "Passwords do not match."
+            else:
+                user_store.update_password(reset_user.username, password)
+                return redirect("/login?reset=1", code=302)
+
+        return render_template("reset_password.html", error=error, token_valid=True)
 
     @server.route("/logout")
     def logout():
