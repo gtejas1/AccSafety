@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Data Uploads ? AccSafety</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="/static/theme.css">
+  <style>
+    .admin-grid { display:grid; grid-template-columns:minmax(320px, 420px) minmax(0, 1fr); gap:20px; align-items:start; }
+    .admin-card { padding:20px; border-radius:16px; background:#fff; box-shadow:0 18px 34px rgba(15,23,42,0.08); margin:12px 0; }
+    .admin-card h2, .admin-card h3 { margin-top:0; }
+    .meta { color:var(--brand-muted); font-size:0.92rem; }
+    .input, .select, .textarea { width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(15,23,42,0.16); background:#f8fafc; }
+    .textarea { min-height:120px; resize:vertical; }
+    .button { border:none; border-radius:10px; padding:10px 14px; background:linear-gradient(130deg, var(--brand-primary), var(--brand-secondary)); color:#fff; font-weight:600; cursor:pointer; }
+    .banner { border-radius:12px; padding:12px 14px; margin:12px 0; }
+    .banner.success { background:rgba(34,197,94,0.12); color:#166534; }
+    .banner.error { background:rgba(239,68,68,0.12); color:#991b1b; }
+    .uploads-table, .rows-table { width:100%; border-collapse:collapse; }
+    .uploads-table th, .uploads-table td, .rows-table th, .rows-table td { padding:10px 12px; border-bottom:1px solid rgba(15,23,42,0.08); text-align:left; vertical-align:top; }
+    .uploads-table th, .rows-table th { text-transform:uppercase; font-size:0.78rem; color:var(--brand-muted); }
+    .badge { display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:0.8rem; background:rgba(11,102,195,0.12); color:var(--brand-primary); }
+    .badge.invalid { background:rgba(239,68,68,0.12); color:#b91c1c; }
+    .badge.published { background:rgba(34,197,94,0.12); color:#15803d; }
+    .summary-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin:14px 0; }
+    .summary-metric { padding:14px; border-radius:12px; background:#f8fafc; border:1px solid rgba(148,163,184,0.2); }
+    .summary-metric strong { display:block; font-size:1.3rem; color:#0b1736; }
+    .inline-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    @media (max-width: 960px) { .admin-grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <img src="/static/img/accsafety-logo.png" alt="AccSafety logo" class="app-logo">
+      <div class="app-header-title">
+        <span class="app-brand">AccSafety</span>
+        <span class="app-subtitle">Admin Data Uploads</span>
+      </div>
+      <nav class="app-nav">
+        <a class="app-link" href="/">Back to Portal</a>
+        <a class="app-link" href="/admin/users">Manage Users</a>
+        <a class="app-link" href="/logout">Log out</a>
+      </nav>
+    </header>
+
+    <main class="app-content">
+      <div class="app-main-centered" style="max-width: 1440px;">
+        {% if message %}
+        <div class="banner success">{{ message }}</div>
+        {% endif %}
+        {% if error %}
+        <div class="banner error">{{ error }}</div>
+        {% endif %}
+
+        <div class="admin-grid">
+          <section class="admin-card">
+            <h2>Upload Excel File</h2>
+            <p class="meta">Upload ECO-style `.xlsx` files, validate them, and publish approved rows into the Explore data pipeline.</p>
+            <form method="post" action="/admin/data-uploads" enctype="multipart/form-data">
+              <label class="meta" for="upload-file">Excel file</label>
+              <input class="input" id="upload-file" name="file" type="file" accept=".xlsx" required>
+
+              <label class="meta" for="upload-mode" style="display:block; margin-top:14px;">Mode</label>
+              <select class="select" id="upload-mode" name="mode" required>
+                {% for mode in mode_options %}
+                <option value="{{ mode }}">{{ mode }}</option>
+                {% endfor %}
+              </select>
+
+              <label class="meta" for="upload-location" style="display:block; margin-top:14px;">Display location override (optional)</label>
+              <input class="input" id="upload-location" name="location_override" type="text" placeholder="Leave blank to use the filename">
+
+              <label class="meta" for="upload-notes" style="display:block; margin-top:14px;">Notes (optional)</label>
+              <textarea class="textarea" id="upload-notes" name="notes" placeholder="Context for reviewers or future admins"></textarea>
+
+              <div style="margin-top:16px;">
+                <button class="button" type="submit">Upload for Review</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="admin-card">
+            <h2>Recent Uploads</h2>
+            {% if uploads %}
+            <table class="uploads-table">
+              <thead>
+                <tr>
+                  <th>File</th>
+                  <th>Mode</th>
+                  <th>Status</th>
+                  <th>Rows</th>
+                  <th>Updated</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for upload in uploads %}
+                <tr>
+                  <td>
+                    <a href="/admin/data-uploads/{{ upload.upload_id }}">{{ upload.original_filename }}</a>
+                    <div class="meta">{{ upload.location_name or "Unknown location" }}</div>
+                  </td>
+                  <td>{{ upload.selected_mode }}</td>
+                  <td>
+                    <span class="badge {% if upload.status == 'invalid' %}invalid{% elif upload.status == 'published' %}published{% endif %}">
+                      {{ upload.status }}
+                    </span>
+                  </td>
+                  <td>{{ upload.valid_rows }}/{{ upload.total_rows }} valid</td>
+                  <td>
+                    <div>{{ upload.uploaded_by or "Unknown" }}</div>
+                    <div class="meta">{{ upload.uploaded_at or "" }}</div>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% else %}
+            <p class="meta">No uploads have been staged yet.</p>
+            {% endif %}
+          </section>
+        </div>
+
+        {% if selected_upload %}
+        <section class="admin-card">
+          <div class="inline-actions">
+            <h2 style="margin:0;">Review Upload</h2>
+            <span class="badge {% if selected_upload.manifest.status == 'invalid' %}invalid{% elif selected_upload.manifest.status == 'published' %}published{% endif %}">
+              {{ selected_upload.manifest.status }}
+            </span>
+          </div>
+          <p class="meta">{{ selected_upload.manifest.original_filename }} ? {{ selected_upload.manifest.selected_mode }} ? {{ selected_upload.manifest.location_name or "Unknown location" }}</p>
+
+          <div class="summary-grid">
+            <div class="summary-metric"><span class="meta">Total Rows</span><strong>{{ selected_upload.manifest.total_rows }}</strong></div>
+            <div class="summary-metric"><span class="meta">Valid Rows</span><strong>{{ selected_upload.manifest.valid_rows }}</strong></div>
+            <div class="summary-metric"><span class="meta">Invalid Rows</span><strong>{{ selected_upload.manifest.invalid_rows }}</strong></div>
+            <div class="summary-metric"><span class="meta">Uploaded By</span><strong style="font-size:1rem;">{{ selected_upload.manifest.uploaded_by or "Unknown" }}</strong></div>
+          </div>
+
+          {% if selected_upload.manifest.notes %}
+          <p><strong>Notes:</strong> {{ selected_upload.manifest.notes }}</p>
+          {% endif %}
+          {% if selected_upload.manifest.error_message %}
+          <div class="banner error">{{ selected_upload.manifest.error_message }}</div>
+          {% endif %}
+
+          {% if selected_upload.manifest.status != 'published' and selected_upload.manifest.valid_rows > 0 %}
+          <form method="post" action="/admin/data-uploads/{{ selected_upload.manifest.upload_id }}/publish">
+            <button class="button" type="submit">Publish to Explore</button>
+          </form>
+          {% elif selected_upload.manifest.status == 'published' %}
+          <p class="meta">Published by {{ selected_upload.manifest.published_by or "Unknown" }} on {{ selected_upload.manifest.published_at or "" }}.</p>
+          {% endif %}
+
+          <h3 style="margin-top:22px;">Directional Summary</h3>
+          {% if selected_upload.direction_summary %}
+          <table class="rows-table">
+            <thead>
+              <tr>
+                <th>Direction</th>
+                <th>Valid Rows</th>
+                <th>Total Counts</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for record in selected_upload.direction_summary %}
+              <tr>
+                <td>{{ record.direction }}</td>
+                <td>{{ record.row_count }}</td>
+                <td>{{ record.total_counts }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="meta">No valid rows are available for summary.</p>
+          {% endif %}
+
+          <h3 style="margin-top:22px;">Sample Staged Rows</h3>
+          {% if selected_upload.rows %}
+          <table class="rows-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Direction</th>
+                <th>Count</th>
+                <th>Validation</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in selected_upload.rows %}
+              <tr>
+                <td>{{ row.count_time or "" }}</td>
+                <td>{{ row.direction }}</td>
+                <td>{{ row.count_value if row.count_value is not none else "" }}</td>
+                <td>{{ row.validation_status }}</td>
+                <td>{{ row.validation_message }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="meta">No staged rows are available.</p>
+          {% endif %}
+        </section>
+        {% endif %}
+      </div>
+    </main>
+  </div>
+</body>
+</html>

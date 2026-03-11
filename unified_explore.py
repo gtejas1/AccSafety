@@ -15,6 +15,7 @@ from dash import dcc, html, Input, Output, State, dash_table
 import dash_bootstrap_components as dbc
 from flask import request as flask_request
 
+from explore_data import UNIFIED_DATA_SQL
 from theme import card, dash_page
 from pbc_eco_app import MODE_TABLE as ECO_MODE_TABLE
 
@@ -230,19 +231,7 @@ def _get_display_columns(counts_name: str = "Total counts") -> list[dict]:
         columns.append(new_col)
     return columns
 
-UNIFIED_SQL = """
-  SELECT
-    "Location",
-    "Duration",
-    "Total counts",
-    "Source type",
-    "Longitude",
-    "Latitude",
-    "Source",
-    "Facility type",
-    "Mode"
-  FROM unified_site_summary
-"""
+UNIFIED_SQL = UNIFIED_DATA_SQL
 
 def _fetch_all() -> pd.DataFrame:
     try:
@@ -1026,7 +1015,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
     filter_block = card(
         [
             html.H2("Explore Counts"),
-            html.P("Query: Mode → Facility → Data source"),
+            html.P("Query: Mode -> Facility -> Data source"),
 
             html.Div(
                 [
@@ -1833,7 +1822,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         return html.Div(
             [
                 html.P(
-                    "This dataset supports analysis of crash risk at trail–roadway intersections. It includes modeled relationships between trail user crashes (2011–2018) and factors such as trail and roadway volumes, intersection type, and crossing length. Developed using data from 197 crossings in Minneapolis, MN, and Milwaukee, WI, the Poisson-lognormal model highlights how exposure and design characteristics influence trail crossing safety.",
+                    "This dataset supports analysis of crash risk at trail-roadway intersections. It includes modeled relationships between trail user crashes (2011-2018) and factors such as trail and roadway volumes, intersection type, and crossing length. Developed using data from 197 crossings in Minneapolis, MN, and Milwaukee, WI, the Poisson-lognormal model highlights how exposure and design characteristics influence trail crossing safety.",
                     className="app-muted",
                     style={"margin": "0 0 0.75rem 0"},
                 ),
@@ -1896,14 +1885,14 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         ),
                         ", as well as the previous foundational work of the statewide modeling: ",
                         html.A(
-                            "“Pedestrian Exposure Data for the Wisconsin State Highway System: WisDOT Southeast Region Pilot Study”",
+                            "Pedestrian Exposure Data for the Wisconsin State Highway System: WisDOT Southeast Region Pilot Study",
                             href="https://uwm.edu/ipit/projects/pedestrian-exposure-data-for-the-wisconsin-state-highway-system-wisdot-southeast-region-pilot-study/",
                             target="_blank",
                             rel="noopener noreferrer",
                         ),
                         " and ",
                         html.A(
-                            "“Practical Application of Pedestrian Exposure Tools: Expanding Southeast Region Results Statewide”",
+                            "Practical Application of Pedestrian Exposure Tools: Expanding Southeast Region Results Statewide",
                             href="https://uwm.edu/ipit/projects/practical-application-of-pedestrian-exposure-tools-expanding-southeast-region-results-statewide/",
                             target="_blank",
                             rel="noopener noreferrer",
@@ -1924,14 +1913,14 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         "The estimated counts have been developed by utilizing statewide short-term intersectional pedestrian and long-term trail counts. ",
                         "For information regarding the source of the data, please refer to the project pages ",
                         html.A(
-                            "“Pedestrian Exposure Data for the Wisconsin State Highway System: WisDOT Southeast Region Pilot Study”",
+                            "Pedestrian Exposure Data for the Wisconsin State Highway System: WisDOT Southeast Region Pilot Study",
                             href="https://uwm.edu/ipit/projects/pedestrian-exposure-data-for-the-wisconsin-state-highway-system-wisdot-southeast-region-pilot-study/",
                             target="_blank",
                             rel="noopener noreferrer",
                         ),
                         " and ",
                         html.A(
-                            "“Practical Application of Pedestrian Exposure Tools: Expanding Southeast Region Results Statewide”",
+                            "Practical Application of Pedestrian Exposure Tools: Expanding Southeast Region Results Statewide",
                             href="https://uwm.edu/ipit/projects/practical-application-of-pedestrian-exposure-tools-expanding-southeast-region-results-statewide/",
                             target="_blank",
                             rel="noopener noreferrer",
@@ -1953,7 +1942,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         "Using technologies like Axis radar-video cameras, Viva V2 sensors, and Eco-Counter units, the program gathers data from diverse environments. ",
                         "For information regarding the source of the data, please refer to the project page ",
                         html.A(
-                            "“Pilot Wisconsin Pedestrian and Bicycle Count Program”",
+                            "Pilot Wisconsin Pedestrian and Bicycle Count Program",
                             href="https://uwm.edu/ipit/projects/pilot-wisconsin-pedestrian-and-bicycle-count-program/",
                             target="_blank",
                             rel="noopener noreferrer",
@@ -1973,14 +1962,14 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     [
                         "The counts have been collected via the ",
                         html.A(
-                            "SEWRPC’s Regional Non-Motorized Count Program",
+                            "SEWRPC's Regional Non-Motorized Count Program",
                             href="https://www.sewrpc.org/Info-and-Data/Non-Motorized-Count-Program",
                             target="_blank",
                             rel="noopener noreferrer",
                         ),
                         ", and this list only contains portion of the counts before 2018, for the use in the project of ",
                         html.A(
-                            "“Wisconsin Pedestrian and Bicycle Count Database and Expansion Factor Development”",
+                            "Wisconsin Pedestrian and Bicycle Count Database and Expansion Factor Development",
                             href="https://uwm.edu/ipit/projects/wisconsin-pedestrian-and-bicycle-count-database-and-expansion-factor-development/",
                             target="_blank",
                             rel="noopener noreferrer",
@@ -2001,14 +1990,14 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                         "The estimated counts have been developed by utilizing statewide short-term intersectional pedestrian and long-term trail counts. ",
                         "For information regarding the source of the data, please refer to the project pages ",
                         html.A(
-                            "“Pedestrian Exposure Data for the Wisconsin State Highway System: WisDOT Southeast Region Pilot Study”",
+                            "Pedestrian Exposure Data for the Wisconsin State Highway System: WisDOT Southeast Region Pilot Study",
                             href="https://uwm.edu/ipit/projects/pedestrian-exposure-data-for-the-wisconsin-state-highway-system-wisdot-southeast-region-pilot-study/",
                             target="_blank",
                             rel="noopener noreferrer",
                         ),
                         " and ",
                         html.A(
-                            "“Practical Application of Pedestrian Exposure Tools: Expanding Southeast Region Results Statewide”",
+                            "Practical Application of Pedestrian Exposure Tools: Expanding Southeast Region Results Statewide",
                             href="https://uwm.edu/ipit/projects/practical-application-of-pedestrian-exposure-tools-expanding-southeast-region-results-statewide/",
                             target="_blank",
                             rel="noopener noreferrer",
@@ -2049,6 +2038,7 @@ if __name__ == "__main__":
     _server = dash.Dash(__name__).server
     _app = create_unified_explore(_server, prefix="/")
     _app.run_server(host="127.0.0.1", port=8068, debug=True)
+
 
 
 
