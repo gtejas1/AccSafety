@@ -8,3 +8,4 @@ static/img/accsafety-logo.png
 *.zip
 rag_embeddings.jsonl
 *.jsonl
+data/users.json
