@@ -552,7 +552,7 @@ def _smtp_settings() -> Dict[str, object]:
 
 def _smtp_ready() -> bool:
     settings = _smtp_settings()
-    required = ("host", "username", "password", "sender", "reset_base_url")
+    required = ("host", "sender", "reset_base_url")
     return all(str(settings[key]).strip() for key in required)
 
 
@@ -599,7 +599,8 @@ def _send_password_reset_email(recipient_email: str, username: str, reset_token:
         if settings["use_tls"]:
             smtp.starttls()
             smtp.ehlo()
-        smtp.login(str(settings["username"]), str(settings["password"]))
+        if str(settings["username"]).strip() and str(settings["password"]):
+            smtp.login(str(settings["username"]), str(settings["password"]))
         smtp.send_message(msg)
 
 
