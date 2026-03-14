@@ -93,6 +93,51 @@ def test_forgot_password_generates_reset_token_and_sends_email(monkeypatch, tmp_
     assert user.flags.get("reset_token_hash") == _hash_reset_token(sent["reset_token"])
 
 
+def test_register_creates_pending_user_and_sends_access_request_email(monkeypatch, tmp_path):
+    store = UserStore(tmp_path / "users.json")
+    monkeypatch.setattr("gateway.user_store", store)
+    monkeypatch.setenv("ACC_SMTP_HOST", "smtp.office365.com")
+    monkeypatch.setenv("ACC_SMTP_PORT", "587")
+    monkeypatch.setenv("ACC_SMTP_USERNAME", "mailer@example.com")
+    monkeypatch.setenv("ACC_SMTP_PASSWORD", "secret")
+    monkeypatch.setenv("ACC_SMTP_FROM", "uwm-ipit@uwm.edu")
+    monkeypatch.setenv("ACC_ACCESS_REQUEST_TO", "admin@example.com")
+
+    sent = {}
+
+    def fake_send(username, email, requested_at):
+        sent["username"] = username
+        sent["email"] = email
+        sent["requested_at"] = requested_at
+
+    monkeypatch.setattr("gateway._send_access_request_email", fake_send)
+
+    app = create_server()
+    app.testing = True
+    client = app.test_client()
+
+    response = client.post(
+        "/register",
+        data={
+            "username": "newperson",
+            "email": "newperson@example.com",
+            "password": "newpassword456",
+            "confirm_password": "newpassword456",
+        },
+    )
+    body = response.get_data(as_text=True)
+    user = store.get_user("newperson")
+
+    assert response.status_code == 200
+    assert "Registration received" in body
+    assert user is not None
+    assert user.approved is False
+    assert user.email == "newperson@example.com"
+    assert sent["username"] == "newperson"
+    assert sent["email"] == "newperson@example.com"
+    assert sent["requested_at"] == user.flags["requested_at"]
+
+
 def test_reset_password_updates_credentials(monkeypatch, tmp_path):
     store = _make_store(tmp_path)
     token = "fixed-reset-token"

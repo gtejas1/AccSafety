@@ -534,25 +534,32 @@ def _password_reset_token_ttl_minutes() -> int:
 
 
 def _smtp_settings() -> Dict[str, object]:
-    port_raw = (os.environ.get("ACC_SMTP_PORT") or "587").strip()
+    port_raw = (os.environ.get("ACC_SMTP_PORT") or "25").strip()
     try:
         port = int(port_raw)
     except ValueError:
-        port = 587
+        port = 25
     return {
-        "host": (os.environ.get("ACC_SMTP_HOST") or "").strip(),
+        "host": (os.environ.get("ACC_SMTP_HOST") or "smtprelay.uwm.edu").strip(),
         "port": port,
         "username": (os.environ.get("ACC_SMTP_USERNAME") or "").strip(),
         "password": os.environ.get("ACC_SMTP_PASSWORD") or "",
-        "sender": (os.environ.get("ACC_SMTP_FROM") or "").strip(),
-        "use_tls": (os.environ.get("ACC_SMTP_USE_TLS") or "1").strip().lower() not in {"0", "false", "no", "off"},
-        "reset_base_url": (os.environ.get("ACC_RESET_BASE_URL") or "").strip().rstrip("/"),
+        "sender": (os.environ.get("ACC_SMTP_FROM") or "uwm-ipit@uwm.edu").strip(),
+        "use_tls": (os.environ.get("ACC_SMTP_USE_TLS") or "0").strip().lower() not in {"0", "false", "no", "off"},
+        "reset_base_url": (os.environ.get("ACC_RESET_BASE_URL") or "http://127.0.0.1:5000").strip().rstrip("/"),
+        "access_request_to": (os.environ.get("ACC_ACCESS_REQUEST_TO") or "uwm-ipit@uwm.edu").strip(),
     }
 
 
 def _smtp_ready() -> bool:
     settings = _smtp_settings()
     required = ("host", "sender", "reset_base_url")
+    return all(str(settings[key]).strip() for key in required)
+
+
+def _access_request_email_ready() -> bool:
+    settings = _smtp_settings()
+    required = ("host", "sender", "access_request_to")
     return all(str(settings[key]).strip() for key in required)
 
 
@@ -592,6 +599,31 @@ def _send_password_reset_email(recipient_email: str, username: str, reset_token:
         f"We received a password reset request for your AccSafety account ({username}).\n\n"
         f"Use this link to reset your password: {reset_url}\n\n"
         f"This link expires in {_password_reset_token_ttl_minutes()} minutes. If you did not request a reset, you can ignore this email.\n"
+    )
+
+    with smtplib.SMTP(str(settings["host"]), int(settings["port"]), timeout=30) as smtp:
+        smtp.ehlo()
+        if settings["use_tls"]:
+            smtp.starttls()
+            smtp.ehlo()
+        if str(settings["username"]).strip() and str(settings["password"]):
+            smtp.login(str(settings["username"]), str(settings["password"]))
+        smtp.send_message(msg)
+
+
+def _send_access_request_email(username: str, email: str, requested_at: str) -> None:
+    settings = _smtp_settings()
+
+    msg = EmailMessage()
+    msg["Subject"] = "AccSafety access request"
+    msg["From"] = str(settings["sender"])
+    msg["To"] = str(settings["access_request_to"])
+    msg.set_content(
+        "Hello,\n\n"
+        "A new AccSafety account request has been submitted.\n\n"
+        f"Username: {username}\n"
+        f"Email: {email}\n"
+        f"Requested at: {requested_at}\n"
     )
 
     with smtplib.SMTP(str(settings["host"]), int(settings["port"]), timeout=30) as smtp:
@@ -691,14 +723,20 @@ def create_server():
             elif user_store.email_exists(form["email"]):
                 error = "An account with that email already exists."
             else:
+                requested_at = datetime.now(timezone.utc).isoformat()
                 user_store.create_user(
                     form["username"],
                     form["email"],
                     password,
                     roles=["user"],
                     approved=False,
-                    flags={"requested_at": datetime.utcnow().isoformat()},
+                    flags={"requested_at": requested_at},
                 )
+                if _access_request_email_ready():
+                    try:
+                        _send_access_request_email(form["username"], form["email"], requested_at)
+                    except Exception:
+                        current_app.logger.exception("Failed to send access request email for %s", form["username"])
                 success = "Registration received. An administrator will review your request."
                 form = {"username": "", "email": ""}
 
