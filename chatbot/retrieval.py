@@ -7,34 +7,8 @@ from typing import Any
 
 import pandas as pd
 
+from explore_data import UNIFIED_NEARBY_SQL, UNIFIED_SEARCH_SQL
 from unified_explore import ENGINE
-
-UNIFIED_SEARCH_SQL = """
-    SELECT
-        "Location",
-        "Longitude",
-        "Latitude",
-        "Total counts",
-        "Source",
-        "Facility type",
-        "Mode"
-    FROM unified_site_summary
-    WHERE "Location" ILIKE %(pattern)s
-"""
-
-UNIFIED_NEARBY_SQL = """
-    SELECT
-        "Location",
-        "Longitude",
-        "Latitude",
-        "Total counts",
-        "Source",
-        "Facility type",
-        "Mode"
-    FROM unified_site_summary
-    WHERE "Longitude" IS NOT NULL
-      AND "Latitude" IS NOT NULL
-"""
 
 
 @dataclass
@@ -249,3 +223,4 @@ class EvidenceRetriever:
         evidence, citations = _evidence_from_matches(combined_matches)
         stats = summary_stats(combined_matches)
         return RetrievalResult(evidence=evidence, citations=citations, stats=stats)
+

@@ -443,6 +443,7 @@
         <a class="app-link" href="/guide">User Guide</a>
 
         <a class="app-link" href="/whats-new">What's New</a>
+        {% if is_admin %}<a class="app-link" href="/admin/data-uploads">Data Uploads</a>{% endif %}
 
         <a class="app-link" href="https://uwm.edu/ipit/wi-pedbike-dashboard/" target="_blank" rel="noopener noreferrer">Program Home</a>
 
@@ -926,7 +927,7 @@
 
         <h2>AccSafety Assistant</h2>
 
-        <button id="chat-widget-close" class="chat-widget-close" type="button" aria-label="Close chat">Ã—</button>
+        <button id="chat-widget-close" class="chat-widget-close" type="button" aria-label="Close chat">×</button>
 
       </header>
 

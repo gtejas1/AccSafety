@@ -31,10 +31,12 @@ from wisdot_files_app import create_wisdot_files_app
 from live_detection_app import create_live_detection_app
 from se_wi_trails_app import create_se_wi_trails_app
 from unified_explore import create_unified_explore, ENGINE
+from explore_data import UNIFIED_NEARBY_SQL, UNIFIED_SEARCH_SQL
 from flask import current_app
 from auth.user_store import UserStore
 from chatbot.logging import ChatAuditLogger, ChatLogRecord
 from chatbot.service import ChatService
+import upload_service
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -65,33 +67,6 @@ user_store.ensure_seed_users(
         },
     }
 )
-
-UNIFIED_SEARCH_SQL = """
-    SELECT
-        "Location",
-        "Longitude",
-        "Latitude",
-        "Total counts",
-        "Source",
-        "Facility type",
-        "Mode"
-    FROM unified_site_summary
-    WHERE "Location" ILIKE %(pattern)s
-"""
-
-UNIFIED_NEARBY_SQL = """
-    SELECT
-        "Location",
-        "Longitude",
-        "Latitude",
-        "Total counts",
-        "Source",
-        "Facility type",
-        "Mode"
-    FROM unified_site_summary
-    WHERE "Longitude" IS NOT NULL
-      AND "Latitude" IS NOT NULL
-"""
 
 
 def _portal_vivacity_ids() -> List[str]:
@@ -647,6 +622,10 @@ def create_server():
     server.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_secret_key")
     chat_service = ChatService()
     chat_logger = ChatAuditLogger()
+    try:
+        upload_service.ensure_tables(ENGINE)
+    except Exception as exc:
+        server.logger.warning("Failed to ensure upload tables", exc_info=exc)
 
     # ---- Global Auth Guard ----
     @server.before_request
@@ -830,7 +809,82 @@ def create_server():
                     message = f"Updated roles for {updated.username}."
 
         users = user_store.list_users()
-        return render_template("admin_users.html", users=users, message=message)
+        return render_template("admin_users.html", users=users, message=message, is_admin=True)
+
+    def _render_upload_page(*, selected_upload_id: str | None = None, message: str | None = None, error: str | None = None):
+        uploads = upload_service.list_uploads(ENGINE)
+        selected_upload = upload_service.get_upload_detail(ENGINE, selected_upload_id) if selected_upload_id else None
+        return render_template(
+            "admin_data_uploads.html",
+            uploads=uploads,
+            selected_upload=selected_upload,
+            mode_options=upload_service.UPLOAD_MODE_OPTIONS,
+            user=session.get("user", "user"),
+            is_admin=True,
+            message=message,
+            error=error,
+        )
+
+    @server.route("/admin/data-uploads", methods=["GET", "POST"])
+    def admin_data_uploads():
+        current_user = _current_user()
+        if not _is_admin(current_user):
+            return ("Forbidden", 403)
+
+        if request.method == "POST":
+            uploaded_file = request.files.get("file")
+            if uploaded_file is None or not (uploaded_file.filename or "").strip():
+                return _render_upload_page(error="Choose an .xlsx file to upload.")
+
+            file_name = uploaded_file.filename or "upload.xlsx"
+            if not file_name.lower().endswith(".xlsx"):
+                return _render_upload_page(error="Only .xlsx uploads are supported.")
+
+            parsed_upload = upload_service.parse_excel_upload(
+                uploaded_file.read(),
+                filename=file_name,
+                selected_mode=request.form.get("mode"),
+                location_override=request.form.get("location_override", ""),
+                notes=request.form.get("notes", ""),
+            )
+            upload_service.stage_upload(ENGINE, parsed_upload, uploaded_by=current_user.username)
+            message = "Upload staged for review."
+            if parsed_upload.status == "invalid":
+                message = "Upload stored with validation errors."
+            return _render_upload_page(selected_upload_id=parsed_upload.upload_id, message=message)
+
+        selected_upload_id = (request.args.get("upload_id") or "").strip() or None
+        return _render_upload_page(selected_upload_id=selected_upload_id)
+
+    @server.get("/admin/data-uploads/<upload_id>")
+    def admin_data_upload_detail(upload_id: str):
+        current_user = _current_user()
+        if not _is_admin(current_user):
+            return ("Forbidden", 403)
+        detail = upload_service.get_upload_detail(ENGINE, upload_id)
+        if detail is None:
+            return ("Not Found", 404)
+        return _render_upload_page(selected_upload_id=upload_id)
+
+    @server.post("/admin/data-uploads/<upload_id>/publish")
+    def admin_data_upload_publish(upload_id: str):
+        current_user = _current_user()
+        if not _is_admin(current_user):
+            return ("Forbidden", 403)
+        try:
+            result = upload_service.publish_upload(ENGINE, upload_id, published_by=current_user.username)
+        except KeyError:
+            return ("Not Found", 404)
+
+        message = None
+        error = None
+        if result["status"] == "published":
+            message = f"Published {result['inserted_rows']} row(s) to Explore."
+        elif result["status"] == "already_published":
+            message = "This upload was already published."
+        else:
+            error = "This upload has no valid rows to publish."
+        return _render_upload_page(selected_upload_id=upload_id, message=message, error=error)
 
     # ---- Subapps ----
     create_trail_dash(server, prefix="/trail/")
@@ -844,7 +898,11 @@ def create_server():
     # ---- Portal Home ----
     @server.route("/")
     def home():
-        return render_template("home.html", user=session.get("user", "user"))
+        return render_template(
+            "home.html",
+            user=session.get("user", "user"),
+            is_admin=_is_admin(_current_user()),
+        )
 
     @server.get("/api/v1/vivacity/sparkline")
     def api_vivacity_sparkline():
@@ -1036,12 +1094,21 @@ def create_server():
 
     @server.route("/guide")
     def user_guide():
-        return render_template("user_guide.html", user=session.get("user", "user"))
+        return render_template(
+            "user_guide.html",
+            user=session.get("user", "user"),
+            is_admin=_is_admin(_current_user()),
+        )
 
     @server.route("/whats-new")
     def whats_new():
         entries = load_whats_new_entries()
-        return render_template("whats_new.html", entries=entries, user=session.get("user", "user"))
+        return render_template(
+            "whats_new.html",
+            entries=entries,
+            user=session.get("user", "user"),
+            is_admin=_is_admin(_current_user()),
+        )
 
     return server
 
