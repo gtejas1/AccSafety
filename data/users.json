@@ -18,5 +18,17 @@
     ],
     "flags": {},
     "approved": true
+  },
+  {
+    "username": "tejas",
+    "email": "tguduru@uwm.edu",
+    "password_hash": "scrypt:32768:8:1$atSurd1nuyOH322O$487334f94c3ff54e2d6c869bf9f1c473d2ac584a66726a7181cc5e7a2590b13572904349843d09824d098c31c8c8c5d1752b92279f891337bd6da8b4f740dd1f",
+    "roles": [
+      "user"
+    ],
+    "flags": {
+      "requested_at": "2026-03-11T04:22:53.153888"
+    },
+    "approved": true
   }
 ]

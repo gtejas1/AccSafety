@@ -37,6 +37,7 @@
     .login-card button:disabled { filter: grayscale(0.4); cursor: not-allowed; box-shadow: none; opacity: 0.7; }
     .login-card .showpw { margin-top: 10px; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: #0b1736; }
     .login-card .error { margin-top: 12px; color: #b91c1c; font-weight: 600; font-size: 0.9rem; }
+    .login-card .success { margin-top: 12px; color: #15803d; font-weight: 600; font-size: 0.9rem; }
     .login-card .meta { margin-top: 12px; font-size: 0.9rem; color: var(--brand-muted); text-align: center; }
     .login-card .meta a { color: var(--brand-primary); font-weight: 600; text-decoration: none; }
     .login-card .meta a:hover { text-decoration: underline; }
@@ -116,9 +117,11 @@
           <label for="password">Password</label>
           <input id="password" name="password" type="password" required placeholder="••••••••">
           <label class="showpw"><input id="toggle" type="checkbox"> Show password</label>
+          <div class="meta"><a href="/forgot-password">Forgot password?</a></div>
 
           <button type="submit" disabled>Sign in</button>
           {% if error %}<div class="error">{{ error }}</div>{% endif %}
+          {% if success %}<div class="success">{{ success }}</div>{% endif %}
           <div class="meta">Need an account? <a href="/register">Request access</a></div>
         </form>
       </div>
