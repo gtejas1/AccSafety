@@ -521,7 +521,7 @@ def _smtp_settings() -> Dict[str, object]:
         "password": os.environ.get("ACC_SMTP_PASSWORD") or "",
         "sender": (os.environ.get("ACC_SMTP_FROM") or "uwm-ipit@uwm.edu").strip(),
         "use_tls": (os.environ.get("ACC_SMTP_USE_TLS") or "0").strip().lower() not in {"0", "false", "no", "off"},
-        "reset_base_url": (os.environ.get("ACC_RESET_BASE_URL") or "http://127.0.0.1:5000").strip().rstrip("/"),
+        "reset_base_url": (os.environ.get("ACC_RESET_BASE_URL") or "https://accsafety.uwm.edu").strip().rstrip("/"),
         "access_request_to": (os.environ.get("ACC_ACCESS_REQUEST_TO") or "uwm-ipit@uwm.edu").strip(),
     }
 
