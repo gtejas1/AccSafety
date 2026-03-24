@@ -33,10 +33,15 @@ def build_header(
         nav_items.insert(0, portal_link())
 
     header_children = [
-        html.Img(
-            src=BRAND_LOGO_SRC,
-            alt=BRAND_LOGO_ALT,
-            className="app-logo",
+        html.A(
+            html.Img(
+                src=BRAND_LOGO_SRC,
+                alt=BRAND_LOGO_ALT,
+                className="app-logo",
+            ),
+            href=PORTAL_URL,
+            className="app-logo-link",
+            **{"aria-label": "Go to AccSafety homepage"},
         ),
         html.Div(
             [
