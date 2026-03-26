@@ -7,10 +7,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-import requests
-
-DEFAULT_EMBEDDING_MODEL = "text-embedding-3-large"
-DEFAULT_EMBEDDING_BASE_URL = "https://api.openai.com/v1/embeddings"
+from chatbot.embeddings import EmbeddingProviderConfig, build_embedding_provider
+from chatbot.providers import ChatProviderError
+from chatbot.settings import (
+    DEFAULT_EMBEDDING_MODEL,
+    DEFAULT_OLLAMA_HOST,
+    DEFAULT_OPENAI_EMBEDDINGS_URL,
+)
 
 
 def _load_json_records(path: Path) -> list[dict]:
@@ -68,101 +71,25 @@ def _clean_and_cap_text(text: str, max_chars: int) -> str:
     return text
 
 
-def _post_with_retries(
-    session: requests.Session,
-    url: str,
-    *,
-    headers: dict[str, str],
-    json_body: dict[str, Any],
-    timeout: int = 60,
-    max_retries: int = 10,
-    verbose_rate_headers: bool = True,
-) -> dict:
-    """
-    Robust POST with retries for 429 and transient 5xx errors.
-    Uses exponential backoff with jitter and honors Retry-After when available.
-    """
-    last_status = None
-    for attempt in range(max_retries):
-        resp = session.post(url, headers=headers, json=json_body, timeout=timeout)
-        last_status = resp.status_code
-
-        if resp.status_code == 200:
-            return resp.json()
-
-        # Rate limit or transient server errors
-        if resp.status_code in (429, 500, 502, 503, 504):
-            try:
-                err = resp.json()
-                if "error" in err:
-                    print("[OPENAI ERROR]", err["error"].get("type"), err["error"].get("code"))
-                    print("[OPENAI MESSAGE]", err["error"].get("message"))
-            except Exception:
-                print("[OPENAI RAW]", resp.text[:500])
-
-            if resp.status_code == 429 and verbose_rate_headers:
-                print("[RATE LIMIT HEADERS]")
-                for k in [
-                    "Retry-After",
-                    "x-ratelimit-limit-requests",
-                    "x-ratelimit-remaining-requests",
-                    "x-ratelimit-reset-requests",
-                    "x-ratelimit-limit-tokens",
-                    "x-ratelimit-remaining-tokens",
-                    "x-ratelimit-reset-tokens",
-                ]:
-                    if k in resp.headers:
-                        print(f"  {k}: {resp.headers.get(k)}")
-
-            retry_after = resp.headers.get("Retry-After")
-            sleep_s: float | None
-            if retry_after:
-                try:
-                    sleep_s = float(retry_after)
-                except ValueError:
-                    sleep_s = None
-            else:
-                sleep_s = None
-
-            if sleep_s is None:
-                # exponential backoff + jitter
-                sleep_s = min(60.0, (2 ** attempt)) + random.uniform(0.0, 1.0)
-
-            print(
-                f"[WARN] HTTP {resp.status_code}. Retrying in {sleep_s:.2f}s... "
-                f"(attempt {attempt+1}/{max_retries})"
-            )
-            time.sleep(sleep_s)
-            continue
-
-        # Non-retryable: raise
-        resp.raise_for_status()
-
-    raise RuntimeError(f"Failed after {max_retries} retries (last status={last_status}).")
-
-
 def _embed_batch(
-    session: requests.Session,
     texts: list[str],
     *,
+    provider_name: str,
     model: str,
     api_key: str,
     base_url: str,
 ) -> list[list[float]]:
-    """
-    Embed a batch of texts in one API call.
-    Returns embeddings in the same order as texts.
-    """
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    payload = {"model": model, "input": texts}
-
-    data = _post_with_retries(session, base_url, headers=headers, json_body=payload, timeout=60)
-    # API returns list of {index, embedding, ...}; sort by index to be safe
-    items = sorted(data["data"], key=lambda d: d.get("index", 0))
-    return [it["embedding"] for it in items]
+    provider = build_embedding_provider(
+        EmbeddingProviderConfig(
+            provider=provider_name,
+            model=model,
+            base_url=base_url,
+            api_key=api_key,
+            timeout_seconds=60,
+            max_retries=10,
+        )
+    )
+    return provider.embed_texts(texts)
 
 
 def parse_args() -> argparse.Namespace:
@@ -184,16 +111,29 @@ def parse_args() -> argparse.Namespace:
         help="Output embeddings JSONL path (env: RAG_INDEX_PATH).",
     )
     parser.add_argument(
+        "--embedding-provider",
+        default=os.environ.get("EMBEDDING_PROVIDER", os.environ.get("CHAT_PROVIDER", "ollama")),
+        help="Embedding provider name (env: EMBEDDING_PROVIDER).",
+    )
+    parser.add_argument(
         "--embedding-model",
         default=os.environ.get(
             "EMBEDDING_MODEL",
             os.environ.get("RAG_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL),
         ),
-        help="OpenAI embedding model name (env: EMBEDDING_MODEL).",
+        help="Embedding model name (env: EMBEDDING_MODEL).",
     )
     parser.add_argument(
         "--embedding-base-url",
-        default=os.environ.get("EMBEDDING_BASE_URL", DEFAULT_EMBEDDING_BASE_URL),
+        default=os.environ.get(
+            "EMBEDDING_BASE_URL",
+            (
+                DEFAULT_OPENAI_EMBEDDINGS_URL
+                if (os.environ.get("EMBEDDING_PROVIDER") or os.environ.get("CHAT_PROVIDER") or "ollama").strip().lower()
+                == "openai"
+                else f"{(os.environ.get('OLLAMA_HOST') or DEFAULT_OLLAMA_HOST).rstrip('/')}/api/embed"
+            ),
+        ),
         help="Embedding API base URL (env: EMBEDDING_BASE_URL).",
     )
     parser.add_argument(
@@ -227,9 +167,10 @@ def main() -> None:
     manifest_path = Path(args.manifest_path)
     embeddings_path = Path(args.embeddings_path)
 
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        raise SystemExit("OPENAI_API_KEY is required to generate embeddings.")
+    provider_name = (args.embedding_provider or "ollama").strip().lower()
+    api_key = (os.environ.get("EMBEDDING_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip()
+    if provider_name == "openai" and not api_key:
+        raise SystemExit("EMBEDDING_API_KEY or OPENAI_API_KEY is required for OpenAI embeddings.")
 
     entries = _load_json_records(manifest_path)
     if not entries:
@@ -266,14 +207,12 @@ def main() -> None:
         return
 
     print(
-        f"[INFO] Embedding {len(work)} chunks using batch_size={args.batch_size} "
+        f"[INFO] Embedding {len(work)} chunks using provider={provider_name} batch_size={args.batch_size} "
         f"max_chars_per_chunk={args.max_chars_per_chunk} model={args.embedding_model} "
         f"base_url={args.embedding_base_url}"
     )
     if skipped_empty:
         print(f"[INFO] Skipped {skipped_empty} empty/invalid chunks.")
-
-    session = requests.Session()
 
     # Append in resume mode, otherwise overwrite
     mode = "a" if args.resume and embeddings_path.exists() else "w"
@@ -285,13 +224,27 @@ def main() -> None:
             texts = [b["text"] for b in batch]
             chunk_ids = [b["chunk_id"] for b in batch]
 
-            embeddings = _embed_batch(
-                session,
-                texts,
-                model=args.embedding_model,
-                api_key=api_key,
-                base_url=args.embedding_base_url,
-            )
+            try:
+                embeddings = _embed_batch(
+                    texts,
+                    provider_name=provider_name,
+                    model=args.embedding_model,
+                    api_key=api_key,
+                    base_url=args.embedding_base_url,
+                )
+            except ChatProviderError as exc:
+                sleep_s = min(60.0, (2 ** max(i // max(args.batch_size, 1), 0))) + random.uniform(0.0, 1.0)
+                if exc.code not in {"timeout", "rate_limited", "provider_unavailable", "network_error"}:
+                    raise SystemExit(exc.public_message) from exc
+                print(f"[WARN] {exc.public_message} Retrying in {sleep_s:.2f}s...")
+                time.sleep(sleep_s)
+                embeddings = _embed_batch(
+                    texts,
+                    provider_name=provider_name,
+                    model=args.embedding_model,
+                    api_key=api_key,
+                    base_url=args.embedding_base_url,
+                )
 
             for cid, emb in zip(chunk_ids, embeddings):
                 handle.write(json.dumps({"chunk_id": cid, "embedding": emb}) + "\n")

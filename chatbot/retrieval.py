@@ -7,9 +7,6 @@ from typing import Any
 
 import pandas as pd
 
-from explore_data import UNIFIED_NEARBY_SQL, UNIFIED_SEARCH_SQL
-from unified_explore import ENGINE
-
 
 @dataclass
 class RetrievalResult:
@@ -84,6 +81,9 @@ def _aggregate_locations(df: pd.DataFrame) -> list[dict[str, Any]]:
 
 
 def location_matches(query: str, *, limit: int = 8) -> list[dict[str, Any]]:
+    from explore_data import UNIFIED_SEARCH_SQL
+    from unified_explore import ENGINE
+
     pattern = f"%{query.strip()}%"
     try:
         df = pd.read_sql(UNIFIED_SEARCH_SQL, ENGINE, params={"pattern": pattern})
@@ -95,6 +95,9 @@ def location_matches(query: str, *, limit: int = 8) -> list[dict[str, Any]]:
 def nearest_sites(matches: list[dict[str, Any]], *, radius_miles: float = 5, limit: int = 8) -> list[dict[str, Any]]:
     if not matches:
         return []
+    from explore_data import UNIFIED_NEARBY_SQL
+    from unified_explore import ENGINE
+
     try:
         all_df = pd.read_sql(UNIFIED_NEARBY_SQL, ENGINE)
     except Exception:

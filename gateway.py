@@ -35,12 +35,14 @@ from explore_data import UNIFIED_NEARBY_SQL, UNIFIED_SEARCH_SQL
 from flask import current_app
 from auth.user_store import UserStore
 from chatbot.logging import ChatAuditLogger, ChatLogRecord
+from chatbot.settings import ChatRuntimeSettings, ChatSettingsStore
 from chatbot.service import ChatService
 import upload_service
 
 
 BASE_DIR = Path(__file__).resolve().parent
 USER_DATA_PATH = BASE_DIR / "data" / "users.json"
+CHAT_SETTINGS_PATH = BASE_DIR / "data" / "chat_settings.json"
 
 PROTECTED_PREFIXES = ("/", "/eco/", "/trail/", "/vivacity/", "/live/", "/wisdot/", "/se-wi-trails/")
 
@@ -620,7 +622,8 @@ def _is_reset_token_valid(user) -> bool:
 def create_server():
     server = Flask(__name__)
     server.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_secret_key")
-    chat_service = ChatService()
+    chat_settings_store = ChatSettingsStore(CHAT_SETTINGS_PATH)
+    chat_service = ChatService(settings_store=chat_settings_store)
     chat_logger = ChatAuditLogger()
     try:
         upload_service.ensure_tables(ENGINE)
@@ -810,6 +813,57 @@ def create_server():
 
         users = user_store.list_users()
         return render_template("admin_users.html", users=users, message=message, is_admin=True)
+
+    def _render_chat_settings_page(
+        *,
+        settings: ChatRuntimeSettings | None = None,
+        message: str | None = None,
+        error: str | None = None,
+    ):
+        active_settings = settings or chat_settings_store.load()
+        return render_template(
+            "admin_chat_settings.html",
+            settings=active_settings,
+            settings_public=active_settings.to_public_dict(),
+            message=message,
+            error=error,
+            is_admin=True,
+        )
+
+    @server.route("/admin/chat-settings", methods=["GET", "POST"])
+    def admin_chat_settings():
+        current_user = _current_user()
+        if not _is_admin(current_user):
+            return ("Forbidden", 403)
+
+        if request.method == "POST":
+            form_values = {
+                "chat_provider": request.form.get("chat_provider"),
+                "chat_model": request.form.get("chat_model"),
+                "chat_base_url": request.form.get("chat_base_url"),
+                "chat_api_key": request.form.get("chat_api_key"),
+                "embedding_provider": request.form.get("embedding_provider"),
+                "embedding_model": request.form.get("embedding_model"),
+                "embedding_base_url": request.form.get("embedding_base_url"),
+                "embedding_api_key": request.form.get("embedding_api_key"),
+            }
+            if not str(form_values["chat_model"] or "").strip():
+                return _render_chat_settings_page(
+                    settings=chat_settings_store.load(),
+                    error="Chat model is required.",
+                )
+            if not str(form_values["embedding_model"] or "").strip():
+                return _render_chat_settings_page(
+                    settings=chat_settings_store.load(),
+                    error="Embedding model is required.",
+                )
+            updated_settings = chat_settings_store.update(form_values)
+            return _render_chat_settings_page(
+                settings=updated_settings,
+                message="Assistant backend settings updated.",
+            )
+
+        return _render_chat_settings_page()
 
     def _render_upload_page(*, selected_upload_id: str | None = None, message: str | None = None, error: str | None = None):
         uploads = upload_service.list_uploads(ENGINE)

@@ -1,0 +1,11 @@
+{
+  "chat_provider": "ollama",
+  "chat_model": "llama3.2",
+  "chat_base_url": "http://127.0.0.1:11434/api/chat",
+  "chat_api_key": "",
+  "embedding_provider": "ollama",
+  "embedding_model": "nomic-embed-text",
+  "embedding_base_url": "http://127.0.0.1:11434/api/embed",
+  "embedding_api_key": "",
+  "updated_at": "2026-03-25T04:26:42.972337+00:00"
+}
