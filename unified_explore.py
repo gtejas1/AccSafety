@@ -1157,8 +1157,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     ),
                     dbc.Col(
                         [
-                            search_results_block,
                             html.Div(id="wrap-map", children=[map_card], style={"display": "block"}),
+                            search_results_block,
                             dcc.Loading(
                                 id="pf-wrap-loader",
                                 type="default",
@@ -1173,6 +1173,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             # sentinel to keep older show/hide logic happy (no children needed)
             html.Div(id="wrap-results", style={"display": "none"}),
             dcc.Store(id="unified-search-active", data=False),
+            dcc.Store(id="unified-search-scroll-trigger", data=0),
         ],
     )
 
@@ -1580,6 +1581,22 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if search_active:
             return {"display": "block"}, {"display": "none"}, {"display": "none"}, {"display": "block"}
         return {"display": "none"}, {"display": "block"}, {"display": "flex"}, {"display": "none"}
+
+    app.clientside_callback(
+        """
+        function(search_active) {
+            if (search_active) {
+                setTimeout(function() {
+                    var el = document.getElementById('wrap-map');
+                    if (el) { el.scrollIntoView({behavior: 'smooth', block: 'start'}); }
+                }, 150);
+            }
+            return 0;
+        }
+        """,
+        Output("unified-search-scroll-trigger", "data"),
+        Input("unified-search-active", "data"),
+    )
 
     # ---------- Progressive options ----------
     @app.callback(
