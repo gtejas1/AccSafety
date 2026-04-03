@@ -1071,14 +1071,42 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 id="pf-map-info",
             ),
             html.Div(
-                dcc.Loading(
-                    type="default",
-                    children=html.Div(
+                [
+                    html.Div(
                         "Search to see locations on the map.",
-                        id="unified-search-map",
+                        id="unified-search-map-msg",
                         className="app-muted small mb-3",
                     ),
-                ),
+                    dcc.Loading(
+                        type="default",
+                        children=dcc.Graph(
+                            id="unified-search-graph",
+                            figure=go.Figure(
+                                layout={
+                                    "mapbox": {"style": "open-street-map"},
+                                    "margin": {"l": 0, "r": 0, "t": 0, "b": 0},
+                                    "height": 420,
+                                }
+                            ),
+                            config={"scrollZoom": True, "displayModeBar": True},
+                            style={"display": "none"},
+                        ),
+                    ),
+                    html.Div(
+                        [
+                            html.Span("(c) OpenStreetMap contributors - Data available under ODbL - "),
+                            html.A(
+                                "https://www.openstreetmap.org/copyright",
+                                href="https://www.openstreetmap.org/copyright",
+                                target="_blank",
+                                rel="noopener noreferrer",
+                            ),
+                        ],
+                        id="unified-search-osm-credit",
+                        className="app-muted small",
+                        style={"display": "none", "padding": "0 6px 6px"},
+                    ),
+                ],
                 id="unified-search-map-wrapper",
                 style={"display": "none"},
             ),
@@ -1129,8 +1157,8 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                     ),
                     dbc.Col(
                         [
-                            search_results_block,
                             html.Div(id="wrap-map", children=[map_card], style={"display": "block"}),
+                            search_results_block,
                             dcc.Loading(
                                 id="pf-wrap-loader",
                                 type="default",
@@ -1145,14 +1173,32 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             # sentinel to keep older show/hide logic happy (no children needed)
             html.Div(id="wrap-results", style={"display": "none"}),
             dcc.Store(id="unified-search-active", data=False),
+            dcc.Store(id="unified-search-scroll-trigger", data=0),
         ],
     )
+
+    _EMPTY_SEARCH_FIG = go.Figure(
+        layout={
+            "mapbox": {"style": "open-street-map"},
+            "margin": {"l": 0, "r": 0, "t": 0, "b": 0},
+            "height": 420,
+        }
+    )
+    _GRAPH_SHOW = {"display": "block"}
+    _GRAPH_HIDE = {"display": "none"}
+    _MSG_SHOW = {}
+    _MSG_HIDE = {"display": "none"}
+    _CREDIT_SHOW = {"display": "block", "padding": "0 6px 6px"}
+    _CREDIT_HIDE = {"display": "none"}
 
     @app.callback(
         Output("unified-search-results", "children"),
         Output("unified-search-nearby", "children"),
         Output("unified-search-status", "children"),
-        Output("unified-search-map", "children"),
+        Output("unified-search-graph", "figure"),
+        Output("unified-search-graph", "style"),
+        Output("unified-search-map-msg", "style"),
+        Output("unified-search-osm-credit", "style"),
         Output("unified-search-active", "data"),
         Input("unified-search-button", "n_clicks"),
         Input("unified-search-query", "n_submit"),
@@ -1169,14 +1215,14 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 [],
                 [],
                 "Enter a location name to search.",
-                html.Div(
-                    "Search to see locations on the map.",
-                    className="app-muted small",
-                ),
+                _EMPTY_SEARCH_FIG,
+                _GRAPH_HIDE,
+                _MSG_SHOW,
+                _CREDIT_HIDE,
                 False,
             )
 
-        def _build_location_map(matches, nearby):
+        def _build_location_map(matches, nearby, query):
             def _compact_counts(value) -> str:
                 if value in (None, "", "nan"):
                     return "Counts: N/A"
@@ -1240,10 +1286,7 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 points.append((lat, lon))
 
             if not points:
-                return html.Div(
-                    "No coordinates available for the selected locations.",
-                    className="app-muted small",
-                )
+                return None
 
             center_lat = sum(lat for lat, _ in points) / len(points)
             center_lon = sum(lon for _, lon in points) / len(points)
@@ -1335,49 +1378,22 @@ def create_unified_explore(server, prefix: str = "/explore/"):
             lon_span = lon_max - lon_min
             dynamic_zoom = _dynamic_zoom(len(points), lat_span, lon_span)
 
-            mapbox_layout = {"style": "open-street-map"}
-            if len(points) > 1:
-                lat_pad = max(lat_span * 0.12, 0.01)
-                lon_pad = max(lon_span * 0.12, 0.01)
-                mapbox_layout["bounds"] = {
-                    "west": lon_min - lon_pad,
-                    "east": lon_max + lon_pad,
-                    "south": lat_min - lat_pad,
-                    "north": lat_max + lat_pad,
-                }
-            else:
-                mapbox_layout["center"] = {"lat": center_lat, "lon": center_lon}
-                mapbox_layout["zoom"] = dynamic_zoom
+            mapbox_layout = {
+                "style": "open-street-map",
+                "center": {"lat": center_lat, "lon": center_lon},
+                "zoom": dynamic_zoom,
+            }
 
             fig.update_layout(
+                uirevision=query,
+                transition={"duration": 700, "easing": "cubic-in-out"},
                 mapbox=mapbox_layout,
                 margin={"l": 0, "r": 0, "t": 0, "b": 0},
                 height=420,
                 legend={"orientation": "h", "yanchor": "bottom", "y": 0.01, "x": 0.01},
             )
 
-            return html.Div(
-                [
-                    dcc.Graph(
-                        id=f"unified-search-graph-{time.time_ns()}",
-                        figure=fig,
-                        config={"scrollZoom": True, "displayModeBar": True},
-                    ),
-                    html.Div(
-                        [
-                            html.Span("(c) OpenStreetMap contributors - Data available under ODbL - "),
-                            html.A(
-                                "https://www.openstreetmap.org/copyright",
-                                href="https://www.openstreetmap.org/copyright",
-                                target="_blank",
-                                rel="noopener noreferrer",
-                            ),
-                        ],
-                        className="app-muted small",
-                        style={"padding": "0 6px 6px"},
-                    ),
-                ]
-            )
+            return fig
         params = {"q": query}
         if radius not in (None, ""):
             params["radius_miles"] = radius
@@ -1399,7 +1415,10 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 [],
                 [],
                 "Unable to load location search results.",
-                html.Div("Unable to load map data.", className="app-muted small"),
+                _EMPTY_SEARCH_FIG,
+                _GRAPH_HIDE,
+                _MSG_SHOW,
+                _CREDIT_HIDE,
                 False,
             )
 
@@ -1408,7 +1427,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
 
         if not matches:
             status = html.Span("No locations matched your search.", className="search-status search-status--empty")
-            return [], [], status, _build_location_map(matches, nearby), True
+            fig = _build_location_map(matches, nearby, query)
+            graph_style = _GRAPH_SHOW if fig is not None else _GRAPH_HIDE
+            credit_style = _CREDIT_SHOW if fig is not None else _CREDIT_HIDE
+            if fig is None:
+                fig = _EMPTY_SEARCH_FIG
+            return [], [], status, fig, graph_style, _MSG_HIDE, credit_style, True
 
         status = html.Span(f"{len(matches)} location(s) matched.", className="search-status search-status--ok")
 
@@ -1539,7 +1563,12 @@ def create_unified_explore(server, prefix: str = "/explore/"):
                 ],
                 className="search-nearby-card",
             )
-        return match_cards, nearby_block, status, _build_location_map(matches, nearby), True
+        fig = _build_location_map(matches, nearby, query)
+        graph_style = _GRAPH_SHOW if fig is not None else _GRAPH_HIDE
+        credit_style = _CREDIT_SHOW if fig is not None else _CREDIT_HIDE
+        if fig is None:
+            fig = _EMPTY_SEARCH_FIG
+        return match_cards, nearby_block, status, fig, graph_style, _MSG_HIDE, credit_style, True
 
     @app.callback(
         Output("unified-search-map-wrapper", "style"),
@@ -1552,6 +1581,22 @@ def create_unified_explore(server, prefix: str = "/explore/"):
         if search_active:
             return {"display": "block"}, {"display": "none"}, {"display": "none"}, {"display": "block"}
         return {"display": "none"}, {"display": "block"}, {"display": "flex"}, {"display": "none"}
+
+    app.clientside_callback(
+        """
+        function(search_active) {
+            if (search_active) {
+                setTimeout(function() {
+                    var el = document.getElementById('wrap-map');
+                    if (el) { el.scrollIntoView({behavior: 'smooth', block: 'start'}); }
+                }, 150);
+            }
+            return 0;
+        }
+        """,
+        Output("unified-search-scroll-trigger", "data"),
+        Input("unified-search-active", "data"),
+    )
 
     # ---------- Progressive options ----------
     @app.callback(
