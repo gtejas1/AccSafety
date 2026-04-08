@@ -12,7 +12,6 @@ from chatbot.providers import ChatProviderError
 from chatbot.settings import (
     DEFAULT_EMBEDDING_MODEL,
     DEFAULT_OLLAMA_HOST,
-    DEFAULT_OPENAI_EMBEDDINGS_URL,
 )
 
 
@@ -127,12 +126,7 @@ def parse_args() -> argparse.Namespace:
         "--embedding-base-url",
         default=os.environ.get(
             "EMBEDDING_BASE_URL",
-            (
-                DEFAULT_OPENAI_EMBEDDINGS_URL
-                if (os.environ.get("EMBEDDING_PROVIDER") or os.environ.get("CHAT_PROVIDER") or "ollama").strip().lower()
-                == "openai"
-                else f"{(os.environ.get('OLLAMA_HOST') or DEFAULT_OLLAMA_HOST).rstrip('/')}/api/embed"
-            ),
+            f"{(os.environ.get('OLLAMA_HOST') or DEFAULT_OLLAMA_HOST).rstrip('/')}/api/embed",
         ),
         help="Embedding API base URL (env: EMBEDDING_BASE_URL).",
     )
@@ -168,9 +162,7 @@ def main() -> None:
     embeddings_path = Path(args.embeddings_path)
 
     provider_name = (args.embedding_provider or "ollama").strip().lower()
-    api_key = (os.environ.get("EMBEDDING_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip()
-    if provider_name == "openai" and not api_key:
-        raise SystemExit("EMBEDDING_API_KEY or OPENAI_API_KEY is required for OpenAI embeddings.")
+    api_key = (os.environ.get("EMBEDDING_API_KEY") or "").strip()
 
     entries = _load_json_records(manifest_path)
     if not entries:

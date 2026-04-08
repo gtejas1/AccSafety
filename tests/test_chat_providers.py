@@ -45,7 +45,7 @@ class _StubEmbeddingProvider:
         return [[1.0, 0.0]]
 
 
-def test_document_retriever_uses_embedding_provider_without_openai_key(tmp_path):
+def test_document_retriever_uses_embedding_provider(tmp_path):
     manifest_path = tmp_path / "manifest.jsonl"
     index_path = tmp_path / "embeddings.jsonl"
 

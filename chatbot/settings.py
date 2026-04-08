@@ -11,15 +11,10 @@ from typing import Any
 DEFAULT_OLLAMA_HOST = "http://127.0.0.1:11434"
 DEFAULT_CHAT_MODEL = "llama3.2"
 DEFAULT_EMBEDDING_MODEL = "nomic-embed-text"
-DEFAULT_OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
-DEFAULT_OPENAI_EMBEDDINGS_URL = "https://api.openai.com/v1/embeddings"
 
 
 def _provider_default_base_url(provider: str, *, kind: str, ollama_host: str) -> str:
-    normalized_provider = (provider or "").strip().lower()
     host = (ollama_host or DEFAULT_OLLAMA_HOST).rstrip("/")
-    if normalized_provider == "openai":
-        return DEFAULT_OPENAI_CHAT_URL if kind == "chat" else DEFAULT_OPENAI_EMBEDDINGS_URL
     if kind == "chat":
         return f"{host}/api/chat"
     return f"{host}/api/embed"
@@ -99,7 +94,7 @@ class ChatSettingsStore:
                 os.environ.get("CHAT_BASE_URL")
                 or _provider_default_base_url(chat_provider, kind="chat", ollama_host=ollama_host)
             ).strip(),
-            chat_api_key=(os.environ.get("CHAT_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip(),
+            chat_api_key=(os.environ.get("CHAT_API_KEY") or "").strip(),
             embedding_provider=embedding_provider,
             embedding_model=(
                 os.environ.get("EMBEDDING_MODEL")
@@ -110,7 +105,7 @@ class ChatSettingsStore:
                 os.environ.get("EMBEDDING_BASE_URL")
                 or _provider_default_base_url(embedding_provider, kind="embedding", ollama_host=ollama_host)
             ).strip(),
-            embedding_api_key=(os.environ.get("EMBEDDING_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip(),
+            embedding_api_key=(os.environ.get("EMBEDDING_API_KEY") or "").strip(),
         )
 
     def load(self) -> ChatRuntimeSettings:

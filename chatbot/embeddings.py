@@ -73,37 +73,6 @@ class _RequestsEmbeddingProvider(BaseEmbeddingProvider):
             raise ChatProviderError("Embedding service returned an invalid response.", code="invalid_response") from exc
 
 
-class OpenAICompatibleEmbeddingProvider(_RequestsEmbeddingProvider):
-    def __init__(
-        self,
-        *,
-        api_key: str,
-        model: str,
-        base_url: str,
-        timeout_seconds: float = 30,
-        max_retries: int = 2,
-    ) -> None:
-        if not api_key:
-            raise ChatProviderError("Embedding service is not configured.", code="config_error")
-        super().__init__(timeout_seconds=timeout_seconds, max_retries=max_retries)
-        self.api_key = api_key
-        self.model = model
-        self.base_url = base_url.rstrip("/")
-
-    def embed_texts(self, texts: list[str]) -> list[list[float]]:
-        payload = {"model": self.model, "input": texts}
-        data = self._post_json(
-            url=self.base_url,
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-            payload=payload,
-        )
-        try:
-            items = sorted(data["data"], key=lambda item: item.get("index", 0))
-            return [list(item["embedding"]) for item in items]
-        except (KeyError, TypeError) as exc:
-            raise ChatProviderError("Embedding service returned an invalid response.", code="invalid_response") from exc
-
-
 class OllamaEmbeddingProvider(_RequestsEmbeddingProvider):
     def __init__(
         self,
@@ -133,23 +102,15 @@ class OllamaEmbeddingProvider(_RequestsEmbeddingProvider):
 def build_embedding_provider(
     config: EmbeddingProviderConfig,
 ) -> BaseEmbeddingProvider:
-    provider_name = (config.provider or "").strip().lower()
-    if provider_name == "ollama":
-        return OllamaEmbeddingProvider(
-            model=config.model,
-            base_url=config.base_url,
-            timeout_seconds=config.timeout_seconds,
-            max_retries=config.max_retries,
-        )
-    if provider_name == "openai":
-        return OpenAICompatibleEmbeddingProvider(
-            api_key=config.api_key,
-            model=config.model,
-            base_url=config.base_url,
-            timeout_seconds=config.timeout_seconds,
-            max_retries=config.max_retries,
-        )
-    raise ChatProviderError(f"Unsupported embedding provider: {provider_name}", code="unsupported_provider")
+    provider_name = (config.provider or "ollama").strip().lower()
+    if provider_name != "ollama":
+        raise ChatProviderError(f"Unsupported embedding provider: {provider_name}. Only 'ollama' is supported.", code="unsupported_provider")
+    return OllamaEmbeddingProvider(
+        model=config.model,
+        base_url=config.base_url,
+        timeout_seconds=config.timeout_seconds,
+        max_retries=config.max_retries,
+    )
 
 
 def build_embedding_provider_from_settings(

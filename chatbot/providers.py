@@ -102,77 +102,6 @@ class RequestsChatProvider(BaseChatProvider):
             raise ChatProviderError("Chat service returned an invalid response.", code="invalid_response") from exc
 
 
-class OpenAICompatibleProvider(RequestsChatProvider):
-    """Simple OpenAI-compatible chat completions provider."""
-
-    def __init__(
-        self,
-        *,
-        api_key: str,
-        model: str,
-        base_url: str,
-        timeout_seconds: float = 20,
-        max_retries: int = 2,
-    ) -> None:
-        if not api_key:
-            raise ChatProviderError("Chat service is not configured.", code="config_error")
-        self.api_key = api_key
-        self.model = model
-        self.base_url = base_url.rstrip("/")
-        super().__init__(timeout_seconds=timeout_seconds, max_retries=max_retries)
-
-    def generate_reply(
-        self,
-        *,
-        message: str,
-        history: list[dict[str, str]] | None = None,
-        user_context: dict[str, Any] | None = None,
-        mode: str | None = None,
-    ) -> ChatProviderResponse:
-        system_prompt = "You are a concise, helpful assistant for transportation safety analytics users."
-        if mode:
-            system_prompt += f" Answer in `{mode}` mode when possible."
-
-        messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
-        for item in history or []:
-            role = (item.get("role") or "").strip()
-            content = (item.get("content") or "").strip()
-            if role in {"system", "assistant", "user"} and content:
-                messages.append({"role": role, "content": content})
-
-        if user_context:
-            username = str(user_context.get("username") or "").strip()
-            if username:
-                messages.append(
-                    {
-                        "role": "system",
-                        "content": f"Authenticated user: {username}.",
-                    }
-                )
-
-        messages.append({"role": "user", "content": message})
-
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": 0.2,
-        }
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-
-        try:
-            data = self._post_json(url=self.base_url, payload=payload, headers=headers)
-            answer = data["choices"][0]["message"]["content"].strip()
-            model = str(data.get("model") or self.model)
-        except (KeyError, IndexError, TypeError) as exc:
-            raise ChatProviderError("Chat service returned an invalid response.", code="invalid_response") from exc
-
-        return ChatProviderResponse(answer=answer, model=model, sources=[])
-
-
 class OllamaChatProvider(RequestsChatProvider):
     def __init__(
         self,
@@ -228,23 +157,15 @@ class OllamaChatProvider(RequestsChatProvider):
 
 
 def build_provider(config: ChatProviderConfig) -> BaseChatProvider:
-    provider_name = (config.provider or "").strip().lower()
-    if provider_name == "openai":
-        return OpenAICompatibleProvider(
-            api_key=config.api_key,
-            model=config.model,
-            base_url=config.base_url,
-            timeout_seconds=config.timeout_seconds,
-            max_retries=config.max_retries,
-        )
-    if provider_name == "ollama":
-        return OllamaChatProvider(
-            model=config.model,
-            base_url=config.base_url,
-            timeout_seconds=config.timeout_seconds,
-            max_retries=config.max_retries,
-        )
-    raise ChatProviderError(f"Unsupported chat provider: {provider_name}", code="unsupported_provider")
+    provider_name = (config.provider or "ollama").strip().lower()
+    if provider_name != "ollama":
+        raise ChatProviderError(f"Unsupported chat provider: {provider_name}. Only 'ollama' is supported.", code="unsupported_provider")
+    return OllamaChatProvider(
+        model=config.model,
+        base_url=config.base_url,
+        timeout_seconds=config.timeout_seconds,
+        max_retries=config.max_retries,
+    )
 
 
 def build_provider_from_settings(settings: ChatRuntimeSettings) -> BaseChatProvider:

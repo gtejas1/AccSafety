@@ -904,53 +904,41 @@
   <section class="chat-widget" aria-label="Assistant chat">
 
     <button
-
       id="chat-widget-toggle"
-
       class="chat-widget-toggle"
-
       type="button"
-
       aria-expanded="false"
-
       aria-controls="chat-widget-panel"
-
     >
-
+      <svg class="chat-toggle-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       AccSafety Assistant
-
     </button>
-
-
 
     <div class="chat-widget-panel" id="chat-widget-panel" hidden>
 
       <header class="chat-widget-header">
-
-        <h2>AccSafety Assistant</h2>
-
-        <button id="chat-widget-close" class="chat-widget-close" type="button" aria-label="Close chat">×</button>
-
+        <div class="chat-header-left">
+          <h2>AccSafety Assistant</h2>
+          <span id="chat-connection-status" class="chat-connection-dot chat-connection-dot--connected" title="Connected"></span>
+        </div>
+        <div class="chat-header-actions">
+          <button id="chat-widget-clear" class="chat-widget-clear" type="button" aria-label="Clear chat" title="Clear chat">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg>
+          </button>
+          <button id="chat-widget-close" class="chat-widget-close" type="button" aria-label="Close chat">&times;</button>
+        </div>
       </header>
-
-
 
       <div id="chat-messages" class="chat-messages" aria-live="polite"></div>
 
-
-
       <div id="chat-status" class="chat-status" hidden></div>
-
       <button id="chat-retry" class="chat-retry" type="button" hidden>Retry last question</button>
 
-
-
       <form id="chat-form" class="chat-form">
-
         <input id="chat-input" type="text" placeholder="Ask about sites, counts, trends..." autocomplete="off" required>
-
-        <button id="chat-send" type="submit">Send</button>
-
+        <button id="chat-send" type="submit" aria-label="Send message">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+        </button>
       </form>
 
     </div>
@@ -960,277 +948,238 @@
 
 
   <script>
-
     (function () {
-
       const panel = document.getElementById('chat-widget-panel');
-
       const toggle = document.getElementById('chat-widget-toggle');
-
       const closeButton = document.getElementById('chat-widget-close');
-
+      const clearButton = document.getElementById('chat-widget-clear');
       const form = document.getElementById('chat-form');
-
       const input = document.getElementById('chat-input');
-
       const send = document.getElementById('chat-send');
-
       const messages = document.getElementById('chat-messages');
-
       const status = document.getElementById('chat-status');
-
       const retry = document.getElementById('chat-retry');
-
-
+      const connectionDot = document.getElementById('chat-connection-status');
 
       const history = [];
-
       let inflight = false;
-
       let lastUserMessage = '';
 
       if (!panel || !toggle || !closeButton || !form || !input || !send || !messages || !status || !retry) {
-
         return;
-
       }
 
+      /* --- Minimal markdown rendering (bold, italic, inline code, links, line breaks) --- */
+      function renderMarkdown(text) {
+        let html = text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;');
+        // bold
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        // italic
+        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        // inline code
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+        // bullet lists (lines starting with - or *)
+        html = html.replace(/^[\-\*]\s+(.+)$/gm, '<li>$1</li>');
+        html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>$1</ul>');
+        // numbered lists
+        html = html.replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>');
+        html = html.replace(/((?:<li>.*<\/li>\n?)+)/g, function(match) {
+          if (match.includes('<ul>')) return match;
+          return '<ol>' + match + '</ol>';
+        });
+        // line breaks
+        html = html.replace(/\n/g, '<br>');
+        return html;
+      }
 
+      /* --- Typing indicator --- */
+      function showTypingIndicator() {
+        const existing = messages.querySelector('.chat-typing-indicator');
+        if (existing) return;
+        const row = document.createElement('article');
+        row.className = 'chat-message chat-message--assistant chat-typing-indicator';
+        row.innerHTML = '<div class="chat-typing-dots"><span></span><span></span><span></span></div>';
+        messages.appendChild(row);
+        messages.scrollTop = messages.scrollHeight;
+      }
 
+      function hideTypingIndicator() {
+        const el = messages.querySelector('.chat-typing-indicator');
+        if (el) el.remove();
+      }
 
+      /* --- Connection status --- */
+      function setConnectionStatus(connected) {
+        if (!connectionDot) return;
+        connectionDot.className = 'chat-connection-dot chat-connection-dot--' + (connected ? 'connected' : 'disconnected');
+        connectionDot.title = connected ? 'Connected' : 'Disconnected';
+      }
 
       function setOpen(open) {
-
-        panel.hidden = !open;
-
-        toggle.setAttribute('aria-expanded', String(open));
-
         if (open) {
-
-          input.focus();
-
+          panel.hidden = false;
+          panel.classList.add('chat-widget-panel--open');
+        } else {
+          panel.classList.remove('chat-widget-panel--open');
+          setTimeout(function() { panel.hidden = true; }, 200);
         }
-
+        toggle.setAttribute('aria-expanded', String(open));
+        if (open) input.focus();
       }
-
-
 
       function setPending(pending) {
-
         inflight = pending;
-
         input.disabled = pending;
-
         send.disabled = pending;
-
+        form.classList.toggle('chat-form--pending', pending);
       }
 
-
-
-      function setStatus(text, isError = false) {
-
+      function setStatus(text, isError) {
+        isError = isError || false;
         status.hidden = !text;
-
         status.textContent = text || '';
-
         status.classList.toggle('chat-status--error', Boolean(text && isError));
-
       }
-
-
 
       function appendMessage(role, text, sources) {
-
         const row = document.createElement('article');
+        row.className = 'chat-message chat-message--' + role;
 
-        row.className = `chat-message chat-message--${role}`;
-
-
-
-        const body = document.createElement('p');
-
+        const body = document.createElement('div');
         body.className = 'chat-message-text';
-
-        body.textContent = text;
-
+        if (role === 'assistant') {
+          body.innerHTML = renderMarkdown(text);
+        } else {
+          body.textContent = text;
+        }
         row.appendChild(body);
 
-
-
         if (role === 'assistant' && Array.isArray(sources) && sources.length) {
-
           const sourceRow = document.createElement('div');
-
           sourceRow.className = 'chat-source-chips';
-
-          sources.forEach((source, idx) => {
-
+          sources.forEach(function(source, idx) {
             const chip = document.createElement(source && source.url ? 'a' : 'span');
-
             chip.className = 'chat-source-chip';
-
-            const label = source?.title || source?.source || source?.name || `Source ${idx + 1}`;
-
+            const label = (source && (source.title || source.source || source.name)) || ('Source ' + (idx + 1));
             chip.textContent = label;
-
             if (source && source.url) {
-
               chip.href = source.url;
-
               chip.target = '_blank';
-
               chip.rel = 'noopener noreferrer';
-
             }
-
             sourceRow.appendChild(chip);
-
           });
-
           row.appendChild(sourceRow);
-
         }
 
-
-
+        // Animate in
+        row.style.opacity = '0';
+        row.style.transform = 'translateY(8px)';
         messages.appendChild(row);
-
+        requestAnimationFrame(function() {
+          row.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+          row.style.opacity = '1';
+          row.style.transform = 'translateY(0)';
+        });
         messages.scrollTop = messages.scrollHeight;
-
       }
 
-
+      function clearChat() {
+        history.length = 0;
+        messages.innerHTML = '';
+        retry.hidden = true;
+        setStatus('');
+        appendMessage('assistant', 'Hi! Ask me about crash trends, site activity, or available data sources.');
+      }
 
       async function sendMessage(messageText) {
-
         if (inflight) return;
-
         const message = (messageText || '').trim();
-
         if (!message) return;
 
-
-
         lastUserMessage = message;
-
         retry.hidden = true;
-
-        setStatus('Thinking...');
-
+        setStatus('');
         appendMessage('user', message);
-
         history.push({ role: 'user', content: message });
-
         setPending(true);
-
-
+        showTypingIndicator();
 
         try {
-
           const response = await fetch('/api/chat', {
-
             method: 'POST',
-
             credentials: 'same-origin',
-
             headers: { 'Content-Type': 'application/json' },
-
-            body: JSON.stringify({ message, history: history.slice(-10) }),
-
+            body: JSON.stringify({ message: message, history: history.slice(-10) }),
           });
 
-
-
-          const payload = await response.json().catch(() => ({}));
-
+          const payload = await response.json().catch(function() { return {}; });
           if (!response.ok) {
-
             throw new Error(payload.error || payload.answer || 'Unable to complete request.');
-
           }
 
+          setConnectionStatus(true);
+          hideTypingIndicator();
 
-
-          const answer = payload.answer || 'No response received.';
-
+          var answer = payload.answer || 'No response received.';
           appendMessage('assistant', answer, []);
-
           history.push({ role: 'assistant', content: answer });
-
           setStatus('');
-
         } catch (error) {
-
-          setStatus(error.message || 'Request failed.', true);
-
+          hideTypingIndicator();
+          var isNetworkError = !error.message || error.message === 'Failed to fetch' || error.message === 'NetworkError when attempting to fetch resource.';
+          if (isNetworkError) {
+            setConnectionStatus(false);
+            setStatus('Unable to reach the server. Check your connection and try again.', true);
+          } else {
+            setStatus(error.message || 'Request failed.', true);
+          }
           retry.hidden = false;
-
         } finally {
-
           setPending(false);
-
         }
-
       }
 
-
-
       toggle.addEventListener('click', function (event) {
-
         event.preventDefault();
-
         setOpen(panel.hidden);
-
       });
-
-
 
       closeButton.addEventListener('click', function (event) {
-
         event.preventDefault();
-
         event.stopPropagation();
-
         setOpen(false);
-
       });
 
-
+      if (clearButton) {
+        clearButton.addEventListener('click', function (event) {
+          event.preventDefault();
+          clearChat();
+        });
+      }
 
       document.addEventListener('keydown', function (event) {
-
         if (event.key === 'Escape' && !panel.hidden) {
-
           setOpen(false);
-
         }
-
       });
 
       retry.addEventListener('click', function () {
-
         sendMessage(lastUserMessage);
-
       });
 
       form.addEventListener('submit', function (event) {
-
         event.preventDefault();
-
-        const text = input.value;
-
+        var text = input.value;
         input.value = '';
-
         sendMessage(text);
-
       });
 
-
-
       appendMessage('assistant', 'Hi! Ask me about crash trends, site activity, or available data sources.');
-
     })();
-
   </script>
 
 
