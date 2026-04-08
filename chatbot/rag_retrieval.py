@@ -7,14 +7,12 @@ import os
 from pathlib import Path
 from typing import Any
 
-import requests
-
+from .embeddings import BaseEmbeddingProvider, build_embedding_provider_from_settings
+from .providers import ChatProviderError
 from .retrieval import RetrievalResult
+from .settings import ChatRuntimeSettings, ChatSettingsStore
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_EMBEDDING_MODEL = "text-embedding-3-large"
-DEFAULT_EMBEDDING_BASE_URL = "https://api.openai.com/v1/embeddings"
 
 
 def _load_json_records(path: Path) -> list[dict[str, Any]]:
@@ -50,9 +48,8 @@ class DocumentRetriever:
         manifest_path: str | Path | None = None,
         embeddings_path: str | Path | None = None,
         top_k: int | None = None,
-        embedding_model: str | None = None,
-        embedding_base_url: str | None = None,
-        openai_api_key: str | None = None,
+        embedding_provider: BaseEmbeddingProvider | None = None,
+        settings: ChatRuntimeSettings | None = None,
     ) -> None:
         self.manifest_path = Path(
             manifest_path
@@ -65,14 +62,10 @@ class DocumentRetriever:
             or os.environ.get("RAG_EMBEDDINGS_PATH", "rag_embeddings.jsonl")
         )
         self.top_k = top_k or int(os.environ.get("RAG_TOP_K", "8"))
-        self.embedding_model = embedding_model or os.environ.get(
-            "EMBEDDING_MODEL",
-            os.environ.get("RAG_EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL),
-        )
-        self.embedding_base_url = embedding_base_url or os.environ.get(
-            "EMBEDDING_BASE_URL", DEFAULT_EMBEDDING_BASE_URL
-        )
-        self.openai_api_key = openai_api_key or os.environ.get("OPENAI_API_KEY")
+        resolved_settings = settings or ChatSettingsStore(
+            os.environ.get("CHAT_SETTINGS_PATH", "data/chat_settings.json")
+        ).load()
+        self.embedding_provider = embedding_provider or build_embedding_provider_from_settings(resolved_settings)
 
         self._validate_paths()
         self._chunks = self._load_chunks()
@@ -117,17 +110,10 @@ class DocumentRetriever:
         return entries
 
     def _embed_query(self, text: str) -> list[float]:
-        if not self.openai_api_key:
-            raise RuntimeError("OPENAI_API_KEY is required for document retrieval.")
-        response = requests.post(
-            self.embedding_base_url,
-            headers={"Authorization": f"Bearer {self.openai_api_key}"},
-            json={"model": self.embedding_model, "input": text},
-            timeout=30,
-        )
-        response.raise_for_status()
-        payload = response.json()
-        return payload["data"][0]["embedding"]
+        embeddings = self.embedding_provider.embed_texts([text])
+        if not embeddings:
+            raise ChatProviderError("Embedding service returned an invalid response.", code="invalid_response")
+        return embeddings[0]
 
     @staticmethod
     def _cosine_similarity(query: list[float], query_norm: float, entry: dict[str, Any]) -> float:
@@ -144,7 +130,10 @@ class DocumentRetriever:
         if not query:
             return RetrievalResult(evidence=[], citations=[], stats={})
 
-        query_vector = self._embed_query(query)
+        try:
+            query_vector = self._embed_query(query)
+        except ChatProviderError:
+            return RetrievalResult(evidence=[], citations=[], stats={})
         query_norm = math.sqrt(sum(value * value for value in query_vector))
 
         scored: list[tuple[str, float]] = []

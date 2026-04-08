@@ -5,10 +5,11 @@ import re
 import time
 from typing import Any
 
-from .providers import BaseChatProvider, ChatProviderError, build_provider_from_env
+from .providers import BaseChatProvider, ChatProviderError, build_provider_from_settings
 from .policy import build_system_policy_text, evaluate_user_request, refusal_text
 from .retrieval import EvidenceRetriever, RetrievalResult
 from .rag_retrieval import DocumentRetriever
+from .settings import ChatRuntimeSettings, ChatSettingsStore
 
 
 NO_EVIDENCE_MESSAGE = (
@@ -46,21 +47,44 @@ class ChatService:
         self,
         provider: BaseChatProvider | None = None,
         retriever: EvidenceRetriever | DocumentRetriever | None = None,
+        settings_store: ChatSettingsStore | None = None,
     ) -> None:
         self.provider = provider
-        self.retriever = retriever or self._build_retriever_from_env()
+        self.settings_store = settings_store or ChatSettingsStore(
+            os.environ.get("CHAT_SETTINGS_PATH", "data/chat_settings.json")
+        )
+        self.retriever = retriever
+        self._settings_signature: tuple[str, ...] | None = None
+        if retriever is None and provider is None:
+            self._refresh_backends()
 
     @staticmethod
-    def _build_retriever_from_env() -> EvidenceRetriever | DocumentRetriever:
+    def _build_retriever_from_settings(settings: ChatRuntimeSettings) -> EvidenceRetriever | DocumentRetriever:
         mode = os.environ.get("RAG_MODE", "").strip().lower()
         if mode == "documents":
-            return DocumentRetriever()
+            return DocumentRetriever(settings=settings)
         return EvidenceRetriever()
 
     def _provider(self) -> BaseChatProvider:
+        self._refresh_backends()
         if self.provider is None:
-            self.provider = build_provider_from_env()
+            raise ChatProviderError("Chat service is not configured.", code="config_error")
         return self.provider
+
+    def _refresh_backends(self) -> None:
+        if self.provider is not None and self.retriever is not None and self._settings_signature is None:
+            return
+
+        settings = self.settings_store.load()
+        signature = settings.signature()
+        if signature == self._settings_signature and self.provider is not None and self.retriever is not None:
+            return
+
+        if self.provider is None or self._settings_signature != signature:
+            self.provider = build_provider_from_settings(settings)
+        if self.retriever is None or self._settings_signature != signature:
+            self.retriever = self._build_retriever_from_settings(settings)
+        self._settings_signature = signature
 
     def _classify_intent(self, message: str) -> str:
         text = message.strip().lower()
@@ -145,7 +169,11 @@ class ChatService:
                 "status": "ok",
             }
 
-        retrieval = self.retriever.retrieve(message=message, intent=intent)
+        self._refresh_backends()
+        if self.retriever is None:
+            retrieval = RetrievalResult(evidence=[], citations=[], stats={})
+        else:
+            retrieval = self.retriever.retrieve(message=message, intent=intent)
 
         if not retrieval.evidence:
             latency_ms = int((time.perf_counter() - started) * 1000)

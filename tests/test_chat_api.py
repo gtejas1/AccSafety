@@ -1,4 +1,43 @@
-from gateway import create_server
+from __future__ import annotations
+
+import importlib
+import sys
+import types
+from pathlib import Path
+
+
+def _load_gateway(monkeypatch):
+    repo_root = Path(__file__).resolve().parent.parent
+    if str(repo_root) not in sys.path:
+        sys.path.insert(0, str(repo_root))
+
+    sys.modules.pop("gateway", None)
+    monkeypatch.setitem(sys.modules, "pbc_trail_app", types.SimpleNamespace(create_trail_dash=lambda *args, **kwargs: None))
+    monkeypatch.setitem(sys.modules, "pbc_eco_app", types.SimpleNamespace(create_eco_dash=lambda *args, **kwargs: None))
+    monkeypatch.setitem(
+        sys.modules,
+        "vivacity_app",
+        types.SimpleNamespace(
+            create_vivacity_dash=lambda *args, **kwargs: None,
+            get_countline_counts=lambda *args, **kwargs: None,
+            _align_range_to_bucket=lambda start, end, bucket: (start, end),
+        ),
+    )
+    monkeypatch.setitem(sys.modules, "wisdot_files_app", types.SimpleNamespace(create_wisdot_files_app=lambda *args, **kwargs: None))
+    monkeypatch.setitem(sys.modules, "live_detection_app", types.SimpleNamespace(create_live_detection_app=lambda *args, **kwargs: None))
+    monkeypatch.setitem(sys.modules, "se_wi_trails_app", types.SimpleNamespace(create_se_wi_trails_app=lambda *args, **kwargs: None))
+    monkeypatch.setitem(
+        sys.modules,
+        "unified_explore",
+        types.SimpleNamespace(create_unified_explore=lambda *args, **kwargs: None, ENGINE=object()),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "explore_data",
+        types.SimpleNamespace(UNIFIED_NEARBY_SQL="SELECT 1", UNIFIED_SEARCH_SQL="SELECT 1"),
+    )
+    monkeypatch.setitem(sys.modules, "upload_service", types.SimpleNamespace(ensure_tables=lambda engine: None))
+    return importlib.import_module("gateway")
 
 
 def _login(client, username="admin"):
@@ -7,8 +46,9 @@ def _login(client, username="admin"):
         session["roles"] = ["admin"]
 
 
-def test_chat_requires_authentication():
-    app = create_server()
+def test_chat_requires_authentication(monkeypatch):
+    gateway = _load_gateway(monkeypatch)
+    app = gateway.create_server()
     app.testing = True
     client = app.test_client()
 
@@ -18,8 +58,9 @@ def test_chat_requires_authentication():
     assert "/login" in response.headers["Location"]
 
 
-def test_chat_payload_validation_errors():
-    app = create_server()
+def test_chat_payload_validation_errors(monkeypatch):
+    gateway = _load_gateway(monkeypatch)
+    app = gateway.create_server()
     app.testing = True
     client = app.test_client()
     _login(client)
@@ -52,7 +93,8 @@ def test_chat_success(monkeypatch):
 
     monkeypatch.setattr("chatbot.service.ChatService.generate_reply", fake_generate_reply)
 
-    app = create_server()
+    gateway = _load_gateway(monkeypatch)
+    app = gateway.create_server()
     app.testing = True
     client = app.test_client()
     _login(client)
@@ -79,7 +121,8 @@ def test_chat_success(monkeypatch):
 
 def test_chat_forbidden_when_role_not_allowed(monkeypatch):
     monkeypatch.setenv("CHATBOT_ALLOWED_ROLES", "admin")
-    app = create_server()
+    gateway = _load_gateway(monkeypatch)
+    app = gateway.create_server()
     app.testing = True
     client = app.test_client()
     with client.session_transaction() as session:
@@ -103,7 +146,8 @@ def test_chat_includes_request_id(monkeypatch):
         }
 
     monkeypatch.setattr("chatbot.service.ChatService.generate_reply", fake_generate_reply)
-    app = create_server()
+    gateway = _load_gateway(monkeypatch)
+    app = gateway.create_server()
     app.testing = True
     client = app.test_client()
     _login(client)
