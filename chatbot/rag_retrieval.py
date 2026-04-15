@@ -147,13 +147,18 @@ class DocumentRetriever:
         query_vector = self._embed_query(query)
         query_norm = math.sqrt(sum(value * value for value in query_vector))
 
+        min_score = float(os.environ.get("RAG_MIN_SCORE", "0.20"))
+
         scored: list[tuple[str, float]] = []
         for chunk_id, embedding in self._embeddings.items():
             score = self._cosine_similarity(query_vector, query_norm, embedding)
             scored.append((chunk_id, score))
 
         scored.sort(key=lambda item: item[1], reverse=True)
-        top_scored = scored[: self.top_k]
+        top_scored = [(chunk_id, score) for chunk_id, score in scored[: self.top_k] if score >= min_score]
+
+        if not top_scored:
+            return RetrievalResult(evidence=[], citations=[], stats={})
 
         evidence: list[dict[str, Any]] = []
         citations: list[dict[str, Any]] = []

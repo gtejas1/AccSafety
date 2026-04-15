@@ -25,19 +25,18 @@ HELP_MESSAGE = (
 NAVIGATION_MESSAGE = (
     "Portal navigation quick guide:\n"
     "\n"
-    "Canonical routes:\n"
-    "- Home: `/`\n"
-    "- Guide: `/guide`\n"
-    "- Explorer: `/explore/`\n"
-    "- Vivacity analytics: `/vivacity/`\n"
-    "- Live monitor: `/live/`\n"
-    "- What's new: `/whats-new`\n"
-    "- Login: `/login`\n"
+    "- [Home](/)\n"
+    "- [Guide](/guide)\n"
+    "- [Explorer](/explore/)\n"
+    "- [Vivacity analytics](/vivacity/)\n"
+    "- [Live monitor](/live/)\n"
+    "- [What's new](/whats-new)\n"
+    "- [Login](/login)\n"
     "\n"
     "Common flows:\n"
-    "- Login: open `/login`, enter your credentials, then return to the page you want.\n"
-    "- Open explorer: go to `/explore/`, then choose filters or a location to start browsing.\n"
-    "- Open live monitor: open `/live/` to view current/live counts and map updates."
+    "- To log in: open [Login](/login), enter your credentials, then return to the page you want.\n"
+    "- To browse data: open the [Explorer](/explore/), then choose filters or a location.\n"
+    "- To view live counts: open the [Live monitor](/live/) for current counts and map updates."
 )
 
 
@@ -67,7 +66,7 @@ class ChatService:
         if not text:
             return "help"
         if re.search(
-            r"\b(navigate|navigation|page|pages|menu|click|where|login|log in|guide|live counts?|explorer|portal|route|path)\b",
+            r"\b(navigate|navigation|menu|login|log in|guide|live counts?|explorer|portal)\b",
             text,
         ):
             return "navigation"
@@ -83,7 +82,9 @@ class ChatService:
         lines = [
             "You are an assistant for transportation safety analytics.",
             "Answer strictly using the provided evidence snippets.",
-            "If the evidence does not support a claim, say so explicitly.",
+            "If the evidence contains site-level count data but does not answer a conceptual or definitional question, "
+            "say in one sentence what data is available (e.g. 'I have count data for X sites from [Source]') "
+            "and that program descriptions are not in the dataset — do not repeat or rephrase this.",
             f"Detected intent: {intent}.",
             "Cite evidence by source and location names when summarizing.",
             build_system_policy_text(),
@@ -174,8 +175,8 @@ class ChatService:
             latency_ms = int((time.perf_counter() - started) * 1000)
             return {
                 "answer": provider_response.answer,
-                "sources": [],
-                "citations": [],
+                "sources": retrieval.citations,
+                "citations": retrieval.citations,
                 "retrieval": {
                     "stats": retrieval.stats,
                     "evidence_count": len(retrieval.evidence),

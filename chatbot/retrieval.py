@@ -205,6 +205,15 @@ def _evidence_from_matches(matches: list[dict[str, Any]]) -> tuple[list[dict[str
 
 def _extract_location_hint(message: str) -> str:
     normalized = re.sub(r"\s+", " ", (message or "").strip())
+    # Strip common question prefixes so "what data is there for Oak St" → "Oak St"
+    normalized = re.sub(
+        r"^(what\s+(is|are|data|do|does|can|counts?|information|info)\s+(there\s+)?(for|about|on|in|at|near|around)\s+|"
+        r"(show|find|get|give)\s+me\s+(data|info|information|counts?)?\s*(for|about|on|at|near)?\s*|"
+        r"(tell\s+me\s+about|how\s+many\s+(people|vehicles|bikes|pedestrians)?\s*(at|near|on|for)?)\s*)",
+        "",
+        normalized,
+        flags=re.IGNORECASE,
+    ).strip()
     return normalized[:120]
 
 

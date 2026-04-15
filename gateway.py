@@ -1085,7 +1085,12 @@ def create_server():
         )
 
         response_payload["request_id"] = request_id
-        http_status = 200 if response_payload.get("status") == "ok" else 503
+        _PROVIDER_ERROR_STATUSES = frozenset({
+            "provider_error", "timeout", "network_error", "provider_unavailable",
+            "invalid_response", "auth_error", "rate_limited", "bad_request",
+            "config_error", "unsupported_provider",
+        })
+        http_status = 503 if response_payload.get("status") in _PROVIDER_ERROR_STATUSES else 200
         return jsonify(response_payload), http_status
 
     # Convenience redirects
