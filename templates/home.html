@@ -1039,7 +1039,63 @@
 
 
 
-      function appendMessage(role, text, sources) {
+      function renderMarkdown(text) {
+        const fragment = document.createDocumentFragment();
+        const paragraphs = text.split(/\n{2,}/);
+        paragraphs.forEach(function (para) {
+          const lines = para.split('\n');
+          const isList = lines.every(function (l) { return l.trim() === '' || l.startsWith('- '); });
+          if (isList && lines.some(function (l) { return l.startsWith('- '); })) {
+            const ul = document.createElement('ul');
+            ul.className = 'chat-md-list';
+            lines.forEach(function (l) {
+              if (!l.startsWith('- ')) return;
+              const li = document.createElement('li');
+              applyInline(li, l.slice(2));
+              ul.appendChild(li);
+            });
+            fragment.appendChild(ul);
+          } else {
+            const p = document.createElement('p');
+            p.className = 'chat-md-para';
+            applyInline(p, para);
+            fragment.appendChild(p);
+          }
+        });
+        return fragment;
+      }
+
+      function applyInline(parent, text) {
+        const pattern = /(\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\))/g;
+        let last = 0, match;
+        while ((match = pattern.exec(text)) !== null) {
+          if (match.index > last) {
+            parent.appendChild(document.createTextNode(text.slice(last, match.index)));
+          }
+          if (match[2] !== undefined) {
+            const strong = document.createElement('strong');
+            strong.textContent = match[2];
+            parent.appendChild(strong);
+          } else if (match[3] !== undefined) {
+            const code = document.createElement('code');
+            code.className = 'chat-md-code';
+            code.textContent = match[3];
+            parent.appendChild(code);
+          } else {
+            const a = document.createElement('a');
+            a.textContent = match[4];
+            a.href = match[5];
+            a.className = 'chat-md-link';
+            parent.appendChild(a);
+          }
+          last = match.index + match[0].length;
+        }
+        if (last < text.length) {
+          parent.appendChild(document.createTextNode(text.slice(last)));
+        }
+      }
+
+      function appendMessage(role, text) {
 
         const row = document.createElement('article');
 
@@ -1051,47 +1107,13 @@
 
         body.className = 'chat-message-text';
 
-        body.textContent = text;
-
-        row.appendChild(body);
-
-
-
-        if (role === 'assistant' && Array.isArray(sources) && sources.length) {
-
-          const sourceRow = document.createElement('div');
-
-          sourceRow.className = 'chat-source-chips';
-
-          sources.forEach((source, idx) => {
-
-            const chip = document.createElement(source && source.url ? 'a' : 'span');
-
-            chip.className = 'chat-source-chip';
-
-            const label = source?.title || source?.source || source?.name || `Source ${idx + 1}`;
-
-            chip.textContent = label;
-
-            if (source && source.url) {
-
-              chip.href = source.url;
-
-              chip.target = '_blank';
-
-              chip.rel = 'noopener noreferrer';
-
-            }
-
-            sourceRow.appendChild(chip);
-
-          });
-
-          row.appendChild(sourceRow);
-
+        if (role === 'assistant') {
+          body.appendChild(renderMarkdown(text));
+        } else {
+          body.textContent = text;
         }
 
-
+        row.appendChild(body);
 
         messages.appendChild(row);
 
@@ -1100,6 +1122,28 @@
       }
 
 
+
+      let typingBubbleEl = null;
+
+      function appendTypingBubble() {
+        const row = document.createElement('article');
+        row.className = 'chat-message chat-message--assistant chat-message--typing';
+        row.setAttribute('aria-label', 'Assistant is typing');
+        const dots = document.createElement('span');
+        dots.className = 'chat-typing-dots';
+        dots.innerHTML = '<span></span><span></span><span></span>';
+        row.appendChild(dots);
+        messages.appendChild(row);
+        messages.scrollTop = messages.scrollHeight;
+        typingBubbleEl = row;
+      }
+
+      function removeTypingBubble() {
+        if (typingBubbleEl && typingBubbleEl.parentNode) {
+          typingBubbleEl.parentNode.removeChild(typingBubbleEl);
+          typingBubbleEl = null;
+        }
+      }
 
       async function sendMessage(messageText) {
 
@@ -1115,11 +1159,13 @@
 
         retry.hidden = true;
 
-        setStatus('Thinking...');
+        setStatus('');
 
         appendMessage('user', message);
 
         history.push({ role: 'user', content: message });
+
+        appendTypingBubble();
 
         setPending(true);
 
@@ -1153,13 +1199,17 @@
 
           const answer = payload.answer || 'No response received.';
 
-          appendMessage('assistant', answer, []);
+          removeTypingBubble();
+
+          appendMessage('assistant', answer);
 
           history.push({ role: 'assistant', content: answer });
 
           setStatus('');
 
         } catch (error) {
+
+          removeTypingBubble();
 
           setStatus(error.message || 'Request failed.', true);
 
