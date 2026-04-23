@@ -1,0 +1,44 @@
+<div id="cookie-banner" class="cookie-banner" hidden role="dialog" aria-label="Cookie consent" aria-live="polite">
+  <p class="cookie-banner__text">
+    This site uses cookies and analytics to improve your experience.
+    By clicking <strong>Accept</strong>, you consent to our use of analytics cookies.
+  </p>
+  <div class="cookie-banner__actions">
+    <button id="cookie-accept" class="cookie-banner__btn cookie-banner__btn--accept">Accept</button>
+    <button id="cookie-decline" class="cookie-banner__btn cookie-banner__btn--decline">Decline</button>
+  </div>
+</div>
+<script>
+(function(){
+  var LS_KEY = 'accsafetyCookieConsent';
+  function safeGetLS(k){ try{ return localStorage.getItem(k); }catch(e){ return null; } }
+  function safeSetLS(k,v){ try{ localStorage.setItem(k,v); }catch(e){} }
+
+  var banner = document.getElementById('cookie-banner');
+  var stored = safeGetLS(LS_KEY);
+
+  function applyConsent(val){
+    if(val === 'accepted' && window._paq){
+      window._paq.push(['rememberConsentGiven']);
+    }
+  }
+
+  if(stored){
+    applyConsent(stored);
+    return;
+  }
+
+  banner.removeAttribute('hidden');
+
+  document.getElementById('cookie-accept').addEventListener('click', function(){
+    safeSetLS(LS_KEY, 'accepted');
+    applyConsent('accepted');
+    banner.setAttribute('hidden', '');
+  });
+
+  document.getElementById('cookie-decline').addEventListener('click', function(){
+    safeSetLS(LS_KEY, 'declined');
+    banner.setAttribute('hidden', '');
+  });
+})();
+</script>
