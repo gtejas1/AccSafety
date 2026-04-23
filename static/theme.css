@@ -1672,3 +1672,75 @@ body {
 .cookie-banner__btn--decline { background: transparent; color: #94a3b8; border: 1px solid #475569; }
 .cookie-banner__btn--accept:hover { filter: brightness(1.1); }
 .cookie-banner__btn--decline:hover { background: rgba(255,255,255,0.07); }
+
+/* ── Live detection page ─────────────────────────────────────────────────── */
+
+/* Live / Offline badge */
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 4px 12px;
+  border-radius: 999px;
+  line-height: 1;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.live-badge--online  { background: rgba(34, 197, 94, 0.14); color: #15803d; }
+.live-badge--offline { background: rgba(100, 116, 139, 0.14); color: #64748b; }
+.live-badge--online::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.45; transform: scale(0.8); }
+}
+
+/* Metric card icons */
+.live-metric-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+.live-metric-icon--ped { background: rgba(11, 102, 195, 0.12); }
+.live-metric-icon--cyc { background: rgba(34, 197, 94, 0.12); }
+.live-metric-icon--time { background: rgba(100, 116, 139, 0.12); }
+
+/* Chart section headings */
+.live-chart-heading {
+  font-size: 0.85rem;
+  font-weight: 650;
+  color: #1e293b;
+  letter-spacing: 0.01em;
+  margin-bottom: 2px;
+}
+.live-chart-heading span { color: var(--brand-muted); font-weight: 400; }
+
+/* Location switcher pills */
+.live-location-switcher {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.live-location-switcher .btn.active,
+.live-location-switcher .btn:is(.active) {
+  background: var(--brand-primary) !important;
+  color: #fff !important;
+  border-color: var(--brand-primary) !important;
+}
