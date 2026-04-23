@@ -205,12 +205,30 @@ for config in LIVE_DETECTION_LOCATIONS.values():
     _ensure_live_detection_table(config["table_name"])
 
 
-def _build_counts_csv_bytes(table_name: str = DEFAULT_TABLE_NAME) -> bytes:
+def _build_counts_csv_bytes(
+    table_name: str = DEFAULT_TABLE_NAME,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> bytes:
     engine = _get_engine()
     if engine is None:
         raise RuntimeError("Database connection unavailable")
 
     table_ref = _quote_table_name(table_name)
+    filters = []
+    params: Dict[str, Any] = {}
+    if start_date:
+        filters.append("interval_start >= :start_date")
+        params["start_date"] = start_date
+    if end_date:
+        filters.append("interval_start < :end_date_exclusive")
+        # include the full end day by shifting to the next day
+        from datetime import date, timedelta
+        end_dt = date.fromisoformat(end_date) + timedelta(days=1)
+        params["end_date_exclusive"] = end_dt.isoformat()
+
+    where_clause = f"WHERE {' AND '.join(filters)}" if filters else ""
+
     with engine.connect() as conn:
         rows = conn.execute(
             text(
@@ -222,9 +240,11 @@ def _build_counts_csv_bytes(table_name: str = DEFAULT_TABLE_NAME) -> bytes:
                     total_cyclists,
                     crosswalk_counts
                 FROM {table_ref}
+                {where_clause}
                 ORDER BY interval_start
                 """
-            )
+            ),
+            params or None,
         ).mappings().all()
 
     crosswalk_keys = sorted(
@@ -1121,43 +1141,54 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     app.title = "Live Object Detection"
 
     # ── UI Layout: Video + cumulative stats ───────────────────────────────────
+    crosswalk_chart_colors = ["#6f42c1", "#0b66c3", "#dc3545", "#198754"]
+    crosswalk_colors_map = {
+        cw["key"]: crosswalk_chart_colors[i % len(crosswalk_chart_colors)]
+        for i, cw in enumerate(initial_crosswalks)
+    }
+
     crosswalk_cards: List[dbc.Col] = []
-    crosswalk_name_style = {"fontSize": "0.78rem"}
-    crosswalk_value_style = {"fontSize": "1.0rem"}
+    crosswalk_name_style = {"fontSize": "0.75rem", "letterSpacing": "0.02em"}
+    crosswalk_value_style = {"fontSize": "1.05rem"}
     for cw in initial_crosswalks:
         key = cw["key"]
+        accent_color = crosswalk_colors_map.get(key, "#94a3b8")
         crosswalk_cards.append(
             dbc.Col(
                 dbc.Card(
                     dbc.CardBody(
                         [
-                            html.Div(cw["name"], className="text-muted", style=crosswalk_name_style),
                             html.Div(
-                                [
-                                    html.Span(
-                                        "Pedestrians",
-                                        className="small text-uppercase text-muted",
-                                    ),
-                                    html.Span(
-                                        "0",
-                                        id=f"crosswalk-{key}-ped",
-                                        className="fw-bold text-primary",
-                                        style=crosswalk_value_style,
-                                    ),
-                                ],
-                                className="d-flex justify-content-between align-items-baseline mt-1",
+                                cw["name"],
+                                className="text-uppercase fw-semibold mb-1",
+                                style=crosswalk_name_style,
                             ),
                             html.Div(
                                 [
                                     html.Span(
-                                        "Cyclists",
-                                        className="small text-uppercase text-muted",
+                                        "Ped",
+                                        className="small text-muted",
+                                    ),
+                                    html.Span(
+                                        "0",
+                                        id=f"crosswalk-{key}-ped",
+                                        className="fw-bold",
+                                        style={"color": "#0b66c3", **crosswalk_value_style},
+                                    ),
+                                ],
+                                className="d-flex justify-content-between align-items-baseline",
+                            ),
+                            html.Div(
+                                [
+                                    html.Span(
+                                        "Cyc",
+                                        className="small text-muted",
                                     ),
                                     html.Span(
                                         "0",
                                         id=f"crosswalk-{key}-cyc",
-                                        className="fw-bold text-success",
-                                        style=crosswalk_value_style,
+                                        className="fw-bold",
+                                        style={"color": "#198754", **crosswalk_value_style},
                                     ),
                                 ],
                                 className="d-flex justify-content-between align-items-baseline",
@@ -1165,6 +1196,7 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                         ]
                     ),
                     className="shadow-sm h-100",
+                    style={"borderLeft": f"4px solid {accent_color}"},
                 ),
                 className="d-flex",
             )
@@ -1362,21 +1394,32 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     )
 
     metric_body_class = "d-flex flex-column gap-2"
-    metric_title_style = {"fontSize": "0.7rem", "letterSpacing": "0.04em"}
-    metric_value_style = {"fontSize": "1.45rem"}
+    metric_title_style = {"fontSize": "0.68rem", "letterSpacing": "0.05em"}
+    metric_value_style = {"fontSize": "1.5rem"}
 
     start_time_card = dbc.Card(
         dbc.CardBody(
             [
-                html.Small(
-                    "Detection Started",
-                    className="text-muted text-uppercase",
-                    style=metric_title_style,
-                ),
-                html.H5(
-                    id="start-time",
-                    className="mb-0 fw-semibold",
-                    style={"fontSize": "1.05rem"},
+                html.Div(
+                    [
+                        html.Div("🕐", className="live-metric-icon live-metric-icon--time"),
+                        html.Div(
+                            [
+                                html.Small(
+                                    "Detection Started",
+                                    className="text-muted text-uppercase",
+                                    style=metric_title_style,
+                                ),
+                                html.H5(
+                                    id="start-time",
+                                    className="mb-0 fw-semibold",
+                                    style={"fontSize": "0.95rem", "color": "#1e293b"},
+                                ),
+                            ],
+                            className="d-flex flex-column",
+                        ),
+                    ],
+                    className="d-flex align-items-center gap-2",
                 ),
             ],
             className=metric_body_class,
@@ -1387,15 +1430,26 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     ped_card = dbc.Card(
         dbc.CardBody(
             [
-                html.Small(
-                    "Total Pedestrians",
-                    className="text-muted text-uppercase",
-                    style=metric_title_style,
-                ),
-                html.H4(
-                    id="ped-count",
-                    className="mb-0 text-primary fw-bold",
-                    style=metric_value_style,
+                html.Div(
+                    [
+                        html.Div("🚶", className="live-metric-icon live-metric-icon--ped"),
+                        html.Div(
+                            [
+                                html.Small(
+                                    "Pedestrians",
+                                    className="text-muted text-uppercase",
+                                    style=metric_title_style,
+                                ),
+                                html.H4(
+                                    id="ped-count",
+                                    className="mb-0 fw-bold",
+                                    style={"color": "#0b66c3", **metric_value_style},
+                                ),
+                            ],
+                            className="d-flex flex-column",
+                        ),
+                    ],
+                    className="d-flex align-items-center gap-2",
                 ),
             ],
             className=metric_body_class,
@@ -1406,15 +1460,26 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     cyc_card = dbc.Card(
         dbc.CardBody(
             [
-                html.Small(
-                    "Total Cyclists",
-                    className="text-muted text-uppercase",
-                    style=metric_title_style,
-                ),
-                html.H4(
-                    id="cyc-count",
-                    className="mb-0 text-success fw-bold",
-                    style=metric_value_style,
+                html.Div(
+                    [
+                        html.Div("🚲", className="live-metric-icon live-metric-icon--cyc"),
+                        html.Div(
+                            [
+                                html.Small(
+                                    "Cyclists",
+                                    className="text-muted text-uppercase",
+                                    style=metric_title_style,
+                                ),
+                                html.H4(
+                                    id="cyc-count",
+                                    className="mb-0 fw-bold",
+                                    style={"color": "#198754", **metric_value_style},
+                                ),
+                            ],
+                            className="d-flex flex-column",
+                        ),
+                    ],
+                    className="d-flex align-items-center gap-2",
                 ),
             ],
             className=metric_body_class,
@@ -1423,15 +1488,16 @@ def create_live_detection_app(server, prefix: str = "/live/"):
     )
 
     download_button = dbc.Button(
-        "Download Saved Counts",
+        [html.Span("↓ ", style={"fontWeight": "400"}), "Download Counts"],
         id="download-counts-btn",
-        color="outline-primary",
-        className="ms-auto",
+        color="primary",
+        outline=True,
+        size="sm",
     )
 
     trend_graph_style = {
-        "height": "190px",
-        "border": "1px solid rgba(0, 0, 0, 0.08)",
+        "height": "230px",
+        "border": "1px solid rgba(0, 0, 0, 0.07)",
         "borderRadius": "0.5rem",
         "backgroundColor": "#ffffff",
         "padding": "0.25rem",
@@ -1446,16 +1512,19 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                         dbc.Col(ped_card, xs=6, md=4),
                         dbc.Col(cyc_card, xs=6, md=4),
                     ],
-                    class_name="g-3",
+                    class_name="g-2",
                 ),
                 html.Div(
-                    [download_button, dcc.Download(id="counts-download")],
-                    className="d-flex justify-content-end",
-                ),
-                html.Div(
-                    "Last 24 Hours Trend",
-                    className="text-muted fw-semibold",
-                    style={"fontSize": "0.9rem"},
+                    [
+                        html.Div(
+                            [
+                                html.Span("Last 24 Hours", className="fw-semibold", style={"color": "#1e293b"}),
+                                html.Span(" Trend", style={"color": "#64748b"}),
+                            ],
+                            className="live-chart-heading",
+                        ),
+                    ],
+                    className="d-flex align-items-center justify-content-between",
                 ),
                 dcc.Graph(
                     id="counts-trend-graph",
@@ -1463,9 +1532,11 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                     config={"displayModeBar": False, "responsive": True},
                 ),
                 html.Div(
-                    "Crosswalk Counts (both directions)",
-                    className="text-muted fw-semibold",
-                    style={"fontSize": "0.9rem"},
+                    [
+                        html.Span("Crosswalk", className="fw-semibold", style={"color": "#1e293b"}),
+                        html.Span(" Comparison", style={"color": "#64748b"}),
+                    ],
+                    className="live-chart-heading",
                 ),
                 dcc.Graph(
                     id="crosswalk-trend-graph",
@@ -1475,6 +1546,26 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 dbc.Row(
                     crosswalk_cards,
                     class_name="g-2 row-cols-2",
+                ),
+                html.Div(
+                    [
+                        html.Small(
+                            "Date range (optional):",
+                            className="text-muted",
+                            style={"fontSize": "0.75rem"},
+                        ),
+                        dcc.DatePickerRange(
+                            id="download-date-range",
+                            display_format="MMM D, YYYY",
+                            clearable=True,
+                            style={"fontSize": "0.8rem"},
+                        ),
+                    ],
+                    className="d-flex flex-column gap-1",
+                ),
+                html.Div(
+                    [download_button, dcc.Download(id="counts-download")],
+                    className="d-flex",
                 ),
                 dcc.Interval(id="stat-timer", interval=1000, n_intervals=0),
             ],
@@ -1503,18 +1594,61 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         style={"height": panel_height},
     )
 
+    location_switcher = html.Div(
+        [
+            html.Span("Location:", className="text-muted small me-1", style={"whiteSpace": "nowrap"}),
+            dbc.ButtonGroup(
+                [
+                    dbc.Button(
+                        cfg["title"].split(" - ")[-1],
+                        id=f"loc-btn-{key}",
+                        color="primary",
+                        outline=True,
+                        size="sm",
+                        n_clicks=0,
+                    )
+                    for key, cfg in LIVE_DETECTION_LOCATIONS.items()
+                ],
+                id="location-switcher",
+                className="live-location-switcher",
+            ),
+        ],
+        className="d-flex align-items-center gap-2",
+    )
+
     app.layout = dash_page(
         "Long Term Counts · Live Detection",
         [
             card(
                 [
                     dcc.Location(id="url", refresh=False),
-                    html.H3(
-                        _get_location_config(None)["title"],
-                        id="location-title",
+                    html.Div(
+                        [
+                            html.H3(
+                                _get_location_config(None)["title"],
+                                id="location-title",
+                                className="mb-0",
+                                style={"fontSize": "1.2rem"},
+                            ),
+                            html.Div(
+                                id="live-status-badge",
+                                className="live-badge live-badge--offline",
+                                children="OFFLINE",
+                            ),
+                        ],
+                        className="d-flex align-items-center justify-content-between gap-2 flex-wrap",
                     ),
-                    html.P(
-                        "NOTE: Only pedestrians and cyclists are counted when they cross the virtual countline.",
+                    html.Div(
+                        [
+                            location_switcher,
+                            dbc.Alert(
+                                "Only pedestrians and cyclists crossing the virtual countline are recorded.",
+                                color="info",
+                                className="mb-0 py-1 px-3 flex-grow-1",
+                                style={"fontSize": "0.82rem"},
+                            ),
+                        ],
+                        className="d-flex align-items-center gap-2 flex-wrap",
                     ),
                     dbc.Row(
                         [
@@ -1535,6 +1669,32 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             )
         ],
     )
+
+    # ── Location switcher callback ───────────────────────────────────────────
+    loc_btn_ids = [f"loc-btn-{key}" for key in LIVE_DETECTION_LOCATIONS]
+
+    @app.callback(
+        Output("url", "search"),
+        *[Input(btn_id, "n_clicks") for btn_id in loc_btn_ids],
+        prevent_initial_call=True,
+    )
+    def _switch_location(*_clicks):
+        ctx = dash.callback_context
+        if not ctx.triggered:
+            raise dash.exceptions.PreventUpdate
+        triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+        loc_key = triggered_id.replace("loc-btn-", "")
+        if loc_key not in LIVE_DETECTION_LOCATIONS:
+            raise dash.exceptions.PreventUpdate
+        return f"?{LOCATION_QUERY_PARAM}={loc_key}"
+
+    @app.callback(
+        *[Output(f"loc-btn-{key}", "active") for key in LIVE_DETECTION_LOCATIONS],
+        Input("url", "search"),
+    )
+    def _update_location_button_active(search):
+        current_key = _resolve_location_key(search)
+        return [key == current_key for key in LIVE_DETECTION_LOCATIONS]
 
     # ── Live-updating counter ────────────────────────────────────────────────
     @app.callback(
@@ -1569,6 +1729,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         Output("start-time", "children"),
         Output("counts-trend-graph", "figure"),
         Output("crosswalk-trend-graph", "figure"),
+        Output("live-status-badge", "children"),
+        Output("live-status-badge", "className"),
         *[
             Output(f"crosswalk-{cw['key']}-ped", "children")
             for cw in initial_crosswalks
@@ -1582,23 +1744,46 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         prevent_initial_call=False,
     )
     def _update_stats(_, search):
-        def _base_trend_figure(title: str) -> go.Figure:
+        def _base_trend_figure() -> go.Figure:
             figure = go.Figure()
             figure.update_layout(
-                title={"text": title, "x": 0.01, "xanchor": "left", "font": {"size": 13}},
-                plot_bgcolor="#ffffff",
+                title=None,
+                plot_bgcolor="#f8fafc",
                 paper_bgcolor="#ffffff",
-                margin={"l": 42, "r": 16, "t": 44, "b": 36},
+                margin={"l": 44, "r": 12, "t": 10, "b": 36},
                 hovermode="x unified",
-                legend={"orientation": "h", "yanchor": "bottom", "y": 1.03, "x": 0},
-                xaxis={"title": "Time", "showgrid": True, "gridcolor": "rgba(30, 41, 59, 0.08)"},
-                yaxis={"title": "Count", "showgrid": True, "gridcolor": "rgba(30, 41, 59, 0.08)"},
+                legend={
+                    "orientation": "h",
+                    "yanchor": "bottom",
+                    "y": 1.02,
+                    "x": 0,
+                    "font": {"size": 11},
+                },
+                xaxis={
+                    "showgrid": True,
+                    "gridcolor": "rgba(30, 41, 59, 0.07)",
+                    "tickformat": "%H:%M",
+                    "tickfont": {"size": 10},
+                    "showline": False,
+                },
+                yaxis={
+                    "showgrid": True,
+                    "gridcolor": "rgba(30, 41, 59, 0.07)",
+                    "tickfont": {"size": 10},
+                    "title": None,
+                    "showline": False,
+                },
+                font={"family": "Inter, Segoe UI, system-ui, sans-serif"},
             )
             return figure
 
         worker = _get_worker(search)
         worker.start()
         _ped, _cyc, start_str, crosswalk_counts = worker.get_stats()
+
+        is_live = worker.get_jpeg() is not None
+        badge_text = "LIVE" if is_live else "OFFLINE"
+        badge_class = "live-badge live-badge--online" if is_live else "live-badge live-badge--offline"
 
         total_ped = sum(counts.get("pedestrians", 0) for counts in crosswalk_counts.values())
         total_cyc = sum(counts.get("cyclists", 0) for counts in crosswalk_counts.values())
@@ -1623,8 +1808,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         cutoff = now - timedelta(hours=24)
         filtered = [point for point in history if point["timestamp"] >= cutoff]
 
-        counts_fig = _base_trend_figure("Last 24 Hours Trend")
-        crosswalk_fig = _base_trend_figure("Crosswalk Trend Comparison")
+        counts_fig = _base_trend_figure()
+        crosswalk_fig = _base_trend_figure()
 
         if filtered:
             timestamps = [point["timestamp"] for point in filtered]
@@ -1632,23 +1817,31 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                 go.Scatter(
                     x=timestamps,
                     y=[point["pedestrians"] for point in filtered],
-                    mode="lines+markers",
+                    mode="lines",
                     name="Pedestrians",
-                    line={"color": "#0d6efd", "width": 2.4, "shape": "spline", "smoothing": 0.5},
-                    marker={"size": 5},
+                    fill="tozeroy",
+                    fillcolor="rgba(11, 102, 195, 0.08)",
+                    line={"color": "#0b66c3", "width": 2, "shape": "spline", "smoothing": 0.6},
                 )
             )
             counts_fig.add_trace(
                 go.Scatter(
                     x=timestamps,
                     y=[point["cyclists"] for point in filtered],
-                    mode="lines+markers",
+                    mode="lines",
                     name="Cyclists",
-                    line={"color": "#198754", "width": 2.4, "shape": "spline", "smoothing": 0.5},
-                    marker={"size": 5},
+                    fill="tozeroy",
+                    fillcolor="rgba(25, 135, 84, 0.08)",
+                    line={"color": "#198754", "width": 2, "shape": "spline", "smoothing": 0.6},
                 )
             )
-            crosswalk_colors = ["#6f42c1", "#0d6efd", "#dc3545", "#198754"]
+            crosswalk_colors = ["#6f42c1", "#0b66c3", "#dc3545", "#198754"]
+            crosswalk_fill_colors = [
+                "rgba(111, 66, 193, 0.07)",
+                "rgba(11, 102, 195, 0.07)",
+                "rgba(220, 53, 69, 0.07)",
+                "rgba(25, 135, 84, 0.07)",
+            ]
             for idx, cw in enumerate(initial_crosswalks):
                 crosswalk_fig.add_trace(
                     go.Scatter(
@@ -1657,15 +1850,16 @@ def create_live_detection_app(server, prefix: str = "/live/"):
                             (point.get("crosswalk_totals") or {}).get(cw["key"], 0)
                             for point in filtered
                         ],
-                        mode="lines+markers",
+                        mode="lines",
                         name=cw["name"],
+                        fill="tozeroy",
+                        fillcolor=crosswalk_fill_colors[idx % len(crosswalk_fill_colors)],
                         line={
                             "color": crosswalk_colors[idx % len(crosswalk_colors)],
-                            "width": 2.2,
+                            "width": 2,
                             "shape": "spline",
-                            "smoothing": 0.45,
+                            "smoothing": 0.5,
                         },
-                        marker={"size": 4},
                     )
                 )
 
@@ -1675,6 +1869,8 @@ def create_live_detection_app(server, prefix: str = "/live/"):
             (start_str or "—"),
             counts_fig,
             crosswalk_fig,
+            badge_text,
+            badge_class,
         ]
         for cw in initial_crosswalks:
             counts = crosswalk_counts.get(
@@ -1692,15 +1888,21 @@ def create_live_detection_app(server, prefix: str = "/live/"):
         Output("counts-download", "data"),
         Input("download-counts-btn", "n_clicks"),
         State("url", "search"),
+        State("download-date-range", "start_date"),
+        State("download-date-range", "end_date"),
         prevent_initial_call=True,
     )
-    def _trigger_counts_download(n_clicks, search):
+    def _trigger_counts_download(n_clicks, search, start_date, end_date):
         if not n_clicks:
             raise dash.exceptions.PreventUpdate
 
         location_config = _get_location_config(search)
         try:
-            payload = _build_counts_csv_bytes(location_config["table_name"])
+            payload = _build_counts_csv_bytes(
+                location_config["table_name"],
+                start_date=start_date,
+                end_date=end_date,
+            )
         except Exception as exc:
             _LOGGER.exception("Failed to trigger counts download: %s", exc)
             return dash.no_update
