@@ -1,0 +1,19 @@
+section,topic,details,route_or_link
+Overview,Welcome,"Use this guide to understand portal navigation, explore statewide datasets, and access specialized safety applications.",/
+Navigation,Portal Home,Go to portal home,/
+Navigation,What's New,Review recent updates and release notes,/whats-new
+Navigation,Program Home,Open the UWM IPIT program page,https://uwm.edu/ipit/wi-pedbike-dashboard/
+Authentication,Login,Visit secure login and enter assigned AccSafety credentials,/login
+Authentication,Policy Acknowledgement,Accept the mandatory data use acknowledgement before proceeding,NA
+Authentication,Remembered Access,"After accepting policy notice once per browser, direct sign-in is available until consent reset.",NA
+Authentication,Session Timeout,"Use Log out in the header when finished or switching accounts.",/logout
+Authentication,Forgot Credentials,"Contact UWM IPIT for password reset; self-service reset is not available.",NA
+Dataset Explorer,Launch Explorer,Select Explore Available Datasets from portal home,/explore/
+Dataset Explorer,Progressive Filter - Mode,"Pedestrian only, Bicycle only, or Ped/Bike (Not Separated).",/explore/
+Dataset Explorer,Progressive Filter - Facility,Toggle between facility types,/explore/
+Dataset Explorer,Progressive Filter - Data Source,Toggle between available data sources,/explore/
+Dataset Explorer,Location Trends,Click the View hyperlink beside location names to show trends,/explore/
+Dataset Explorer,Filter Prerequisite,"Map and locations appear only after selecting all three progressive filters.",/explore/
+Specialized Applications,Live Counts,"Monitor computer-vision detections and safety insights around high-priority intersections.",/vivacity/
+Specialized Applications,Live Detection Monitor,Watch real-time multimodal activity,/live/
+Support,Help Contact,"Email UWM IPIT for data updates, account provisioning, and onboarding support.",NA
